@@ -394,7 +394,7 @@ DDL 见 `internal/protocol/schema/006_decision_log.sql`。
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m3_observability`。最终值落 `config/m03.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m3_observability`。
 
 ## 15. 跨模块依赖与契约
 

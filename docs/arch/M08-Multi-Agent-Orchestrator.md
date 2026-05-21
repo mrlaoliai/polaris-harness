@@ -56,7 +56,7 @@ SupervisorEpoch: 启动时 [Storage-SQLite] sys_config 原子递增 `orchestrato
 Claim(taskID, agentID):
   1. RLock 查找, 不存在→ErrTaskNotFound
   2. atomic.Pointer CAS(nil→&agentID), 仅 ClaimedBy==nil 可认领
-  3. double-check Status==Pending → ClaimedAt=now, ExpiresAt=now+60s, Status=Claimed, Version++
+  3. double-check Status==Pending → ClaimedAt=now, ExpiresAt=now+`spec/state.yaml §m8_multiagent.lease_ttl_seconds`, Status=Claimed, Version++
   4. 发射 EventTaskClaimed; 返回(claimed bool, error)
 ```
 
@@ -75,7 +75,7 @@ BeginExecution(taskID, agentID):
 ```
 RenewLease(taskID, agentID):
   1. Lock 验证 ClaimedBy==agentID
-  2. ExpiresAt=now+60s, RenewCount++, Lock 内原地修改 tasks map
+  2. ExpiresAt=now+`spec/state.yaml §m8_multiagent.lease_ttl_seconds`, RenewCount++, Lock 内原地修改 tasks map
 ```
 
 ### 1.5 HITL 挂起/恢复
@@ -139,8 +139,8 @@ ListenLoop(ctx): loop{ select events chan, 仅 EventTaskPosted →
 
 ## 2. Supervisor Tree
 
-Root(suture, OneForOne, 5/60s) → Orchestrator → Agent-*(Supervisor, OneForOne, 3/5min)
-退避: 100ms→200ms→400ms→800ms→1.6s→3.2s→6.4s→12.8s→25.6s→30s(max)
+Root(suture, OneForOne) → Orchestrator → Agent-*(Supervisor, OneForOne)。重启窗口策略权威源 `spec/state.yaml §m8_multiagent.agent_restart_max_in_window` / `agent_restart_window_seconds`。
+退避指数从 `spec/state.yaml §m8_multiagent.supervisor_backoff_initial_ms` 倍增至 `supervisor_backoff_max_seconds` 封顶。
 
 | 策略 | 行为 | 适用 |
 |------|------|------|
@@ -299,7 +299,7 @@ TopologyEvolver.Evaluate: 获取候选fitness → Pareto前沿(成功率×token�
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m8_multiagent`。最终值落 `config/m08.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m8_multiagent`。
 
 ## 11. 跨模块契约
 

@@ -1,7 +1,7 @@
 # 模块 4: Agent Kernel
 
 > M4, `pkg/cognition/` | Go 状态机持有控制流，LLM 仅概率性填空 | `[HE-Rule-5]` `[Tier-0-Limit]`
-> **§跳读**: 0-bis:5 职责 / 0-ter:18 不变量速查 / 1:31 状态机 / 2:84 Suspend-on-Idle / 3:94 S_VALIDATE / 4:121 DAG / 5:199 System1/2 / 6:221 WorldModel / 7:233 推理预算 / 8:281 CrashRecovery / 12:338 (SOFT)降级 / 13:356 跨模块契约
+> **§跳读**: 0-bis:5 职责 / 0-ter:18 不变量速查 / 1:31 状态机 / 2:84 Suspend-on-Idle / 3:94 S_VALIDATE / 4:121 DAG / 5:198 System1/2 / 6:220 WorldModel / 7:232 推理预算 / 8:280 CrashRecovery / 12:337 (SOFT)降级 / 13:355 跨模块契约
 ## 0-bis. 职责边界
 
 | M4 **是** | M4 **不是** |
@@ -85,7 +85,7 @@ ReplanGuard 覆盖全部 5 条路径: S_VALIDATE 失败 / S_ROLLBACK 完成 / M1
 
 Agent 以 goroutine 形式运行，空闲时挂起释放资源。核心结构见 `pkg/cognition/kernel/state_machine.go:Agent`，FSM 实现见 `pkg/cognition/fsm.go:FallbackFSM`。
 
-Agent 运行循环: 等待 intent channel 上的意图脉冲 → 唤醒推进状态机 → 处理 LLM 和工具返回的 events → 空闲超过 5 分钟自动 checkpoint 到 SurrealDB-Core KV 后释放 goroutine。HITL 等待期间通过 M2 EventLog Subscribe 监听 ApprovalResolved 事件（非 Go channel，防止进程崩溃丢失审批）。
+Agent 运行循环: 等待 intent channel 上的意图脉冲 → 唤醒推进状态机 → 处理 LLM 和工具返回的 events → 空闲超过 SuspendIdleThreshold (`spec/state.yaml §m4_kernel.suspend_idle_threshold_minutes`) 自动 checkpoint 到 SurrealDB-Core KV 后释放 goroutine。HITL 等待期间通过 M2 EventLog Subscribe 监听 ApprovalResolved 事件（非 Go channel，防止进程崩溃丢失审批）。
 
 内存效率: 活跃 Agent 约消耗 1MB（含 buffer 和栈），休眠 Agent 仅保留约 100 字节的 checkpoint 元数据。Tier 0 硬上限 2 个活跃 Agent。
 
@@ -94,7 +94,7 @@ Agent 运行循环: 等待 intent channel 上的意图脉冲 → 唤醒推进状
 ## 3. S_VALIDATE 四层校验
 
 ```
-L0 拓扑 (<1ms, 所有 DAG): 节点熔断(>50)→环检测(DFS 三色)→深度熔断(>10)→孤立节点
+L0 拓扑 (<1ms, 所有 DAG): 节点熔断(`spec/state.yaml §m4_kernel.plan_dag_max_nodes`)→环检测(DFS 三色)→深度熔断(`spec/state.yaml §m4_kernel.plan_dag_max_depth`)→孤立节点
 L1 确定性 (<1ms, 所有动作): TaintGate + JSON Schema + Tool availability + PolicyGate[Cedar-Gate]
 L2 启发式 (<5ms, RiskHigh+): 批量规模(>100)→受保护路径→资源预估
 L3 LLM 看门狗 (~200ms, 仅 RiskPrivileged): Tier1 模型语义判断, <10次/小时
@@ -114,7 +114,7 @@ PolicyGate: `[Cedar-Gate]` {principal, action, resource, context} → FORBID 优
 
 HeuristicChecker (L2, RiskLevel>=RiskHigh): 批量检查(>100) / 受保护路径(`/etc/`,`/sys/`,`~/.ssh/`→拒绝) / 资源预估 vs Tier 阈值
 
-LLMWatchdog (L3, 仅 RiskPrivileged): Budget Pool 模型（M1 §4.2 `<flash-class>`）输出 `{reasonable, reason}`，>10次/小时 → L3+HITL 双审批。L3 为咨询信号——L0/L1/L2 确定性校验未放行的动作不会因 L3 通过而放行。L3 仅可建议拒绝（补充确定性门控），不可建议放行。
+LLMWatchdog (L3, 仅 RiskPrivileged): Budget Pool 模型（M1 §4.2 `<flash-class>`）输出 `{reasonable, reason}`，频次上限见 `spec/state.yaml §m4_kernel.l3_watchdog_max_per_hour`，超限 → L3+HITL 双审批。L3 为咨询信号——L0/L1/L2 确定性校验未放行的动作不会因 L3 通过而放行。L3 仅可建议拒绝（补充确定性门控），不可建议放行。
 
 ---
 
@@ -144,7 +144,7 @@ DAGExecutor 实现见 `pkg/cognition/kernel/dag_executor.go`（旧版 `pkg/cogni
 1. findReadyNodes: DependsOn ⊆ completedSet → 就绪，同批字典序优先
 2. 副作用分类: read_only/pure → 并发; write_local/write_network → 必须声明 CompensationAction
 3. 启动 LeaseHeartbeat goroutine: 每 15s(±5s jitter) 续期，防 M8 Reaper 误判超时
-4. errgroup 并发执行，sem channel 限制并发度 (Tier 0 = 4)
+4. errgroup 并发执行，sem channel 限制并发度 (`spec/state.yaml §m4_kernel.max_concurrent_nodes`)
 5. 任意失败 → 已完成并行节点逆序 Undo 补偿
 6. 循环至全部完成 → 停止 Heartbeat
 
@@ -155,7 +155,6 @@ DAGExecutor 实现见 `pkg/cognition/kernel/dag_executor.go`（旧版 `pkg/cogni
 ### 4.5 StepScorer (Hardware-Aware Dual-Track Scorer)
 
 接口定义见 `internal/protocol/interfaces.go:StepScorer`，实现见 `pkg/cognition/step_scorer.go`。
-为应对复杂推理和长程任务的中间步奖励需求，系统引入基于硬件感知的双轨评分机制：
 
 - **Tier 0 (纯静态启发式)**: 受限内存环境仅执行启发式扣分。权重: toolSuccess=0.4, schemaCheck=0.3, latency=0.2, tokenEfficiency=0.1。Score 从 1.0 起点按四项扣分，latency/token 惩罚 cap 封顶。
 - **Tier 1+ (启发式 + 1.5B 挂载 PRM 融合)**: 在启发式规则之上，系统通过 M1 LocalProvider 加载一个极小参数量 (如 1.5B) 的 PRM (Process Reward Model)。PRM 对局部步 (intermediate steps) 给予语义打分 (+1, 0, -1)，并在总分中占 0.6 权重。如果 PRM 调用超时 (>100ms) 或内存不足，则安全降级为纯静态启发式。
@@ -220,7 +219,7 @@ RouteReasoning:
 
 ## 6. World Model
 
-双层决策体系: L1 World Model 在 LLM 调用前拦截，基于马尔可夫状态转移矩阵（拉普拉斯平滑，公式 `(success+1)/(total+2)`）和 Isotonic Regression 置信度校准，判断当前状态是否可以直接跳过 LLM 推理。校准置信度 > 0.8 时跳过 LLM。L2 SurpriseIndex 在执行后进行结果质量评估和路由调整。
+双层决策体系: L1 World Model 在 LLM 调用前拦截，基于马尔可夫状态转移矩阵（拉普拉斯平滑，公式 `(success+1)/(total+2)`）和 Isotonic Regression 置信度校准，判断当前状态是否可以直接跳过 LLM 推理。校准置信度超阈值 (`spec/state.yaml §m4_kernel.world_model_skip_threshold`) 时跳过 LLM。L2 SurpriseIndex 在执行后进行结果质量评估和路由调整。
 
 **重放确定性契约**: 跳过 LLM 时必须写入 EventLog `event_type='world_model_skip'` 事件（含 StateContext 哈希、转移矩阵版本、置信度、预测输出），重放时从 EventLog 读取该事件直接复用预测输出，禁止重新计算转移矩阵（转移矩阵在重放时刻可能已更新）。这保证 [HE-Rule-5] 状态机控制流的可重放性——World Model 跳过决策本身被视为状态机的一次结构化填空，与 LLM 调用同等待遇。
 
@@ -310,7 +309,7 @@ Event ID 格式: {session_id}:{seq}:{event_type}
 
 在非重放路径上（`uuid.New().String()` 生成 2PC 中间事件），同一事件的重放时间戳不同但通过 idempotency_key 防重入——回放时 `isReplaying=true` 物理切断所有副作用，确保这些 UUID 事件不会被重新投递。
 
-**Snapshot 策略**: 每 1000 步创建一次 session_snapshot，保留最近 5 个。Snapshot 损坏时回退到完整 EventLog 回放。
+**Snapshot 策略**: 步频与保留数见 `spec/state.yaml §m4_kernel.snapshot_interval_steps` / `snapshot_retention_count`。Snapshot 损坏时回退到完整 EventLog 回放。
 
 **S_REPLAN 降级**: M1 CircuitBreaker 熔断时，执行零 LLM 的确定性图剪枝（纯 Go 图遍历）：移除失败节点及其所有直接后继节点，注入 degraded_replan 标记。此步骤禁止任何 LLM 调用——剪枝逻辑为纯函数，幂等且可重放。
 
@@ -379,4 +378,4 @@ Event ID 格式: {session_id}:{seq}:{event_type}
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m4_kernel`。最终值落 `config/m04.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m4_kernel`。

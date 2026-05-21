@@ -55,14 +55,14 @@ AgentREPL:
 数据导出/迁移: `polaris export [outfile.jsonl]` 流式导出 `chat_sessions`、`chat_messages` 和 `kv_store` (config 前缀)。`polaris import <infile.jsonl>` 幂等 upsert 恢复。
 
 **外部平台迁移**: `polaris migrate openclaw` 一次性迁移工具（`cmd/polaris/migrate_openclaw.go`）,从 OpenClaw 用户数据目录(~/.openclaw)导入配置、API 密钥、记忆和人设文件:
-- 配置与密钥 → `configs/defaults.yaml` (key mapping, 低难度)
-- SOUL.md/AGENTS.md → 系统 prompt + M5 记忆层 (均 Markdown, 低难度)
-- 记忆 SQLite → EventLog (需 `--with-memory` 显式启用, schema 自省映射, 中难度)
+- 配置与密钥 → `configs/defaults.yaml`（key mapping）
+- SOUL.md/AGENTS.md → 系统 prompt + M5 记忆层（均 Markdown）
+- 记忆 SQLite → EventLog（需 `--with-memory` 显式启用, schema 自省映射）
   - 默认 `--stage` 模式: 记忆写入隔离命名空间 `topic=memory.openclaw.staging`, 低 `salience=0.3`
   - `--stage=false` : 跳过隔离, 直接写主线 `memory.openclaw`
   - `--smart` : LLM 启发式预压缩(按 session 分组摘要、去重、过滤低价值行), 降噪后写入
   - 迁移后运行 `polaris memory process-staging` 触发三阶段渐进吸收: 去重→Salience重算→topic提升到主线
-- 技能 SKILL.md → 仅拷贝源码 + 标注"需人工 Logic Collapse 编译为 Wasm"(脚本→Wasm 无法自动转换, 高难度)
+- 技能 SKILL.md → 仅拷贝源码 + 标注"需人工 Logic Collapse 编译为 Wasm"（脚本→Wasm 无法自动转换）
 - ClawHub 技能注册表只读拉取: `--clawhub-url` 参数, 同源技能按同一规则处理
 
 月度成本报告: cron 0 0 1 * * → 生成 monthly_cost_report.md，含 by_provider / by_task_type / by_session / by_call_type(llm|embedding) 四维度。`polaris config budget set <amount>` 配置 monthly_budget，写入 `kv_store`（键 `config:budget:monthly_usd`）。
@@ -186,7 +186,7 @@ SealedMiddleware: ServerState==Unsealed→next; 否则非 unseal/healthz→503
 
 Server.Shutdown:
   1. 禁用 Keep-Alive, 停止新连接
-  2. 30s context 等待进行中请求
+  2. 等待进行中请求，超时见 `spec/state.yaml §m13_scheduler.graceful_shutdown_timeout_seconds`
   3. http.Server.Shutdown(ctx)
   4. SSE 客户端连接随 context 取消自然断开
   5. scheduler.Drain()
@@ -329,7 +329,7 @@ Notifier: NotifyApproval(req)/NotifyResolved(req,outcome)
 HITLStore: Persist(INSERT OR REPLACE)/UpdateStatus(UPDATE status/comment/resolved_at)/LoadPending(SELECT WHERE status='pending')
 
 ApprovalRequest:
-  ID/AgentID/Action(string)/Detail(string)/RiskLevel(string)/CreatedAt/Timeout(30min,Per-TaskType可配置)
+  ID/AgentID/Action(string)/Detail(string)/RiskLevel(string)/CreatedAt/Timeout（默认值见 `spec/state.yaml §m13_scheduler.hitl_default_deadline_minutes_normal`，紧急/长程档见同节 _urgent / _long，Per-TaskType 可覆盖）
   TimeoutPolicy: kill_pause(默认)/auto_deny/auto_approve(policy_version>=2+管理员授权)
   Status: pending/approved/denied/timeout
 
@@ -390,7 +390,7 @@ ConnectMCP: 1.遍历 Servers 2.CommandTransport exec.Command→MCP 会话 3.sess
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m13_scheduler`。最终值落 `config/m13.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m13_scheduler`。
 
 ## 7. 跨模块依赖与契约
 

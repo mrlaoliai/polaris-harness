@@ -309,9 +309,9 @@ wazero 运行时配置见 [Wasm-Sandbox] (M7 权威源)。本节仅含 M6 编译
 
 ### 5.1 分层预加载
 
-- 等级: 金牌 | 条件: 成功率 > 90% 且使用 > 50 | 策略: 启动时预编译常驻 | Tier 1+ 上限: 20 | Tier 0 上限: **5**
-- 等级: 银牌 | 条件: 成功率 > 70% 或 7 天使用 > 10 | 策略: 首次调用编译后常驻 | Tier 1+ 上限: 100 | Tier 0 上限: **20**
-- 等级: 铜牌 | 条件: 其余已入库 | 策略: 按需编译，30min TTL | Tier 1+ 上限: 200 | Tier 0 上限: **25** (~50MB)
+- 等级: 金牌 | 条件: 成功率 > 90% 且使用 > 50 | 策略: 启动时预编译常驻 | 各 Tier 上限见 M03 §5.3 TierParameterTable `SkillPreloadGold`
+- 等级: 银牌 | 条件: 成功率 > 70% 或 7 天使用 > 10 | 策略: 首次调用编译后常驻 | 各 Tier 上限见 M03 §5.3 TierParameterTable `SkillPreloadSilver`
+- 等级: 铜牌 | 条件: 其余已入库 | 策略: 按需编译，30min TTL | 各 Tier 上限见 M03 §5.3 TierParameterTable `SkillPreloadBronze`（Tier 0 ~50MB）
 
 ```
 WasmSkillCache:
@@ -342,14 +342,14 @@ Tier 0 Bronze 并发编译硬限制 1: Bronze 按需编译瞬间额外占用 ~5-
 - 故障场景: SkillSelector 未匹配任何技能 | 降级路径: 退到 LLM 通用工具调用路径 | 恢复策略: 新技能注册后自动生效
 - 故障场景: Wasm 编译失败 | 降级路径: `ErrLogicCollapseUnavailableInLocalOnly` + 降级到 SKILL.md 模式 (WARN) | 恢复策略: LLM 蒸馏失败缓存标记，下次重试
 - 故障场景: cosign 签名校验失败 | 降级路径: 拒绝加载（fail-closed）+ CRITICAL 审计 | 恢复策略: 重新签名或回滚旧版本
-- 故障场景: 技能执行超时 | 降级路径: 30s 硬 kill + ErrSkillTimeout | 恢复策略: 下次调用正常执行
+- 故障场景: 技能执行超时 | 降级路径: 硬 kill（超时见 `spec/state.yaml §m6_skill.skill_exec_timeout_low_seconds` / `skill_exec_timeout_medium_high_seconds`）+ ErrSkillTimeout | 恢复策略: 下次调用正常执行
 - 故障场景: 技能缓存 LRU 驱逐 | 降级路径: 冷加载 (~100ms 延迟) | 恢复策略: 热度恢复后自动缓存
 
 与 OSMemoryGuard 协同: M3 L2 紧急 → 暂停 Logic Collapse 编译（禁止新 Wasm 编译）。Tier 0 Bronze 并发编译硬上限 1。
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m6_skill`。最终值落 `config/m06.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m6_skill`。
 
 ## 8. 跨模块依赖与契约
 

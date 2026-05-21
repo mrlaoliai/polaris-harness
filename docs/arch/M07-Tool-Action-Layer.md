@@ -282,7 +282,7 @@ permit(principal in Role::"Agent", action == Action::"call_tool", resource) when
 
 write_network/privileged 不可逆操作:
 - Phase1 Shadow Dry-Run: 路由到 `localhost:{port}/_shadow/{tool_name}`→基于output_schema自动生成mock响应→Agent Kernel验证schema一致性
-- Phase2 HITL: 展示工具名+参数摘要+Shadow结果→approve生成一次性Token(TTL=1min)/deny拒绝
+- Phase2 HITL: 展示工具名+参数摘要+Shadow结果→approve生成一次性Token(TTL 见 `spec/state.yaml §m7_tool.dryrun_protect_window_seconds`)/deny拒绝
 - Phase3 Real Execution: 一次性Token签发→执行
 
 `generateMockFromSchema`: string→"[MOCK:{name}]"；number→min/max中值；boolean→false；array→1元素；object→递归
@@ -507,7 +507,7 @@ GetContextHint(ToolName):
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m7_tool`。最终值落 `config/m07.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m7_tool`。
 
 ## 13. 跨模块契约
 

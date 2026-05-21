@@ -25,7 +25,7 @@
 | inv_M10_02 | Connector 拉取内容默认 taint=high——对于纯本地协议（如 file://）强制置为 low，不可被全局策略覆盖升为 high | M11 Connector-Taint-Table |
 | inv_M10_03 | 每 chunk 携带 lineage metadata——source_uri + doc_version + chunk_seq + content_hash | DDL NOT NULL 约束 |
 | inv_M10_04 | Embedding 维度变更时禁止跨模型投影——通过 SurrealDB-Core 双索引隔离表实现无缝切换 | M10 §1.5 |
-| inv_M10_05 | GraphRAG LLM 调用受日预算硬上限（Tier 0: 200 次/日）——超限跳过 graph_build_task | M10 §2.7 预算上限 |
+| inv_M10_05 | GraphRAG LLM 调用受日预算硬上限（Tier 0 上限见 `spec/state.yaml §m10_kb.graphrag_llm_call_daily_budget_ht0`）——超限跳过 graph_build_task | M10 §2.7 预算上限 |
 | inv_M10_06 | 所有出站 Connector 网络请求经 M11 SafeDialer——禁止裸 HTTP client | CI `safe_dialer_lint` |
 
 ---
@@ -143,7 +143,7 @@ Ingester.generateSummaries:
 
 ### 2.2 HybridRetriever (内容层)
 
-HybridRetrieverConfig: BM25Weight=0.3, VectorWeight=0.6, GraphWeight=0.1, RRF_K=60, OversampleN=3, RerankTopM=50, FinalTopK=5
+HybridRetrieverConfig: BM25Weight=0.3, VectorWeight=0.6, GraphWeight=0.1, RRF_K 见 `spec/state.yaml §m5_memory.rrf_k`（M5/M10 共享），OversampleN=3, RerankTopM=50, FinalTopK=5
 
 4 级流水线:
   1. 三路并行宽召回(限定scope子树): errgroup BM25.SearchInScope(3×50) + denseVec.SearchInScope + graphDB.TraverseInScope(depth=2); 部分路失败→slog.Warn+继续
@@ -216,7 +216,7 @@ EntityExtractor/RelationExtractor/CrossDocumentLinker/Clusterer 实现见 `pkg/s
 6. **延迟**: 纯 Go，<5ms，零外部依赖
 
 **GraphRAG LLM 调用预算上限**:
-- 每日 LLM 调用上限: Tier 0 = 200 次（单实体提取 + 关系提取），Tier 1+ = 500 次
+- 每日 LLM 调用上限: Tier 0 见 `spec/state.yaml §m10_kb.graphrag_llm_call_daily_budget_ht0`（单实体提取 + 关系提取），Tier 1+ = 500 次
 - GraphBuildWorker 每次轮询前检查当日 GraphRAG LLM 调用计数 (`polaris_graphrag_llm_calls_daily` Counter)。已达上限 → 跳过本轮 graph_build_task + WARN + 任务保持 pending 状态 + 设置 `next_retry_at = 次日 00:00:00 UTC`（M2 Outbox Worker 主查询和迟提交补偿均检查 next_retry_at，跳过未来重试时间的记录，避免每 30s 无条件死循环扫描）
 - 优先级: 优先处理用户最近 24h 活跃检索的知识库文档的图谱构建，48h+ 未访问的文档降级为低优先级
 - Global Search 零 LLM 调用（抽取式摘要替代生成式摘要）
@@ -373,7 +373,7 @@ Connectors → Document → 结构解析 → 文档树+父子双存+多级摘要
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m10_kb`。最终值落 `config/m10.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m10_kb`。
 
 ## 10. 跨模块契约
 

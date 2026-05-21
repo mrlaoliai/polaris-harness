@@ -95,7 +95,7 @@ CI 回放(毫秒/零费用/确定性阻塞) + Nightly 重执行(真实模型)。
 
 EvalRunner/EvalRunConfig/TrajectoryRecorder/TrajectoryReplayer 实现见 `pkg/governance/eval_runner.go`。
 
-CI: PR 变更 `prompts/** skills/** config/** go.mod` → replay P0+P1, 5min 超时。P0 失败阻塞，P1<0.90 警告。
+CI: PR 变更 `prompts/** skills/** config/** go.mod` → replay P0+P1, 5min 超时。P0 失败阻塞，P1 单 Judge 置信度阈值见 `spec/state.yaml §m12_eval.judge_single_confidence`，低于阈值告警。
 
 ## 5. Eval Suite 分区 (防 M9 过拟合)
 
@@ -286,7 +286,7 @@ CoverageGaps: 输入工具注册表 → 返回未覆盖工具名
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m12_eval`。最终值落 `config/m12.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m12_eval`。
 
 ## 18. 跨模块依赖与契约
 

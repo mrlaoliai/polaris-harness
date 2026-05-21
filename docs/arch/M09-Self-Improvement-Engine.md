@@ -73,7 +73,7 @@
 
 后台任务按五级优先级调度: 0=Consolidation（记忆压缩，最高优先）、1=LogicCollapse（技能自动生成）、2=Reflection（失败反思）、3=AutoCurriculum（课程自动生成）、4=PromptOptimizer（最低优先）。
 
-**空闲门控**: L0/L1 级任务不受限制。L2+ 级任务需要同时满足: CPU 占用率 <5% 持续超过 30 秒、空闲内存 >1.5GB、交流电源供电、无全屏应用——四项条件全部满足才允许入队。运行中的 L2+ 任务在条件破坏时被挂起（30 秒宽限期）。电池供电时仅允许 L0 级任务。`/config background_tasks off` 暂停所有后台任务。
+**空闲门控**: L0/L1 级任务不受限制。L2+ 级任务需要同时满足: CPU 占用率低于 `spec/state.yaml §m9_self_improve.worker_cpu_pct_user_active` 持续超过 `worker_heartbeat_seconds`、空闲内存 >1.5GB、交流电源供电、无全屏应用——四项条件全部满足才允许入队。运行中的 L2+ 任务在条件破坏时被挂起（同步宽限期）。电池供电时仅允许 L0 级任务。`/config background_tasks off` 暂停所有后台任务。
 
 **状态与游标持久化 (HE-Rule-6)**: 
 Background Worker 消费 EventLog 产生自进化样本时，必须维护自身的消费游标。每个 Worker 在处理完一个 Batch 之后，必须通过 CAS (Compare-And-Swap) 将 `last_processed_event_seq` 同步写入 M2 的 `sys_config` 表中，以确保原子推进。配合下游阶段写入操作的幂等性设计（通过 `idempotency_key` 约束），严格保障崩溃恢复时的 Exactly-Once 处理语义。严禁 Worker 依赖纯内存队列或在重启后漏消费/重复消费进度。
@@ -198,13 +198,13 @@ SKILL.md → 收集轨迹 → LLM 编译 Wasm → System1 执行
 ```
 Gate 1: Eval Harness 离线回归 — 全部黄金用例 + Welch's t-test p<0.05
 Gate 2: Shadow Execution (3-7天) — 成功率/Token/工具正确率/[SurpriseIndex] 无退化。candidate 版本执行真实任务但输出不面用户（仅 M12 ShadowExecutor 对比）。安全护栏: candidate 禁止 write_network + privileged（仅 read_only + write_local 且写入隔离影子 workspace，防候选版本产生不可逆副作用）。影子执行中 write_network 工具调用强制路由至 M7 Shadow Sink（§5.3）mock 模式，输出记录于影子 workspace；影子 vs 基线对比时此类步骤以 tool_call 参数一致性（而非实际输出）作为评估依据。
-Gate 3: Canary Rollout (1%→5%→25%→50%→100%)
+Gate 3: Canary Rollout（阶梯权威源 `spec/state.yaml §m9_self_improve.canary_steps`）
   硬停止: error>baseline×1.2 | P95 latency>baseline×1.4 | 安全违规>0 → autoRollback
-  每阶段稳定 24-48h 后进阶
+  每阶段驻留时长见 `canary_dwell_per_step_hours_ht0` 后进阶
 Gate 4: Full Rollout, 旧版本保留 7 天 rollback target
 ```
 
-实现见 `pkg/swarm/rollout.go` (ProgressiveRollout, RolloutStage)。流量按 1→5→25→50→100 百分比推进，每阶段稳定 24-48h 后进阶。硬停止条件: ErrorRate>baseline×1.2 | P95Latency>baseline×1.4 | SafetyViolations>0 → autoRollback。M9 决策阶段推进，M13 TrafficSplitter 执行分发，M12 ShadowExecutor 对比评估。
+实现见 `pkg/swarm/rollout.go` (ProgressiveRollout, RolloutStage)。阶梯与驻留时长权威源 `spec/state.yaml §m9_self_improve.canary_steps` / `canary_dwell_per_step_hours_ht0`。硬停止条件: ErrorRate>baseline×1.2 | P95Latency>baseline×1.4 | SafetyViolations>0 → autoRollback。M9 决策阶段推进，M13 TrafficSplitter 执行分发，M12 ShadowExecutor 对比评估。
 
 ### 2.4 Cross-Module Co-Evolution [Module-Topology] [Blackboard]
 
@@ -353,7 +353,7 @@ QLoRA/PRM/ActivationSteering 的 Tier 门控由 `FeatureGate` 自动化：`Featu
 
 | 故障场景 | 降级路径 | 恢复策略 |
 |---------|---------|---------|
-| Worker goroutine 崩溃 (Reflexion/Distillation/Curriculum/Fallacy) | suture OneForOne 重启 + backoff (100ms→30s) | 5 次上限 → Escalate Root Supervisor |
+| Worker goroutine 崩溃 (Reflexion/Distillation/Curriculum/Fallacy) | suture OneForOne 重启 + backoff（权威源 `spec/state.yaml §m9_self_improve.worker_restart_backoff_initial_ms` / `worker_restart_backoff_max_seconds`） | 5 次上限 → Escalate Root Supervisor |
 | PromptOptimizer 候选生成为空 | 跳过本周期 → 延长触发间隔 | 下次周期正常触发恢复 |
 | MEMF 池检索超时 (>50ms) | 跳过剪枝直接放行 | 池大小削减后恢复 |
 | Auto-Curriculum 任务失败 | 标记课程任务 failed→Ephemeral Namespace 绑定，不影响核心功能 | — |
@@ -366,7 +366,7 @@ QLoRA/PRM/ActivationSteering 的 Tier 门控由 `FeatureGate` 自动化：`Featu
 
 ## 默认参数
 
-完整阈值与重评触发条件: `spec/state.yaml §thresholds.m9_self_improve`。最终值落 `config/m09.toml`。
+完整阈值与重评触发条件: `spec/state.yaml §thresholds.m9_self_improve`。
 
 ## 7. 跨模块依赖与契约
 
