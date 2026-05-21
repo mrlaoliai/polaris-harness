@@ -161,8 +161,10 @@ func Load(path string) (*Config, error) {
 	loadModuleTOML(filepath.Join(configDir, "m6_skill.toml"), &cfg.Thresholds.M6Skill)
 	loadModuleTOML(filepath.Join(configDir, "m7_tool.toml"), &cfg.Thresholds.M7Tool)
 	loadModuleTOML(filepath.Join(configDir, "m8_orchestrator.toml"), &cfg.Thresholds.M8Orchestrator)
+	loadModuleTOML(filepath.Join(configDir, "m9_self_improve.toml"), &cfg.Thresholds.M9SelfImprove)
 	loadModuleTOML(filepath.Join(configDir, "m10_knowledge.toml"), &cfg.Thresholds.M10Knowledge)
 	loadModuleTOML(filepath.Join(configDir, "m11_policy.toml"), &cfg.Thresholds.M11Policy)
+	loadModuleTOML(filepath.Join(configDir, "m12_eval.toml"), &cfg.Thresholds.M12Eval)
 	loadModuleTOML(filepath.Join(configDir, "m13_interface.toml"), &cfg.Thresholds.M13Interface)
 
 	cfg.Thresholds = applyThresholdDefaults(cfg.Thresholds)
