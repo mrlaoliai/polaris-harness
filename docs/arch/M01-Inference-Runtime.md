@@ -88,7 +88,7 @@ L3 LLM 输出 provider 推荐槽位，由 Route() 确定性函数验证（预算
 
 ### 4.3 ComplexityDeterminer
 
-实现见 `pkg/substrate/inference/router.go:DualRouteRouter`。
+实现见 `pkg/substrate/inference/router.go:InferenceRouter`。
 
 - outputEstimate: EMA α=0.3, window=100；冷启动默认 1024(simple) / 4096(code/research)
 - ToolCount > 5 OR outputEstimate > 4096 → Reasoning Pool
