@@ -15,15 +15,20 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to open sqlite db: %v", err)
 	}
 
-	// Create rag_chunks schema
+	// Create rag_chunks schema（含 031_rag_lineage 新增的 lineage 字段）
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS rag_chunks (
-			id              TEXT PRIMARY KEY,
-			doc_id          TEXT NOT NULL,
-			content         TEXT NOT NULL,
-			taint_level     INTEGER NOT NULL DEFAULT 1,
-			taint_source    TEXT,
-			created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			id                   TEXT PRIMARY KEY,
+			doc_id               TEXT NOT NULL,
+			content              TEXT NOT NULL,
+			taint_level          INTEGER NOT NULL DEFAULT 1,
+			taint_source         TEXT,
+			source_uri           TEXT NOT NULL DEFAULT '',
+			doc_version          TEXT NOT NULL DEFAULT '',
+			chunk_seq            INTEGER NOT NULL DEFAULT 0,
+			content_hash         TEXT NOT NULL DEFAULT '',
+			embed_model_version  TEXT NOT NULL DEFAULT '',
+			created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
 
 		CREATE VIRTUAL TABLE IF NOT EXISTS rag_chunks_fts USING fts5(

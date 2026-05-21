@@ -78,6 +78,12 @@ type Chunk struct {
 	ParentChunkID string    `json:"parent_chunk_id,omitempty"`
 	TaintLevel    int       `json:"taint_level"`
 	TaintSource   string    `json:"taint_source,omitempty"`
+	// inv_M10_03 lineage metadata — DDL NOT NULL，跨版本溯源必填
+	SourceURI         string `json:"source_uri"`
+	DocVersion        string `json:"doc_version"`
+	ChunkSeq          int    `json:"chunk_seq"`
+	ContentHash       string `json:"content_hash"`
+	EmbedModelVersion string `json:"embed_model_version"`
 }
 
 // Entity is a node in the knowledge graph extracted from documents.

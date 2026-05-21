@@ -28,15 +28,16 @@ const (
 
 // MemoryEntry is a unit of retrievable memory.
 type MemoryEntry struct {
-	ID          string         `json:"id"`
-	Layer       Layer          `json:"layer"`
-	Content     string         `json:"content"`
-	Embedding   []float64      `json:"embedding,omitempty"`
-	EmbedDim    int            `json:"embed_dim,omitempty"`
-	OccurredAt  time.Time      `json:"occurred_at"`
-	TaintLevel  int            `json:"taint_level"`
-	TaintSource string         `json:"taint_source,omitempty"`
-	Meta        map[string]any `json:"meta,omitempty"`
+	ID                string         `json:"id"`
+	Layer             Layer          `json:"layer"`
+	Content           string         `json:"content"`
+	Embedding         []float64      `json:"embedding,omitempty"`
+	EmbedDim          int            `json:"embed_dim,omitempty"`
+	OccurredAt        time.Time      `json:"occurred_at"`
+	TaintLevel        int            `json:"taint_level"`
+	TaintSource       string         `json:"taint_source,omitempty"`
+	Meta              map[string]any `json:"meta,omitempty"`
+	EmbedModelVersion string         `json:"embed_model_version"` // inv_M5_03: 跨版本检索触发 OnlineReindexer
 }
 
 // MemorySystem is the four-layer memory manager.

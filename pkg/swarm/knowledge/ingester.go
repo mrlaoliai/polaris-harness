@@ -4,10 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"strings"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 )
+
+func simpleHash(s string) uint64 {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(s))
+	return h.Sum64()
+}
 
 // PipelineImpl 实现 IngestionPipeline (M10 Knowledge RAG 摄取管道)。
 // 生产实现: 将文本分块，并落盘到 SQLite rag_chunks 表以支持 FTS。
@@ -37,6 +44,7 @@ func (p *PipelineImpl) Ingest(ctx context.Context, doc *Document, initialTaint i
 		if part == "" {
 			continue
 		}
+		contentHash := fmt.Sprintf("%x", simpleHash(part))
 		chunkID := fmt.Sprintf("%s_chunk_%d", doc.Ref.ContentHash, i)
 
 		nodes = append(nodes, &DocNode{
@@ -46,16 +54,22 @@ func (p *PipelineImpl) Ingest(ctx context.Context, doc *Document, initialTaint i
 			Content: part,
 		})
 
-		// 持久化 Chunk 到 SQLite rag_chunks 表
+		// 持久化 Chunk 到 SQLite rag_chunks 表（含 inv_M10_03 lineage 字段）
 		_, err := p.db.ExecContext(ctx, `
-			INSERT INTO rag_chunks (id, doc_id, content, taint_level, taint_source)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO rag_chunks (id, doc_id, content, taint_level, taint_source,
+				source_uri, doc_version, chunk_seq, content_hash, embed_model_version)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')
 			ON CONFLICT(id) DO UPDATE SET
 				content=excluded.content,
 				taint_level=excluded.taint_level,
 				taint_source=excluded.taint_source,
+				source_uri=excluded.source_uri,
+				doc_version=excluded.doc_version,
+				chunk_seq=excluded.chunk_seq,
+				content_hash=excluded.content_hash,
 				created_at=CURRENT_TIMESTAMP
-		`, chunkID, doc.Ref.URI, part, initialTaint, "")
+		`, chunkID, doc.Ref.URI, part, initialTaint, "",
+			doc.Ref.URI, doc.Ref.ContentHash, i, contentHash)
 		if err != nil {
 			return nil, perrors.Wrap(perrors.CodeInternal, "ingester: insert chunk failed", err)
 		}
