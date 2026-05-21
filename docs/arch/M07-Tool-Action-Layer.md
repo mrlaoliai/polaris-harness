@@ -345,6 +345,16 @@ GOOS守卫: deployTier==Tier0 && mode=="headless" → 跳过注册。
 
 GUI Action Loop: see→decide→act循环maxSteps次。Capture→VLM Describe→VLM DecideAction→done返回成功/impossible返回失败→executeAction(left_click/right_click/type/key/scroll/mouse_move)→GUIResult
 
+**HITL 拦截门控**（`interceptComputerUse`，`pkg/cognition/kernel/agent_execute.go`）:
+- 触发工具: `computer_use` 和 `browser_use`（均需经此门控）
+- 受 `StateContext.Preferences["computer_use_mode"]` 控制（由 `Agent.SetPreferences` 注入，来源 `preferences` 表）:
+  - `auto_review`（默认）: 仅危险动作触发 HITL
+  - `default`: 所有调用均触发 HITL
+- 危险动作定义:
+  - `computer_use`: `key / type / left_click / right_click / double_click / left_click_drag`
+  - `browser_use`: `click / type / key`
+- HITL 路径: `a.hitl.Prompt()` → 用户 approve/deny → deny 返回 `CodeForbidden`（任务中止）
+
 ### 7.2 LAM（Large Action Model）— ComputerUseEngine
 
 实现见 `pkg/action/lam/lam.go`（`ComputerUseEngine`，实现 `LargeActionModel` 接口）。将自然语言意图转为 GUI 动作并执行，路径：`intent + ScreenState → VLM → computerUseArgs JSON → ExecutorFn`。

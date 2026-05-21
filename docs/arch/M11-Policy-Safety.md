@@ -241,6 +241,14 @@ Agent 能力策略 (permit + conditions):
     附加 TaintLevel 约束: write_network 工具调用参数中任一 `[TaintLevel]` ≥ `[Taint-Medium]` → forbid (需经 SanitizeByUserApproval 降至 TaintLow 或 TaintUserReviewed 后方可放行)
     附加配额约束 (OWASP LLM06 Excessive Agency 防护): Capability Token 必须包含 `MaxCallsPerTask` 维度（如单工具上限 50 次），杜绝无限制死循环代理。
 
+**trust_level 数据来源**（插件/MCP 场景）:
+  `skill_sources.trust_tier` / `mcp_servers.trust_tier` 在 Cedar 评估上下文注入为 `trust_level`；
+  值由 `builtinCatalog` 白名单决定，安装时固化，请求方不可覆盖（ADR-0016）:
+  - `trust_tier=3`（Official）→ Cedar `trust_level=3`，`write_network` 自动通过；
+  - `trust_tier=2`（Community）→ `trust_level=2`，`write_network` 需 `approval=="approved"`（HITL 补签）；
+  - `trust_tier=1`（Unknown）→ `trust_level=1`，Cedar deny-by-default 阻断 `write_network`。
+  详见 M13 §8.6 插件安装流程。
+
 硬约束 (forbid 无条件优先):
   deploy/drop_db/delete_data/send_mass_email AND approval != "approved" → forbid
   monthly_spend > monthly_budget → forbid (所有 principal/action/resource)
