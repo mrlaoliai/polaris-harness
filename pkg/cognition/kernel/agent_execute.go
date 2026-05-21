@@ -423,7 +423,22 @@ func (a *Agent) runExecuteDAG(ctx context.Context) error { //nolint:gocyclo
 			}, nil
 		}
 
+		start := time.Now()
 		res, err := a.toolRegistry.ExecuteTool(ctx, toolName, args, taintLevel)
+		latencyMs := time.Since(start).Milliseconds()
+
+		// Adaptive Max-Steps: 为每次工具调用打分，低分时收紧步骤预算
+		if a.scorer != nil {
+			toolOK := err == nil && res != nil && res.Success
+			sc := a.scorer.score(stepCtx{
+				ToolName:     toolName,
+				LatencyMs:    latencyMs,
+				TokensUsed:   0, // 工具调用不消耗 token，此维度不惩罚
+				SchemaPassed: true,
+				ToolResult:   toolOK,
+			})
+			a.sCtx.MaxStepsLimit = adjustMaxSteps(a.sCtx.MaxStepsLimit, sc)
+		}
 
 		// [2PC Phase 2] 执行完成，写入日志闭环
 		if !isIdempotent && pendingEventID != "" {

@@ -201,6 +201,10 @@ func (s *ContainerSandbox) Run(ctx context.Context, spec SandboxSpec) (*protocol
 	// MVP: 直接调用系统沙箱二进制（未来替换为 gVisor Runtime）
 	cmd := exec.CommandContext(execCtx, s.binPath, "--tool", spec.ToolName)
 	cmd.Stdin = bytes2ReadCloser(spec.Input)
+	// Linux: 注入命名空间隔离属性（CLONE_NEWPID|CLONE_NEWNS + Pdeathsig）
+	if attrs := containerSandboxSysProcAttr(); attrs != nil {
+		cmd.SysProcAttr = attrs
+	}
 
 	start := time.Now()
 	out, err := cmd.Output()

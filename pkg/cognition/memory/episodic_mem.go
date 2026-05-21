@@ -12,15 +12,25 @@ import (
 
 // EpisodicMem (L1) — 事件表 + 向量投影。
 type EpisodicMem struct {
-	store  protocol.Store
-	events []protocol.Event
-	mu     sync.Mutex
+	store   protocol.Store
+	events  []protocol.Event
+	mu      sync.Mutex
+	indexer *EpisodicGraphIndexer // Tier1+：图索引器，nil 时跳过
 }
 
 func NewEpisodicMem(store protocol.Store) *EpisodicMem {
 	return &EpisodicMem{
 		store:  store,
 		events: make([]protocol.Event, 0),
+	}
+}
+
+// NewEpisodicMemWithGraph 创建含图索引的 EpisodicMem（Tier1+）。
+func NewEpisodicMemWithGraph(store protocol.Store, indexer *EpisodicGraphIndexer) *EpisodicMem {
+	return &EpisodicMem{
+		store:   store,
+		events:  make([]protocol.Event, 0),
+		indexer: indexer,
 	}
 }
 
@@ -37,6 +47,10 @@ func (em *EpisodicMem) Append(ctx context.Context, ev protocol.Event) error {
 		return err
 	}
 	em.events = append(em.events, ev)
+	// 图索引：将事件节点与代理/会话建立关联边（Tier1+，nil 时跳过）
+	if em.indexer != nil {
+		em.indexer.Index(ctx, ev)
+	}
 	return nil
 }
 

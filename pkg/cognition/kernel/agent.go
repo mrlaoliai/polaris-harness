@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
@@ -31,6 +32,7 @@ type Agent struct {
 	toolRegistry protocol.ToolRegistry // 工具注册表（由 M7 提供）
 	memory       protocol.Memory       // 四层记忆系统（由 M5 提供）
 	prm          *prm.DefaultPRM       // 可选；nil 时跳过多候选打分
+	scorer       *stepScorer           // Adaptive Max-Steps 打分器
 }
 
 type AgentConfig struct {
@@ -53,6 +55,7 @@ func NewAgent(id string, taintGate TaintGate, provider protocol.Provider) *Agent
 		cancel:    cancel,
 		taintGate: taintGate,
 		provider:  provider,
+		scorer:    newDefaultStepScorer(),
 	}
 }
 
@@ -70,9 +73,23 @@ func NewAgentWithDefaults(id string) *Agent {
 // Run 启动 Agent 事件循环（Suspend-on-Idle）。
 // 空闲时阻塞在 intent channel 上，不轮询——符合 par_inv_05。
 func (a *Agent) Run(ctx context.Context) error {
+	// 从 AgentConfig 初始化步骤预算（仅在首次 Run 时设置，支持外部注入覆盖）
+	if a.Config.MaxSteps > 0 && a.sCtx.MaxStepsLimit == 0 {
+		a.sCtx.MaxStepsLimit = a.Config.MaxSteps
+	}
 	for {
 		select {
 		case trigger := <-a.intent:
+			// Adaptive Max-Steps: 步骤计数 + 预算熔断
+			a.sCtx.StepsUsed++
+			if a.sCtx.MaxStepsLimit > 0 && a.sCtx.StepsUsed > a.sCtx.MaxStepsLimit {
+				a.sm.history = append(a.sm.history, a.sm.current)
+				a.sm.current = protocol.AgentStateFailed
+				return perrors.New(perrors.CodeInternal,
+					fmt.Sprintf("MAX_STEPS_EXCEEDED: steps %d > limit %d",
+						a.sCtx.StepsUsed, a.sCtx.MaxStepsLimit))
+			}
+
 			effects, err := a.sm.Dispatch(ctx, a.sCtx, trigger)
 			if err != nil {
 				if errors.Is(err, ErrReplanExhausted) {

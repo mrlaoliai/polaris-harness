@@ -100,6 +100,21 @@ func NewMemImpl(store protocol.Store) *MemImpl {
 	}
 }
 
+// NewMemImplWithGraph 创建含 SurrealDB 图遍历路径的 MemImpl（Tier1+）。
+// graph 注入后：episodic 事件写入时自动建立图谱边；检索时激活 BM25+Simhash+Graph 三路融合。
+func NewMemImplWithGraph(store protocol.Store, graph GraphTraverser) *MemImpl {
+	indexer := NewEpisodicGraphIndexer(graph)
+	procedural := &ProceduralMem{skills: nil}
+	return &MemImpl{
+		working:    NewWorkingMem(),
+		episodic:   NewEpisodicMemWithGraph(store, indexer),
+		semantic:   NewSemanticMem(store),
+		procedural: procedural,
+		retriever:  NewHybridRetrieverWithGraph(store, graph),
+		reflection: NewReflectionMem(store),
+	}
+}
+
 func (m *MemImpl) Working() protocol.WorkingMemory       { return m.working }
 func (m *MemImpl) Episodic() protocol.EpisodicMemory     { return m.episodic }
 func (m *MemImpl) Semantic() protocol.SemanticMemory     { return m.semantic }

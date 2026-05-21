@@ -72,6 +72,12 @@ type StateContext struct {
 	TokenBudget int
 	TokensUsed  int
 
+	// Step Budget 控制（Adaptive Max-Steps）
+	// MaxStepsLimit 由 AgentConfig.MaxSteps 初始化；StepScorer 低分时动态收紧。
+	// 0 = 无上限（不推荐用于生产）。
+	StepsUsed     int
+	MaxStepsLimit int
+
 	// 认知状态
 	SurpriseIndex float64
 

@@ -21,6 +21,11 @@ func NewMemorySystem(store protocol.Store) *MemorySystemImpl {
 	return &MemorySystemImpl{mem: NewMemImpl(store)}
 }
 
+// NewMemorySystemWithGraph 创建含 SurrealDB 图路径的 MemorySystem facade（Tier1+）。
+func NewMemorySystemWithGraph(store protocol.Store, graph GraphTraverser) *MemorySystemImpl {
+	return &MemorySystemImpl{mem: NewMemImplWithGraph(store, graph)}
+}
+
 // Mem 返回底层四层 facade。
 func (ms *MemorySystemImpl) Mem() protocol.Memory { return ms.mem }
 
@@ -35,11 +40,29 @@ func (ms *MemorySystemImpl) Write(ctx context.Context, entry *MemoryEntry) error
 		})
 		return nil
 	case LayerEpisodic:
+		evType := protocol.EventIntent
+		if entry.Meta != nil {
+			if t, ok := entry.Meta["event_type"].(string); ok && t != "" {
+				evType = protocol.EventType(t)
+			}
+		}
+		agentID := ""
+		sessionID := entry.ID
+		if entry.Meta != nil {
+			if v, ok := entry.Meta["agent_id"].(string); ok {
+				agentID = v
+			}
+			if v, ok := entry.Meta["session_id"].(string); ok && v != "" {
+				sessionID = v
+			}
+		}
 		ev := protocol.Event{
-			ID:      entry.ID,
-			Type:    "memory_write",
-			TaskID:  entry.ID,
-			Payload: []byte(entry.Content),
+			ID:        entry.ID,
+			Type:      evType,
+			TaskID:    sessionID,
+			AgentID:   agentID,
+			Payload:   []byte(entry.Content),
+			CreatedAt: entry.OccurredAt,
 		}
 		return ms.mem.episodic.Append(ctx, ev)
 	case LayerSemantic:

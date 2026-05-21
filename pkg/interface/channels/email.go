@@ -57,10 +57,10 @@ func (m *Manager) runEmailPoller(ctx context.Context, channelID string, cfg map[
 		case <-ticker.C:
 		}
 		if m.safeDialer == nil {
-		slog.Error("email: SafeDialer 未注入，拒绝 IMAP 连接（SSRF 防护）", "channel", channelID)
-		return
-	}
-	msgs, err := imapFetchUnseen(ctx, m.safeDialer.DialContext, imapHost+":"+imapPort, address, password)
+			slog.Error("email: SafeDialer 未注入，拒绝 IMAP 连接（SSRF 防护）", "channel", channelID)
+			return
+		}
+		msgs, err := imapFetchUnseen(ctx, m.safeDialer.DialContext, imapHost+":"+imapPort, address, password)
 		if err != nil {
 			slog.Error("email: IMAP fetch failed", "err", err)
 			continue
