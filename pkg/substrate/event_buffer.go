@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
 
 // EventWriteBuffer — MPSC 批量写入缓冲。
@@ -64,6 +66,9 @@ func (b *EventWriteBuffer) broadcast(ev *StateTransitionEvent) {
 
 // Emit 发送事件。
 func (b *EventWriteBuffer) Emit(ev *StateTransitionEvent) error {
+	if protocol.IsReplaying() {
+		return nil
+	}
 	b.broadcast(ev)
 	select {
 	case b.ch <- ev:
@@ -87,6 +92,9 @@ func (b *EventWriteBuffer) Emit(ev *StateTransitionEvent) error {
 
 // EmitCritical 关键事件零丢失。
 func (b *EventWriteBuffer) EmitCritical(ctx context.Context, ev *StateTransitionEvent) error {
+	if protocol.IsReplaying() {
+		return nil
+	}
 	b.broadcast(ev)
 	intent := &MutationIntent{
 		Table:     "events",

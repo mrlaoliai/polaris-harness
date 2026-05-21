@@ -263,6 +263,11 @@ func (e *DAGExecutor) executeNode(ctx context.Context, node ExecNode) NodeResult
 			}
 		}
 
+		// 处于重放模式时物理切断外部副作用（工具调用）
+		if protocol.IsReplaying() {
+			return NodeResult{NodeID: node.ID, Output: []byte(`{"replayed":true}`)}
+		}
+
 		// 传递从 LLM 解析并继承的最高级污点 TaintLevel
 		res, err := e.toolExec(nodeCtx, node.ToolName, node.Args, node.TaintLevel)
 		if err == nil { //nolint:nestif
@@ -299,6 +304,12 @@ func (e *DAGExecutor) runCompensation(ctx context.Context) {
 			return
 		default:
 		}
+
+		// 处于重放模式时物理切断外部副作用
+		if protocol.IsReplaying() {
+			continue
+		}
+
 		// 补偿失败记录但继续（Saga 尽力补偿原则）
 		// 补偿动作继承与原节点相同的污染等级
 		if res, err := e.toolExec(compCtx, comp.ToolName, comp.Args, comp.TaintLevel); err != nil || (res != nil && !res.Success) {

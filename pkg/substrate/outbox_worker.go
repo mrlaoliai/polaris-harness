@@ -133,6 +133,11 @@ func scanOutboxRows(rows *sql.Rows) ([]*OutboxRecord, error) {
 // 版本高水位拦截: existing_version >= incoming_version → 丢弃 + ErrVersionStale
 // Poison Pill: crash_recovery_count >= 3 → 直接标记 dead
 func (w *OutboxWorker) Process(ctx context.Context, record *OutboxRecord) error {
+	// 处于重放模式时物理切断外部副作用
+	if protocol.IsReplaying() {
+		return nil
+	}
+
 	if record.CrashRecoveryCount >= 3 {
 		// 标记 dead，阻断确定性崩溃循环
 		return nil
