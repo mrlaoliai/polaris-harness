@@ -80,7 +80,9 @@ func BuildRouteTable(surrealAvailable bool) []RouteRule {
 		},
 		{
 			// 知识片段存储 (BM25 / Vector) → SurrealDB-Core
-			Match:       func(req *StorageRequest) bool { return req.AccessMode == "adhoc_query" || req.DataType == "fulltext" || req.DataType == "knowledge" },
+			Match: func(req *StorageRequest) bool {
+				return req.AccessMode == "adhoc_query" || req.DataType == "fulltext" || req.DataType == "knowledge"
+			},
 			TargetStore: "surreal",
 			Priority:    3,
 		},
