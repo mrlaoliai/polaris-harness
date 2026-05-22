@@ -10,8 +10,7 @@ use tokio::runtime::Runtime;
 // ─── Surreal FFI 错误码 ────────────────────────────────────────────────────────
 const SURREAL_OK: c_int = 0;
 const SURREAL_NOT_FOUND: c_int = 1;
-const SURREAL_ERR_UTF8: c_int = -1;
-const SURREAL_ERR_LOCK: c_int = -2;
+
 const SURREAL_ERR_PANIC: c_int = -3;
 
 pub struct SurrealTier1Store {
@@ -55,9 +54,7 @@ fn bytes_to_hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{:02x}", x)).collect()
 }
 
-fn escape_json(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('"', "\\\"")
-}
+
 
 fn hex_to_bytes(s: &str) -> Result<Vec<u8>, std::num::ParseIntError> {
     (0..s.len())
