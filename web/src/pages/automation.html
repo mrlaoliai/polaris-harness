@@ -16,7 +16,7 @@
 
     <!-- Routine Tab -->
     <div x-show="tab === 'routine'" class="space-y-6">
-      <div class="flex justify-between items-center bg-base-200 p-6 rounded-xl border border-base-300">
+      <div class="flex justify-between items-center bg-base-200 p-6 rounded-box border border-base-300">
         <div>
           <h3 class="font-bold text-lg">自动化任务</h3>
           <p class="text-sm text-base-content/60 mt-1">按计划或按需运行 Agent 任务，结果自动归入会话历史</p>
@@ -30,7 +30,7 @@
       </div>
 
       <!-- Empty State -->
-      <div class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300" x-show="!$store.cron.loading && $store.cron.list.length === 0">
+      <div class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-box border border-dashed border-base-300" x-show="!$store.cron.loading && $store.cron.list.length === 0">
         <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
         <h3 class="text-lg font-bold text-base-content/80 mb-1">创建首个自动化</h3>
         <p class="text-sm mb-6">选择模板快速开始，或自定义配置</p>
@@ -109,7 +109,7 @@
             </div>
           </div>
         </template>
-        <div class="text-center py-10 text-sm text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300" x-show="!$store.cron.list.some(j=>j.trigger_type==='webhook'||j.trigger_type==='both')">
+        <div class="text-center py-10 text-sm text-base-content/40 bg-base-200/50 rounded-box border border-dashed border-base-300" x-show="!$store.cron.list.some(j=>j.trigger_type==='webhook'||j.trigger_type==='both')">
           暂无 Webhook 触发任务。
         </div>
       </div>
@@ -140,7 +140,7 @@
                 <div class="badge font-bold uppercase text-[10px]" :class="req.risk_level === 'critical' ? 'badge-error animate-pulse' : req.risk_level === 'high' ? 'badge-error badge-outline' : req.risk_level === 'medium' ? 'badge-warning badge-outline' : 'badge-success badge-outline'" x-text="(req.risk_level || 'medium')"></div>
               </div>
               
-              <div class="bg-base-100 rounded-lg p-3 my-3 text-sm text-base-content/70 whitespace-pre-wrap border border-base-300" x-text="req.detail"></div>
+              <div class="bg-base-100 rounded-box p-3 my-3 text-sm text-base-content/70 whitespace-pre-wrap border border-base-300" x-text="req.detail"></div>
               
               <input type="text" class="input input-sm input-bordered w-full text-xs" :placeholder="$store.i18n.t('tasks_note_optional')" x-model="comment" />
               

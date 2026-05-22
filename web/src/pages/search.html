@@ -35,7 +35,7 @@
             </div>
             <div class="space-y-2">
               <template x-for="(m, i) in sr.matches" :key="i">
-                <div class="bg-base-100 rounded-lg p-3 border-l-4 border-primary">
+                <div class="bg-base-100 rounded-box p-3 border-l-4 border-primary">
                   <div class="text-[10px] font-bold text-base-content/50 mb-1 uppercase" x-text="m.role === 'user' ? '用户' : 'AI'"></div>
                   <div class="text-sm leading-relaxed" x-html="m.snippet.replace(/\*\*(.*?)\*\*/g, '<mark class=\'bg-primary/20 text-primary px-1 rounded\'>$1</mark>')"></div>
                 </div>

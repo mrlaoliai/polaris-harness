@@ -51,12 +51,12 @@
       </div>
 
       <!-- Empty State -->
-      <div x-show="!$store.plugins.loading && $store.plugins.filtered.length === 0 && $store.plugins.filter !== 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300">
+      <div x-show="!$store.plugins.loading && $store.plugins.filtered.length === 0 && $store.plugins.filter !== 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-box border border-dashed border-base-300">
         <div class="text-4xl mb-4 opacity-50">🔌</div>
         <p class="text-lg" x-text="$store.i18n.t('plugins_empty', '未找到匹配的项')"></p>
       </div>
       
-      <div x-show="!$store.plugins.loading && $store.plugins.filteredMarketplaces.length === 0 && $store.plugins.filter === 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300">
+      <div x-show="!$store.plugins.loading && $store.plugins.filteredMarketplaces.length === 0 && $store.plugins.filter === 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-box border border-dashed border-base-300">
         <div class="text-4xl mb-4 opacity-50">🛒</div>
         <p class="text-lg">暂无插件市场</p>
       </div>

@@ -22,7 +22,7 @@
      }">
 
   <!-- Thinking Panel -->
-  <div class="mx-4 mt-2 border border-base-300 rounded-xl overflow-hidden shrink-0 bg-base-200/50" x-show="$store.chat.thinkingText" x-cloak>
+  <div class="mx-4 mt-2 border border-base-300 rounded-box overflow-hidden shrink-0 bg-base-200/50" x-show="$store.chat.thinkingText" x-cloak>
     <div class="flex items-center gap-2 p-2 px-4 cursor-pointer text-base-content/60 text-sm font-medium hover:bg-base-300/50 transition-colors" @click="$store.chat.thinkingOpen = !$store.chat.thinkingOpen">
       <span x-show="$store.chat.state === 'THINKING'" class="loading loading-spinner loading-xs"></span>
       <span x-text="$store.i18n.t('chat_thinking')"></span>
@@ -69,7 +69,7 @@
                   <div class="badge badge-warning badge-xs absolute -top-2 right-2" x-show="msg.aborted" x-text="'⚠ ' + $store.i18n.t('chat_interrupted')"></div>
                   
                   <template x-for="(tc, ti) in msg.toolCalls" :key="ti">
-                    <div class="mb-3 rounded-lg border border-primary/30 bg-primary/5 overflow-hidden text-xs">
+                    <div class="mb-3 rounded-box border border-primary/30 bg-primary/5 overflow-hidden text-xs">
                       <div class="flex items-center gap-2 p-2 bg-primary/10 text-primary font-mono font-bold">
                         <span>⚡</span><span x-text="tc.name"></span>
                         <span x-show="tc.output !== null" class="ml-auto opacity-70" x-text="$store.i18n.t('chat_complete')"></span>
@@ -111,10 +111,10 @@
 
   <!-- Input Area -->
   <div class="p-4 bg-base-100 shrink-0 w-full max-w-4xl mx-auto">
-    <div class="relative bg-base-200 rounded-3xl border border-base-300 shadow-sm focus-within:border-primary focus-within:shadow-md transition-all flex flex-col p-2 px-3">
+    <div class="relative bg-base-200 rounded-box border border-base-300 shadow-sm focus-within:border-primary focus-within:shadow-md transition-all flex flex-col p-2 px-3">
       
       <!-- Command Menu -->
-      <div class="absolute bottom-full left-0 mb-2 w-full bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden" x-show="showSlash" x-cloak>
+      <div class="absolute bottom-full left-0 mb-2 w-full bg-base-100 border border-base-300 rounded-box shadow-xl z-50 overflow-hidden" x-show="showSlash" x-cloak>
         <ul class="menu menu-sm bg-base-100 rounded-box p-2">
           <template x-for="(item, i) in slashItems" :key="item.cmd">
             <li>
@@ -130,8 +130,8 @@
       <!-- Attachments -->
       <div class="flex gap-2 mb-2 flex-wrap" x-show="$store.chat.attachments.length > 0" x-cloak>
         <template x-for="(att, idx) in $store.chat.attachments" :key="idx">
-          <div class="relative w-14 h-14 rounded-lg border border-base-300 bg-base-100 flex items-center justify-center shadow-sm">
-            <template x-if="att.dataUrl"><img :src="att.dataUrl" class="w-full h-full object-cover rounded-lg"></template>
+          <div class="relative w-14 h-14 rounded-box border border-base-300 bg-base-100 flex items-center justify-center shadow-sm">
+            <template x-if="att.dataUrl"><img :src="att.dataUrl" class="w-full h-full object-cover rounded-box"></template>
             <template x-if="!att.dataUrl"><div class="text-2xl opacity-50">📄</div></template>
             <button @click="$store.chat.removeAttachment(idx)" class="btn btn-xs btn-circle btn-error absolute -top-2 -right-2 w-5 h-5 min-h-0 text-[10px]">✕</button>
           </div>

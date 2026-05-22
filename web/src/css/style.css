@@ -21,6 +21,13 @@
   --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
 }
 
+/* 全局圆角配置 (类似 Codex 风格) */
+:root {
+  --rounded-box: 1.5rem;
+  --rounded-btn: 9999px;
+  --rounded-badge: 9999px;
+}
+
 [x-cloak] { display: none !important; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

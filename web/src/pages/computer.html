@@ -9,12 +9,12 @@
             </div>
 
     <!-- 权限模式选择 -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+    <div class="bg-white dark:bg-gray-800 rounded-box shadow-sm border border-gray-200 dark:border-gray-700 p-5">
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">权限模式</h3>
         
         <div class="space-y-4">
             <!-- 默认权限 -->
-            <label class="flex items-start p-4 border rounded-lg cursor-pointer transition-colors"
+            <label class="flex items-start p-4 border rounded-box cursor-pointer transition-colors"
                 :class="store.mode === 'default' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'">
                 <div class="flex-shrink-0 mt-0.5">
                     <input type="radio" name="computer_mode" value="default" class="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
@@ -30,7 +30,7 @@
             </label>
 
             <!-- 自动审查 -->
-            <label class="flex items-start p-4 border rounded-lg cursor-pointer transition-colors"
+            <label class="flex items-start p-4 border rounded-box cursor-pointer transition-colors"
                 :class="store.mode === 'auto_review' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'">
                 <div class="flex-shrink-0 mt-0.5">
                     <input type="radio" name="computer_mode" value="auto_review" class="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
@@ -46,7 +46,7 @@
             </label>
 
             <!-- 完全访问 -->
-            <label class="flex items-start p-4 border rounded-lg cursor-pointer transition-colors"
+            <label class="flex items-start p-4 border rounded-box cursor-pointer transition-colors"
                 :class="store.mode === 'full_access' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'">
                 <div class="flex-shrink-0 mt-0.5">
                     <input type="radio" name="computer_mode" value="full_access" class="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
@@ -64,7 +64,7 @@
     </div>
 
     <!-- 允许的应用开关 -->
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div class="bg-white dark:bg-gray-800 rounded-box shadow-sm border border-gray-200 dark:border-gray-700">
         <div class="p-5 border-b border-gray-200 dark:border-gray-700">
             <h3 class="text-lg font-medium text-gray-900 dark:text-white">允许操控的应用</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">指定 Agent 可以操作哪些目标应用</p>

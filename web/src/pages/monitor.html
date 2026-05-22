@@ -112,7 +112,7 @@
           
           <div class="space-y-2">
             <template x-for="c in checks" :key="c.name">
-              <div class="flex items-center gap-3 p-3 bg-base-100 rounded-lg border border-base-300 shadow-sm">
+              <div class="flex items-center gap-3 p-3 bg-base-100 rounded-box border border-base-300 shadow-sm">
                 <span class="font-bold text-lg" :class="c.ok ? 'text-success' : 'text-error'" x-text="c.ok ? '✓' : '✕'"></span>
                 <span class="font-bold text-sm min-w-[120px]" x-text="c.name"></span>
                 <span class="text-xs text-base-content/60" x-text="c.detail"></span>
@@ -123,11 +123,11 @@
       </div>
 
       <!-- Raw Metrics -->
-      <div class="collapse collapse-arrow bg-base-200 border border-base-300 shadow-sm rounded-xl hover:border-primary transition-colors">
+      <div class="collapse collapse-arrow bg-base-200 border border-base-300 shadow-sm rounded-box hover:border-primary transition-colors">
         <input type="checkbox" /> 
         <div class="collapse-title font-bold text-sm" x-text="$store.i18n.t('status_metrics')"></div>
         <div class="collapse-content">
-          <div class="bg-base-100 p-4 rounded-lg overflow-x-auto border border-base-300 shadow-inner" x-data="{ raw: '' }" x-init="fetch('/metrics').then(r=>r.text()).then(t=>raw=t)">
+          <div class="bg-base-100 p-4 rounded-box overflow-x-auto border border-base-300 shadow-inner" x-data="{ raw: '' }" x-init="fetch('/metrics').then(r=>r.text()).then(t=>raw=t)">
             <pre class="font-mono text-xs text-base-content/60" x-text="raw || $store.i18n.t('loading')"></pre>
           </div>
         </div>
@@ -137,7 +137,7 @@
     <!-- Insights Tab -->
     <div x-show="tab === 'insights'" class="space-y-6">
       
-      <div class="flex justify-between items-center bg-base-200 p-6 rounded-xl border border-base-300">
+      <div class="flex justify-between items-center bg-base-200 p-6 rounded-box border border-base-300">
         <div>
           <h3 class="font-bold text-lg" x-text="$store.i18n.t('insights_title')"></h3>
           <p class="text-sm text-base-content/60 mt-1" x-text="$store.i18n.t('insights_subtitle')"></p>
@@ -225,7 +225,7 @@
               <div x-show="$store.insights.data.top_sessions.length === 0" class="text-sm text-base-content/50" x-text="$store.i18n.t('monitor_no_data')"></div>
               <div class="space-y-2">
                 <template x-for="(sess, i) in $store.insights.data.top_sessions" :key="sess.id">
-                  <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-base-100 transition-colors cursor-pointer border border-transparent hover:border-base-300"
+                  <div class="flex items-center gap-3 p-2 rounded-box hover:bg-base-100 transition-colors cursor-pointer border border-transparent hover:border-base-300"
                        @click="Alpine.store('chat').loadSession(sess.id); Alpine.store('nav').navigate('chat')">
                     <span class="text-xs font-mono font-bold text-base-content/40 w-5 text-right" x-text="i+1"></span>
                     <div class="flex-1 min-w-0 truncate text-sm font-medium" x-text="sess.title || sess.id.slice(0,20)+'…'"></div>
@@ -260,7 +260,7 @@
     <!-- Agents Tab -->
     <div x-show="tab === 'agents'" class="space-y-6">
       
-      <div class="flex justify-between items-center bg-base-200 p-6 rounded-xl border border-base-300">
+      <div class="flex justify-between items-center bg-base-200 p-6 rounded-box border border-base-300">
         <div>
           <h3 class="font-bold text-lg" x-text="$store.i18n.t('agents_title')"></h3>
           <p class="text-sm text-base-content/60 mt-1" x-text="$store.i18n.t('agents_subtitle')"></p>
@@ -358,11 +358,11 @@
                 <span class="badge badge-sm badge-ghost" x-text="$store.agents.mcpServers.length"></span>
               </h3>
               
-              <div x-show="$store.agents.mcpServers.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-lg" x-text="$store.i18n.t('agents_no_mcp')"></div>
+              <div x-show="$store.agents.mcpServers.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-box" x-text="$store.i18n.t('agents_no_mcp')"></div>
               
               <div class="space-y-2">
                 <template x-for="srv in $store.agents.mcpServers" :key="srv.id">
-                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-lg border border-base-300 shadow-sm">
+                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-box border border-base-300 shadow-sm">
                     <div class="w-2.5 h-2.5 rounded-full shrink-0" :class="srv.connected ? 'bg-success shadow-[0_0_8px_rgba(0,255,0,0.4)]' : 'bg-error'"></div>
                     <span class="font-bold text-sm flex-1 truncate" x-text="srv.name"></span>
                     <span class="badge badge-xs badge-ghost font-mono uppercase" x-text="srv.transport"></span>
@@ -382,11 +382,11 @@
                 <span class="badge badge-sm badge-ghost" x-text="$store.agents.tools.length"></span>
               </h3>
               
-              <div x-show="$store.agents.tools.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-lg" x-text="$store.i18n.t('cap_no_tools')"></div>
+              <div x-show="$store.agents.tools.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-box" x-text="$store.i18n.t('cap_no_tools')"></div>
               
               <div class="space-y-2">
                 <template x-for="t in $store.agents.tools" :key="t.name">
-                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-lg border border-base-300 shadow-sm">
+                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-box border border-base-300 shadow-sm">
                     <span class="font-bold text-sm flex-1 truncate font-mono" x-text="t.name"></span>
                     <span class="text-xs text-base-content/60 truncate max-w-sm hidden md:block" x-text="t.description || ''"></span>
                     <span class="badge badge-xs badge-ghost font-mono uppercase shrink-0" x-text="t.source || 'builtin'"></span>
@@ -404,11 +404,11 @@
                 <span class="badge badge-sm badge-ghost" x-text="$store.agents.skills.length"></span>
               </h3>
               
-              <div x-show="$store.agents.skills.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-lg" x-text="$store.i18n.t('cap_no_skills')"></div>
+              <div x-show="$store.agents.skills.length === 0" class="text-sm text-base-content/50 py-4 text-center border border-dashed border-base-300 rounded-box" x-text="$store.i18n.t('cap_no_skills')"></div>
               
               <div class="space-y-2">
                 <template x-for="sk in $store.agents.skills" :key="sk.name">
-                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-lg border border-base-300 shadow-sm">
+                  <div class="flex items-center gap-3 p-3 bg-base-100 rounded-box border border-base-300 shadow-sm">
                     <span class="font-bold text-sm flex-1 truncate font-mono text-primary" x-text="sk.name"></span>
                     <span class="text-xs text-base-content/60 truncate max-w-sm hidden md:block" x-text="sk.description || ''"></span>
                     <span class="badge badge-xs badge-ghost font-mono shrink-0" x-text="sk.version || 'v1'"></span>
