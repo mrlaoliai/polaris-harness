@@ -15,6 +15,7 @@ Alpine.store('chat', {
   thinkingOpen: true,
   errorMsg: '',
   _historyIdx: -1,
+  _inputHistory: [],     // 初始化输入历史数组，防止首次加载时未定义报错
   imageParts: [],        // [{ data, mimeType }]
   ttsEnabled: false,
 

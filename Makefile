@@ -12,6 +12,13 @@ build: rust-build build-ui
 	@cp rust/substrate/target/release/substrate.dll bin/lib/ 2>/dev/null || true
 	$(GO) build -o bin/$(BINARY) ./cmd/polaris
 
+build-tier1: rust-build-tier1 build-ui
+	@mkdir -p bin/lib
+	@cp rust/substrate/target/release/libsubstrate.dylib bin/lib/ 2>/dev/null || true
+	@cp rust/substrate/target/release/libsubstrate.so bin/lib/ 2>/dev/null || true
+	@cp rust/substrate/target/release/substrate.dll bin/lib/ 2>/dev/null || true
+	$(GO) build -tags tier1 -o bin/$(BINARY) ./cmd/polaris
+
 build-ui:
 	@cd $(WEBUI_DIR) && npm install --silent && npm run build
 
@@ -51,6 +58,9 @@ docs-lint:
 
 rust-build:
 	$(CARGO) build --release --manifest-path rust/substrate/Cargo.toml
+
+rust-build-tier1:
+	$(CARGO) build --release --features tier1 --manifest-path rust/substrate/Cargo.toml
 
 rust-test:
 	$(CARGO) test --manifest-path rust/substrate/Cargo.toml

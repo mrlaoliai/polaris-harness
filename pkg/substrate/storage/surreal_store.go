@@ -30,7 +30,7 @@ var (
 	surrealOnce sync.Once
 	surrealErr  error
 
-	surrealOpen          func() int32
+	surrealOpen          func(tier int32, dbPath string) int32
 	surrealKvGet         func(key *byte, keyLen uintptr, outVal *uintptr, outLen *uintptr) int32
 	surrealKvPut         func(key *byte, keyLen uintptr, val *byte, valLen uintptr) int32
 	surrealKvDelete      func(key *byte, keyLen uintptr) int32
@@ -137,11 +137,11 @@ var _ protocol.Store = (*SurrealDBCoreStore)(nil)
 // OpenSurrealDBCore 初始化全局 SurrealCoreStore（幂等）。
 // useHNSW=true：切换向量引擎到 HNSW（Tier1+），首次启用时全量重建索引。
 // HNSW 启用失败时降级暴力扫描，不阻断启动。
-func OpenSurrealDBCore(useHNSW bool) (*SurrealDBCoreStore, error) {
+func OpenSurrealDBCore(tier int32, dbPath string, useHNSW bool) (*SurrealDBCoreStore, error) {
 	if err := bindSurreal(); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, "surreal load lib", err)
 	}
-	if rc := surrealOpen(); rc != 0 {
+	if rc := surrealOpen(tier, dbPath); rc != 0 {
 		return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("surreal_open failed: code %d", rc))
 	}
 	if useHNSW {

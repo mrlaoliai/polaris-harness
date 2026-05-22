@@ -151,7 +151,12 @@ func run() error { //nolint:gocyclo
 	var surrealStore *storage.SurrealDBCoreStore
 	if autoConf == nil || autoConf.Gate.State(observability.FeatureSurrealDBCore) != observability.FeatureDisabled {
 		useHNSW := autoConf != nil && autoConf.Config.SurrealVecMode == observability.SurrealVecHNSW
-		if surrealCore, sErr := storage.OpenSurrealDBCore(useHNSW); sErr != nil {
+		var tier int32
+		if autoConf != nil {
+			tier = int32(autoConf.Config.Tier)
+		}
+		surrealDBPath := filepath.Join(dataDir, "surreal_rust.db")
+		if surrealCore, sErr := storage.OpenSurrealDBCore(tier, surrealDBPath, useHNSW); sErr != nil {
 			slog.Warn("polaris: SurrealDB Core init failed, cognitive axis falls back to SQLite", "err", sErr)
 		} else {
 			surrealStore = surrealCore
