@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.6",
+    "daisyui": "^5.5.1-beta.2",
     "vite": "^6.3.5"
   }
 }

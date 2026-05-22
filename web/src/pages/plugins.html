@@ -1,361 +1,275 @@
-<!-- 插件目录页（MCP / 技能库 / 插件包）-->
-    <div x-show="$store.nav.page === 'plugins'" x-cloak class="page-container flex flex-col"
-         style="overflow:hidden;padding:0">
-
-      <!-- 页头 + 过滤栏 -->
-      <div style="padding:24px 24px 0;flex-shrink:0">
-        <div class="page-header">
-          <div>
-            <div class="page-title" x-text="$store.i18n.t('plugins_title')"></div>
-            <div class="page-subtitle">
-              <span x-text="$store.plugins.catalog.length"></span>
-              <span x-text="' ' + $store.i18n.t('plugins_subtitle')"></span>
-              <span style="margin-left:8px;color:var(--color-ok)"
-                    x-text="`(${$store.plugins.catalog.filter(e=>e.installed).length} ` + $store.i18n.t('plugins_installed') + ')'">
-              </span>
-            </div>
+<div x-show="$store.nav.page === 'plugins'" x-cloak class="flex-1 overflow-y-auto p-6 bg-base-100">
+  <div class="max-w-6xl mx-auto w-full flex flex-col">
+    
+    <!-- Page Header & Filters -->
+    <div class="mb-6 border-b border-base-300 pb-4">
+      <div class="flex justify-between items-end mb-4">
+        <div>
+          <h2 class="text-2xl font-bold text-base-content" x-text="$store.i18n.t('plugins_title')"></h2>
+          <div class="text-sm text-base-content/60 mt-1 flex items-center gap-2">
+            <span x-text="$store.plugins.catalog.length"></span>
+            <span x-text="$store.i18n.t('plugins_subtitle')"></span>
+            <div class="badge badge-success badge-sm badge-outline" x-text="`${$store.plugins.catalog.filter(e=>e.installed).length} ` + $store.i18n.t('plugins_installed')"></div>
           </div>
-          <button class="btn btn-ghost btn-sm" @click="$store.plugins.load()"
-                  :disabled="$store.plugins.loading"
-                  x-text="$store.plugins.loading ? $store.i18n.t('loading') : $store.i18n.t('plugins_refresh')">
+        </div>
+        <button class="btn btn-ghost btn-sm" @click="$store.plugins.load()" :disabled="$store.plugins.loading">
+          <span x-show="$store.plugins.loading" class="loading loading-spinner loading-xs"></span>
+          <span x-show="!$store.plugins.loading" x-text="$store.i18n.t('plugins_refresh')"></span>
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-4 items-center justify-between">
+        <div class="tabs tabs-boxed">
+          <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'plugin' }" @click="$store.plugins.filter = 'plugin'">📦 插件</a>
+          <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'app' }" @click="$store.plugins.filter = 'app'">📱 应用</a>
+          <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'mcp' }" @click="$store.plugins.filter = 'mcp'">⚙ MCP</a>
+          <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'skill' }" @click="$store.plugins.filter = 'skill'">⚡ 技能</a>
+          <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'marketplace' }" @click="$store.plugins.filter = 'marketplace'">🛒 市场</a>
+        </div>
+
+        <div class="flex gap-2 w-full md:w-auto">
+          <label class="input input-bordered input-sm flex items-center gap-2 w-full md:w-64">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="w-4 h-4 opacity-70"><path fill-rule="evenodd" d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z" clip-rule="evenodd" /></svg>
+            <input type="search" class="grow" :placeholder="$store.plugins.filter === 'marketplace' ? '搜索市场...' : `搜索${$store.plugins.typeLabel($store.plugins.filter)}...`" x-model="$store.plugins.search" />
+          </label>
+          <button class="btn btn-primary btn-sm" @click="$store.plugins.openCreateModal()" x-text="`+ ${$store.plugins.filter === 'marketplace' ? '添加市场' : '创建'}`"></button>
+          <button class="btn btn-outline btn-sm" @click="$store.plugins.syncMarketplaces()" :disabled="$store.plugins.syncing">
+            <span x-show="$store.plugins.syncing" class="loading loading-spinner loading-xs"></span>
+            <span x-show="!$store.plugins.syncing">⟳ 同步</span>
           </button>
         </div>
+      </div>
+    </div>
 
-        <!-- 过滤 Tab + 搜索 -->
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
-          <div class="tab-bar" style="padding:0;flex-shrink:0">
-            <button class="tab-btn" :class="{active:$store.plugins.filter==='plugin'}"
-                    @click="$store.plugins.filter='plugin'">📦 插件</button>
-            <button class="tab-btn" :class="{active:$store.plugins.filter==='app'}"
-                    @click="$store.plugins.filter='app'">📱 应用</button>
-            <button class="tab-btn" :class="{active:$store.plugins.filter==='mcp'}"
-                    @click="$store.plugins.filter='mcp'">⚙ MCP</button>
-            <button class="tab-btn" :class="{active:$store.plugins.filter==='skill'}"
-                    @click="$store.plugins.filter='skill'">⚡ 技能</button>
-            <button class="tab-btn" :class="{active:$store.plugins.filter==='marketplace'}"
-                    @click="$store.plugins.filter='marketplace'">🛒 市场</button>
-          </div>
-          <input class="form-input" type="search"
-                 id="plugins-search-input"
-                 name="plugins-search-input"
-                 aria-label="搜索"
-                 :placeholder="$store.plugins.filter === 'marketplace' ? '搜索市场名称、发布者...' : `搜索${$store.plugins.typeLabel($store.plugins.filter)}名称、发布者、标签...`"
-                 x-model="$store.plugins.search"
-                 style="flex:1;max-width:280px;font-size:12px" />
-          
-          <div style="margin-left:auto;display:flex;gap:8px">
-            <button class="btn btn-primary btn-sm" @click="$store.plugins.openCreateModal()" x-text="`+ ${$store.plugins.filter === 'marketplace' ? '添加市场' : '创建' + $store.plugins.typeLabel($store.plugins.filter)}`"></button>
-            <button class="btn btn-ghost btn-sm" @click="$store.plugins.syncMarketplaces()" :disabled="$store.plugins.syncing" x-text="$store.plugins.syncing ? '同步中...' : '⟳ 同步市场'"></button>
-          </div>
-        </div>
+    <!-- Content Area -->
+    <div class="relative min-h-[400px]">
+      
+      <!-- Loading State -->
+      <div x-show="$store.plugins.loading" class="flex flex-col items-center justify-center py-20 text-base-content/40 absolute inset-0 z-10 bg-base-100/50 backdrop-blur-sm">
+        <span class="loading loading-spinner loading-lg mb-4 text-primary"></span>
+        <p x-text="$store.i18n.t('loading')"></p>
       </div>
 
-      <!-- 卡片网格 -->
-      <div style="flex:1;min-height:0;overflow-y:auto;padding:0 24px 24px">
+      <!-- Empty State -->
+      <div x-show="!$store.plugins.loading && $store.plugins.filtered.length === 0 && $store.plugins.filter !== 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300">
+        <div class="text-4xl mb-4 opacity-50">🔌</div>
+        <p class="text-lg" x-text="$store.i18n.t('plugins_empty', '未找到匹配的项')"></p>
+      </div>
+      
+      <div x-show="!$store.plugins.loading && $store.plugins.filteredMarketplaces.length === 0 && $store.plugins.filter === 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/40 bg-base-200/50 rounded-xl border border-dashed border-base-300">
+        <div class="text-4xl mb-4 opacity-50">🛒</div>
+        <p class="text-lg">暂无插件市场</p>
+      </div>
 
-        <!-- 加载中 -->
-        <div x-show="$store.plugins.loading" class="empty-state">
-          <div class="spinner" style="width:32px;height:32px;margin:0 auto 12px"></div>
-          <p x-text="$store.i18n.t('loading')"></p>
-        </div>
-
-        <!-- 空结果 -->
-        <div x-show="!$store.plugins.loading && $store.plugins.filtered.length === 0 && $store.plugins.filter !== 'marketplace'" class="empty-state">
-          <div style="font-size:32px;margin-bottom:12px">🔌</div>
-          <div x-text="$store.i18n.t('plugins_empty', '未找到匹配的插件')"></div>
-        </div>
-        
-        <div x-show="!$store.plugins.loading && $store.plugins.filteredMarketplaces.length === 0 && $store.plugins.filter === 'marketplace'" class="empty-state">
-          <div style="font-size:32px;margin-bottom:12px">🛒</div>
-          <div>暂无插件市场</div>
-        </div>
-
-        <!-- 插件/应用/MCP/技能 视图 -->
-        <div x-show="!$store.plugins.loading && $store.plugins.filtered.length > 0 && $store.plugins.filter !== 'marketplace'"
-             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
-          <template x-for="entry in $store.plugins.filtered" :key="entry.id">
-
-            <div style="background:var(--color-surface-raised);border:1px solid var(--color-border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px"
-                 :style="`border-left:3px solid ${$store.plugins.typeColor(entry.type)}`">
-
-              <!-- 头部：图标 + 名称 + 徽章 -->
-              <div style="display:flex;align-items:flex-start;gap:10px">
-                <div style="font-size:22px;flex-shrink:0;line-height:1.2"
-                     x-text="$store.plugins.publisherIcon(entry.publisher)"></div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                       x-text="entry.name"></div>
-                  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;align-items:center">
-                    <!-- 类型徽章 -->
-                    <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px"
-                          :style="`background:color-mix(in srgb,${$store.plugins.typeColor(entry.type)} 15%,transparent);color:${$store.plugins.typeColor(entry.type)}`"
-                          x-text="$store.plugins.typeLabel(entry.type)"></span>
-                    <!-- 信任等级徽章 -->
-                    <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px"
-                          :style="`background:color-mix(in srgb,${$store.plugins.trustColor(entry.trust_tier)} 15%,transparent);color:${$store.plugins.trustColor(entry.trust_tier)}`"
-                          x-text="$store.plugins.trustLabel(entry.trust_tier)"></span>
-                    <!-- 发布者 -->
-                    <span style="font-size:10px;color:var(--color-text-dim);font-family:monospace"
-                          x-text="entry.publisher"></span>
+      <!-- Plugin Grid -->
+      <div x-show="!$store.plugins.loading && $store.plugins.filtered.length > 0 && $store.plugins.filter !== 'marketplace'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="entry in $store.plugins.filtered" :key="entry.id">
+          <div class="card bg-base-200 border border-base-300 shadow-sm hover:shadow-md transition-shadow h-full flex flex-col" :style="`border-left-width:4px;border-left-color:${$store.plugins.typeColor(entry.type)}`">
+            <div class="card-body p-5 flex flex-col h-full gap-4">
+              
+              <!-- Header -->
+              <div class="flex items-start gap-3">
+                <div class="text-2xl shrink-0" x-text="$store.plugins.publisherIcon(entry.publisher)"></div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-bold text-sm truncate" x-text="entry.name"></h3>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    <span class="badge badge-xs font-bold uppercase" :style="`background:color-mix(in srgb,${$store.plugins.typeColor(entry.type)} 20%,transparent);color:${$store.plugins.typeColor(entry.type)};border-color:${$store.plugins.typeColor(entry.type)}`" x-text="$store.plugins.typeLabel(entry.type)"></span>
+                    <span class="badge badge-xs font-bold uppercase" :style="`background:color-mix(in srgb,${$store.plugins.trustColor(entry.trust_tier)} 20%,transparent);color:${$store.plugins.trustColor(entry.trust_tier)};border-color:${$store.plugins.trustColor(entry.trust_tier)}`" x-text="$store.plugins.trustLabel(entry.trust_tier)"></span>
+                    <span class="text-[10px] font-mono text-base-content/50 truncate max-w-full" x-text="entry.publisher"></span>
                   </div>
                 </div>
-                <!-- 已安装指示点 -->
-                <div x-show="entry.installed"
-                     style="width:8px;height:8px;border-radius:50%;background:var(--color-ok);flex-shrink:0;margin-top:5px"
-                     :title="$store.i18n.t('plugins_installed')"></div>
+                <div x-show="entry.installed" class="w-2.5 h-2.5 rounded-full bg-success shadow-[0_0_8px_rgba(0,255,0,0.5)] shrink-0 mt-1" :title="$store.i18n.t('plugins_installed')"></div>
               </div>
 
-              <!-- 描述 -->
-              <div style="font-size:12px;color:var(--color-text-dim);line-height:1.55;flex:1"
-                   x-text="entry.description"></div>
+              <!-- Description -->
+              <p class="text-xs text-base-content/70 flex-1 line-clamp-3" x-text="entry.description"></p>
 
-              <!-- MCP 专属：命令行 / URL 预览 -->
+              <!-- Extra Info (MCP/URL) -->
               <template x-if="!entry.type || entry.type === 'mcp'">
-                <div style="background:var(--color-surface);border-radius:6px;padding:7px 10px;font-size:11px;font-family:monospace;color:var(--color-text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                  <span style="color:var(--color-accent)" x-text="entry.transport || 'stdio'"></span>
-                  <span x-show="entry.command"
-                        x-text="` ${entry.command} ${(entry.args||[]).join(' ')}`"
-                        style="opacity:.7"></span>
-                  <span x-show="!entry.command && entry.url"
-                        x-text="entry.url" style="opacity:.7"></span>
+                <div class="bg-base-100 rounded p-2 text-[10px] font-mono text-base-content/60 truncate border border-base-300">
+                  <span class="text-primary font-bold mr-1" x-text="entry.transport || 'stdio'"></span>
+                  <span x-show="entry.command" x-text="`${entry.command} ${(entry.args||[]).join(' ')}`"></span>
+                  <span x-show="!entry.command && entry.url" x-text="entry.url"></span>
                 </div>
               </template>
-
-              <!-- Skill / Plugin 专属：GitHub 仓库链接 -->
               <template x-if="entry.type === 'skill' || entry.type === 'plugin'">
-                <div style="background:var(--color-surface);border-radius:6px;padding:7px 10px;font-size:11px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                  <a :href="entry.url" target="_blank" rel="noopener"
-                     style="color:var(--color-accent);text-decoration:none"
-                     x-text="(entry.url||'').replace('https://','')"></a>
+                <div class="bg-base-100 rounded p-2 text-[10px] font-mono truncate border border-base-300">
+                  <a :href="entry.url" target="_blank" rel="noopener" class="text-primary hover:underline" x-text="(entry.url||'').replace('https://','')"></a>
                 </div>
               </template>
 
-              <!-- 标签 -->
-              <div style="display:flex;flex-wrap:wrap;gap:4px">
+              <!-- Tags -->
+              <div class="flex flex-wrap gap-1">
                 <template x-for="tag in (entry.tags||[])" :key="tag">
-                  <span style="font-size:10px;padding:1px 7px;border-radius:8px;background:var(--color-surface);color:var(--color-text-dim)"
-                        x-text="tag"></span>
+                  <span class="badge badge-ghost badge-sm text-[10px] h-4" x-text="tag"></span>
                 </template>
               </div>
 
-              <!-- 操作栏 -->
-              <div style="display:flex;gap:6px;align-items:center;margin-top:auto;padding-top:4px;border-top:1px solid var(--color-border)">
-
-                <!-- 未安装：安装按钮 -->
-                <template x-if="!entry.installed">
-                  <button class="btn btn-primary btn-sm" style="flex:1;font-size:12px"
-                          :disabled="$store.plugins.installing[entry.id]"
-                          @click="$store.plugins.tryInstall(entry)"
-                          x-text="$store.plugins.installing[entry.id] ? $store.i18n.t('plugins_installing') : $store.i18n.t('plugins_install')">
-                  </button>
-                </template>
-
-                <!-- 已安装：状态 + 操作 -->
-                <template x-if="entry.installed">
-                  <div style="display:flex;gap:6px;flex:1;align-items:center">
-                    <span style="flex:1;font-size:11px;color:var(--color-ok);font-weight:600">
-                      ✓ <span x-text="$store.i18n.t('plugins_installed')"></span>
-                    </span>
-                    <!-- Skill/Plugin 已安装：显示仓库链接 -->
-                    <a x-show="(entry.type==='skill'||entry.type==='plugin') && entry.url"
-                       :href="entry.url" target="_blank" rel="noopener"
-                       class="btn btn-ghost btn-sm"
-                       style="font-size:11px"
-                       x-text="$store.i18n.t('plugins_view_repo')"></a>
-                    <button class="btn btn-ghost btn-sm"
-                            style="color:var(--color-error);font-size:11px"
-                            :disabled="$store.plugins.uninstalling[entry.id]"
-                            @click="$store.plugins.uninstall(entry)"
-                            x-text="$store.plugins.uninstalling[entry.id] ? $store.i18n.t('plugins_uninstalling') : $store.i18n.t('plugins_uninstall')">
+              <!-- Actions -->
+              <div class="card-actions mt-auto pt-4 border-t border-base-300 items-center justify-between">
+                <div class="flex-1 flex gap-2">
+                  <template x-if="!entry.installed">
+                    <button class="btn btn-primary btn-sm flex-1 text-xs" :disabled="$store.plugins.installing[entry.id]" @click="$store.plugins.tryInstall(entry)">
+                      <span x-show="$store.plugins.installing[entry.id]" class="loading loading-spinner loading-xs"></span>
+                      <span x-text="$store.plugins.installing[entry.id] ? $store.i18n.t('plugins_installing') : $store.i18n.t('plugins_install')"></span>
                     </button>
-                  </div>
-                </template>
-
-                <!-- 详情链接 -->
-                <a x-show="entry.homepage" :href="entry.homepage" target="_blank" rel="noopener"
-                   class="btn btn-ghost btn-sm"
-                   style="font-size:11px;flex-shrink:0"
-                   x-text="$store.i18n.t('plugins_detail')"></a>
+                  </template>
+                  <template x-if="entry.installed">
+                    <div class="flex gap-2 flex-1 items-center">
+                      <span class="text-success text-xs font-bold flex-1 flex items-center gap-1">✓ <span x-text="$store.i18n.t('plugins_installed')"></span></span>
+                      <button class="btn btn-ghost btn-sm text-error hover:bg-error/10" :disabled="$store.plugins.uninstalling[entry.id]" @click="$store.plugins.uninstall(entry)">
+                        <span x-show="$store.plugins.uninstalling[entry.id]" class="loading loading-spinner loading-xs"></span>
+                        <span x-show="!$store.plugins.uninstalling[entry.id]" x-text="$store.i18n.t('plugins_uninstall')"></span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+                <a x-show="entry.homepage" :href="entry.homepage" target="_blank" rel="noopener" class="btn btn-ghost btn-sm text-xs px-2 shrink-0">详情</a>
               </div>
             </div>
+          </div>
+        </template>
+      </div>
 
+      <!-- Marketplace Grid -->
+      <div x-show="!$store.plugins.loading && $store.plugins.filter === 'marketplace' && $store.plugins.filteredMarketplaces.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="entry in $store.plugins.filteredMarketplaces" :key="entry.id">
+          <div class="card bg-base-200 border border-base-300 shadow-sm hover:border-secondary transition-colors h-full flex flex-col border-l-4 border-l-secondary">
+            <div class="card-body p-5 flex flex-col h-full gap-4">
+              <div class="flex items-start gap-3">
+                <div class="text-2xl shrink-0">🛒</div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-bold text-sm truncate" x-text="entry.name"></h3>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5 items-center">
+                    <span class="badge badge-secondary badge-xs badge-outline font-bold uppercase">市场</span>
+                    <span class="text-[10px] font-mono text-base-content/50 truncate max-w-full" x-text="entry.publisher"></span>
+                  </div>
+                </div>
+                <div x-show="entry.is_builtin === 1" class="badge badge-success badge-sm badge-outline font-bold text-[10px]" title="系统内置">Built-in</div>
+              </div>
+              <div class="text-xs text-base-content/70 flex-1 flex flex-col gap-2">
+                <div class="line-clamp-2" x-text="entry.description || ''"></div>
+                <div><span class="opacity-60">包含类型:</span> <span class="font-mono font-bold" x-text="(entry.type || '').toUpperCase()"></span></div>
+                <div class="truncate"><span class="opacity-60">地址:</span> <a :href="entry.repo_url" target="_blank" class="link link-primary font-mono" x-text="entry.repo_url"></a></div>
+              </div>
+              <div class="card-actions mt-auto pt-4 border-t border-base-300 justify-end">
+                <button x-show="entry.is_builtin === 0" class="btn btn-ghost btn-sm text-error hover:bg-error/10" @click="fetch(`/v1/plugins/marketplaces/${entry.id}`, {method:'DELETE'}).then(()=>$store.plugins.load())">删除市场</button>
+                <div x-show="entry.is_builtin === 1" class="text-xs text-base-content/40 px-3 py-1.5">系统内置不可删除</div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+    </div>
+
+    <!-- Modals (Env Config, Create Plugin) Ported Over -->
+    <div class="modal" :class="$store.plugins.showEnvModal ? 'modal-open' : ''">
+      <div class="modal-box bg-base-200 border border-base-300">
+        <h3 class="font-bold text-lg mb-4" x-text="$store.i18n.t('plugins_env_title') + (($store.plugins.envPending?.entry?.name) ? '：' + $store.plugins.envPending.entry.name : '')"></h3>
+        <p class="text-sm text-base-content/70 mb-4" x-text="$store.i18n.t('plugins_env_hint')"></p>
+        <div class="space-y-4">
+          <template x-for="[key] in Object.entries($store.plugins.envPending?.envVars || {})" :key="key">
+            <div class="form-control w-full">
+              <label class="label"><span class="label-text font-bold" x-text="key"></span></label>
+              <input type="password" class="input input-bordered w-full" :placeholder="`请输入 ${key}`" :value="$store.plugins.envPending?.envVars[key] || ''" @input="if($store.plugins.envPending) $store.plugins.envPending.envVars[key]=$event.target.value" />
+            </div>
           </template>
         </div>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="$store.plugins.showEnvModal=false" x-text="$store.i18n.t('cancel')"></button>
+          <button class="btn btn-primary" @click="$store.plugins.confirmInstall()" x-text="$store.i18n.t('plugins_install')"></button>
+        </div>
+      </div>
+      <div class="modal-backdrop" @click="$store.plugins.showEnvModal=false"></div>
+    </div>
 
-        <!-- 市场 (Marketplace) 视图 -->
-        <div x-show="!$store.plugins.loading && $store.plugins.filter === 'marketplace' && $store.plugins.filteredMarketplaces.length > 0"
-             style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">
-          <template x-for="entry in $store.plugins.filteredMarketplaces" :key="entry.id">
+    <div class="modal" :class="$store.plugins.showCreateModal ? 'modal-open' : ''">
+      <div class="modal-box bg-base-200 border border-base-300 w-11/12 max-w-lg">
+        <h3 class="font-bold text-lg mb-4" x-text="`创建 ${$store.plugins.typeLabel($store.plugins.filter)}`"></h3>
+        <div class="space-y-4">
+          <div class="form-control">
+            <label class="label"><span class="label-text font-bold">名称</span></label>
+            <input type="text" class="input input-bordered w-full" x-model="$store.plugins.createForm.name" placeholder="输入名称" />
+          </div>
 
-            <div style="background:var(--color-surface-raised);border:1px solid var(--color-border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;border-left:3px solid #ec4899">
+          <div class="form-control" x-show="['skill', 'plugin', 'app', 'marketplace'].includes($store.plugins.filter)">
+            <label class="label"><span class="label-text font-bold">描述</span></label>
+            <textarea class="textarea textarea-bordered h-24" x-model="$store.plugins.createForm.description" placeholder="输入描述信息"></textarea>
+          </div>
 
-              <div style="display:flex;align-items:flex-start;gap:10px">
-                <div style="font-size:22px;flex-shrink:0;line-height:1.2">🛒</div>
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                       x-text="entry.name"></div>
-                  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;align-items:center">
-                    <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px"
-                          style="background:color-mix(in srgb,#ec4899 15%,transparent);color:#ec4899"
-                          x-text="'市场'"></span>
-                    <span style="font-size:10px;color:var(--color-text-dim);font-family:monospace"
-                          x-text="entry.publisher"></span>
+          <!-- Type specific templates ported directly, just wrapping with DaisyUI classes -->
+          <template x-if="$store.plugins.filter === 'skill'">
+            <div class="space-y-4">
+              <div class="form-control">
+                <label class="label"><span class="label-text font-bold">Git 仓库地址</span></label>
+                <input type="text" class="input input-bordered w-full" x-model="$store.plugins.createForm.repo_url" placeholder="https://github.com/..." />
+              </div>
+              <div class="form-control">
+                <label class="label"><span class="label-text font-bold">执行入口 (Entrypoint)</span></label>
+                <input type="text" class="input input-bordered w-full" x-model="$store.plugins.createForm.entrypoint" placeholder="python main.py" />
+              </div>
+            </div>
+          </template>
+
+          <template x-if="$store.plugins.filter === 'plugin'">
+            <div class="form-control">
+              <label class="label"><span class="label-text font-bold">Manifest URL</span></label>
+              <input type="text" class="input input-bordered w-full" x-model="$store.plugins.createForm.manifest_url" placeholder="https://.../.well-known/ai-plugin.json" />
+            </div>
+          </template>
+
+          <template x-if="['app', 'marketplace'].includes($store.plugins.filter)">
+            <div class="form-control">
+              <label class="label"><span class="label-text font-bold">URL / 仓库地址</span></label>
+              <input type="text" class="input input-bordered w-full" x-model="$store.plugins.createForm.url" placeholder="https://..." />
+            </div>
+          </template>
+
+          <template x-if="$store.plugins.filter === 'mcp'">
+            <div class="space-y-4">
+              <div class="form-control">
+                <label class="label"><span class="label-text font-bold">Transport 类型</span></label>
+                <select class="select select-bordered" x-model="$store.plugins.createForm.transport">
+                  <option value="stdio">stdio</option>
+                  <option value="sse">sse</option>
+                </select>
+              </div>
+              
+              <template x-if="$store.plugins.createForm.transport === 'stdio'">
+                <div class="space-y-4">
+                  <div class="form-control">
+                    <label class="label"><span class="label-text font-bold">执行命令 (Command)</span></label>
+                    <input type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.command" placeholder="npx, python, etc." />
+                  </div>
+                  <div class="form-control">
+                    <label class="label"><span class="label-text font-bold">参数 (Args - JSON Array)</span></label>
+                    <input type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.args" placeholder='["-y", "@modelcontextprotocol/server-filesystem"]' />
                   </div>
                 </div>
-                <div x-show="entry.is_builtin === 1"
-                     style="font-size:10px;font-weight:600;color:var(--color-ok);padding:2px 6px;border-radius:4px;background:var(--color-surface)"
-                     title="系统内置">Built-in</div>
-              </div>
+              </template>
 
-              <div style="font-size:12px;color:var(--color-text-dim);line-height:1.55;flex:1">
-                <div style="margin-bottom:8px" x-text="entry.description || ''"></div>
-                <div>包含类型: <span style="font-family:monospace" x-text="(entry.type || '').toUpperCase()"></span></div>
-                <div>地址: <a :href="entry.repo_url" target="_blank" x-text="entry.repo_url" style="color:var(--color-accent);text-decoration:none;font-family:monospace"></a></div>
-              </div>
+              <template x-if="$store.plugins.createForm.transport === 'sse'">
+                <div class="form-control">
+                  <label class="label"><span class="label-text font-bold">SSE URL</span></label>
+                  <input type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.url" placeholder="https://..." />
+                </div>
+              </template>
 
-              <div style="display:flex;gap:6px;align-items:center;margin-top:auto;padding-top:4px;border-top:1px solid var(--color-border)">
-                <button x-show="entry.is_builtin === 0" class="btn btn-ghost btn-sm" style="color:var(--color-error);font-size:11px" @click="fetch(`/v1/plugins/marketplaces/${entry.id}`, {method:'DELETE'}).then(()=>$store.plugins.load())">删除</button>
-                <div x-show="entry.is_builtin === 1" style="font-size:11px;color:var(--color-text-dim)">不可删除</div>
+              <div class="form-control">
+                <label class="label"><span class="label-text font-bold">环境变量 (Env - JSON Object)</span></label>
+                <input type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.env" placeholder='{"API_KEY": "value"}' />
               </div>
-
             </div>
-
           </template>
         </div>
-
-      </div>
-
-      <!-- ENV 变量配置 Modal（MCP 安装时） -->
-      <div class="modal-overlay" x-show="$store.plugins.showEnvModal" x-cloak
-           @click.self="$store.plugins.showEnvModal=false"
-           @keydown.escape.window="$store.plugins.showEnvModal=false">
-        <div class="modal-panel">
-          <div class="modal-header">
-            <span x-text="$store.i18n.t('plugins_env_title') + (($store.plugins.envPending?.entry?.name) ? '：' + $store.plugins.envPending.entry.name : '')"></span>
-            <button class="btn btn-ghost btn-sm" @click="$store.plugins.showEnvModal=false">✕</button>
-          </div>
-          <div class="modal-body">
-            <div style="font-size:12px;color:var(--color-text-dim);margin-bottom:14px"
-                 x-text="$store.i18n.t('plugins_env_hint')"></div>
-            <template x-for="[key] in Object.entries($store.plugins.envPending?.envVars || {})" :key="key">
-              <div class="form-group">
-                <label class="form-label" :for="'env-input-' + key" x-text="key"></label>
-                <input class="form-input" type="password"
-                       :id="'env-input-' + key"
-                       :name="'env-input-' + key"
-                       :placeholder="`请输入 ${key}`"
-                       :value="$store.plugins.envPending?.envVars[key] || ''"
-                       @input="if($store.plugins.envPending) $store.plugins.envPending.envVars[key]=$event.target.value" />
-              </div>
-            </template>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost btn-sm" @click="$store.plugins.showEnvModal=false"
-                    x-text="$store.i18n.t('cancel')"></button>
-            <button class="btn btn-primary btn-sm" @click="$store.plugins.confirmInstall()"
-                    x-text="$store.i18n.t('plugins_install')"></button>
-          </div>
+        <div class="modal-action">
+          <button class="btn btn-ghost" @click="$store.plugins.showCreateModal=false" x-text="$store.i18n.t('cancel')"></button>
+          <button class="btn btn-primary" @click="$store.plugins.submitCreation()">保存</button>
         </div>
       </div>
+      <div class="modal-backdrop" @click="$store.plugins.showCreateModal=false"></div>
+    </div>
 
-      <!-- Create Entity Modal -->
-      <div class="modal-overlay" x-show="$store.plugins.showCreateModal" x-cloak
-           @click.self="$store.plugins.showCreateModal=false"
-           @keydown.escape.window="$store.plugins.showCreateModal=false">
-        <div class="modal-panel" style="width: 500px">
-          <div class="modal-header">
-            <span x-text="`创建 ${$store.plugins.typeLabel($store.plugins.filter)}`"></span>
-            <button class="btn btn-ghost btn-sm" @click="$store.plugins.showCreateModal=false">✕</button>
-          </div>
-          <div class="modal-body">
-            
-            <div class="form-group">
-              <label class="form-label" for="create-plugin-name">名称</label>
-              <input id="create-plugin-name" name="create-plugin-name" class="form-input" type="text" x-model="$store.plugins.createForm.name" placeholder="输入名称" />
-            </div>
-
-            <!-- Description for Skill, Plugin, App, Marketplace -->
-            <div class="form-group" x-show="['skill', 'plugin', 'app', 'marketplace'].includes($store.plugins.filter)">
-              <label class="form-label" for="create-plugin-desc">描述</label>
-              <textarea id="create-plugin-desc" name="create-plugin-desc" class="form-input" x-model="$store.plugins.createForm.description" placeholder="输入描述信息"></textarea>
-            </div>
-
-            <!-- Skill specifics -->
-            <template x-if="$store.plugins.filter === 'skill'">
-              <div>
-                <div class="form-group">
-                  <label class="form-label" for="create-plugin-repo">Git 仓库地址</label>
-                  <input id="create-plugin-repo" name="create-plugin-repo" class="form-input" type="text" x-model="$store.plugins.createForm.repo_url" placeholder="https://github.com/..." />
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="create-plugin-entry">执行入口 (Entrypoint)</label>
-                  <input id="create-plugin-entry" name="create-plugin-entry" class="form-input" type="text" x-model="$store.plugins.createForm.entrypoint" placeholder="python main.py" />
-                </div>
-              </div>
-            </template>
-
-            <!-- Plugin specifics -->
-            <template x-if="$store.plugins.filter === 'plugin'">
-              <div class="form-group">
-                <label class="form-label" for="create-plugin-manifest">Manifest URL</label>
-                <input id="create-plugin-manifest" name="create-plugin-manifest" class="form-input" type="text" x-model="$store.plugins.createForm.manifest_url" placeholder="https://.../.well-known/ai-plugin.json" />
-              </div>
-            </template>
-
-            <!-- App / Marketplace specifics -->
-            <template x-if="['app', 'marketplace'].includes($store.plugins.filter)">
-              <div class="form-group">
-                <label class="form-label" for="create-plugin-url">URL / 仓库地址</label>
-                <input id="create-plugin-url" name="create-plugin-url" class="form-input" type="text" x-model="$store.plugins.createForm.url" placeholder="https://..." />
-              </div>
-            </template>
-
-            <!-- MCP specifics -->
-            <template x-if="$store.plugins.filter === 'mcp'">
-              <div>
-                <div class="form-group">
-                  <label class="form-label" for="create-plugin-transport">Transport 类型</label>
-                  <select id="create-plugin-transport" name="create-plugin-transport" class="form-input" x-model="$store.plugins.createForm.transport">
-                    <option value="stdio">stdio</option>
-                    <option value="sse">sse</option>
-                  </select>
-                </div>
-                
-                <!-- stdio fields -->
-                <template x-if="$store.plugins.createForm.transport === 'stdio'">
-                  <div>
-                    <div class="form-group">
-                      <label class="form-label" for="create-plugin-command">执行命令 (Command)</label>
-                      <input id="create-plugin-command" name="create-plugin-command" class="form-input" type="text" x-model="$store.plugins.createForm.command" placeholder="npx, python, etc." />
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label" for="create-plugin-args">参数 (Args - JSON Array)</label>
-                      <input id="create-plugin-args" name="create-plugin-args" class="form-input" type="text" x-model="$store.plugins.createForm.args" placeholder='["-y", "@modelcontextprotocol/server-filesystem"]' />
-                    </div>
-                  </div>
-                </template>
-
-                <!-- sse fields -->
-                <template x-if="$store.plugins.createForm.transport === 'sse'">
-                  <div class="form-group">
-                    <label class="form-label" for="create-plugin-sse">SSE URL</label>
-                    <input id="create-plugin-sse" name="create-plugin-sse" class="form-input" type="text" x-model="$store.plugins.createForm.url" placeholder="https://..." />
-                  </div>
-                </template>
-
-                <div class="form-group">
-                  <label class="form-label" for="create-plugin-env">环境变量 (Env - JSON Object)</label>
-                  <input id="create-plugin-env" name="create-plugin-env" class="form-input" type="text" x-model="$store.plugins.createForm.env" placeholder='{"API_KEY": "value"}' />
-                </div>
-              </div>
-            </template>
-
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost btn-sm" @click="$store.plugins.showCreateModal=false" x-text="$store.i18n.t('cancel')"></button>
-            <button class="btn btn-primary btn-sm" @click="$store.plugins.submitCreation()" x-text="'保存'"></button>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /plugins -->
+  </div>
+</div>

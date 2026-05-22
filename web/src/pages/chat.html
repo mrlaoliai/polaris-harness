@@ -1,266 +1,184 @@
-<!-- 对话页 -->
-    <div x-show="$store.nav.page === 'chat'" class="chat-page"
-         x-data="{
-           atBottom: true,
-           _el: null,
-           init() {
-             this.$nextTick(() => {
-               this._el = document.getElementById('message-list')
-               if (!this._el) return
-               this._el.addEventListener('scroll', () => {
-                 this.atBottom = this._el.scrollHeight - this._el.scrollTop - this._el.clientHeight < 60
-               })
-               new MutationObserver(() => {
-                 if (this.atBottom) this._el.scrollTop = this._el.scrollHeight
-               }).observe(this._el, { childList: true, subtree: true, characterData: true })
-               // 初始滚到最新消息
-               this._el.scrollTop = this._el.scrollHeight
-             })
-           },
-           scrollBottom() {
-             if (this._el) this._el.scrollTo({ top: this._el.scrollHeight, behavior: 'smooth' })
-             this.atBottom = true
-           }
-         }">
+<div x-show="$store.nav.page === 'chat'" class="flex flex-col flex-1 h-full min-h-0 relative"
+     x-data="{
+       atBottom: true,
+       _el: null,
+       init() {
+         this.$nextTick(() => {
+           this._el = document.getElementById('message-list');
+           if (!this._el) return;
+           this._el.addEventListener('scroll', () => {
+             this.atBottom = this._el.scrollHeight - this._el.scrollTop - this._el.clientHeight < 60;
+           });
+           new MutationObserver(() => {
+             if (this.atBottom) this._el.scrollTop = this._el.scrollHeight;
+           }).observe(this._el, { childList: true, subtree: true, characterData: true });
+           this._el.scrollTop = this._el.scrollHeight;
+         });
+       },
+       scrollBottom() {
+         if (this._el) this._el.scrollTo({ top: this._el.scrollHeight, behavior: 'smooth' });
+         this.atBottom = true;
+       }
+     }">
 
-      <!-- Thinking Panel -->
-      <div class="thinking-panel"
-           style="flex-shrink:0"
-           x-show="$store.chat.thinkingText"
-           x-cloak>
-        <div class="thinking-header" @click="$store.chat.thinkingOpen = !$store.chat.thinkingOpen">
-          <div class="spinner" x-show="$store.chat.state === 'THINKING'"></div>
-          <span x-text="$store.i18n.t('chat_thinking')"></span>
-          <svg style="width:12px;height:12px;margin-left:auto;transition:transform 0.2s"
-               :style="$store.chat.thinkingOpen ? {} : { transform: 'rotate(-90deg)' }"
-               fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
-          </svg>
-        </div>
-        <div class="thinking-body" x-show="$store.chat.thinkingOpen" x-text="$store.chat.thinkingText"></div>
-      </div>
+  <!-- Thinking Panel -->
+  <div class="mx-4 mt-2 border border-base-300 rounded-xl overflow-hidden shrink-0 bg-base-200/50" x-show="$store.chat.thinkingText" x-cloak>
+    <div class="flex items-center gap-2 p-2 px-4 cursor-pointer text-base-content/60 text-sm font-medium hover:bg-base-300/50 transition-colors" @click="$store.chat.thinkingOpen = !$store.chat.thinkingOpen">
+      <span x-show="$store.chat.state === 'THINKING'" class="loading loading-spinner loading-xs"></span>
+      <span x-text="$store.i18n.t('chat_thinking')"></span>
+      <svg class="w-4 h-4 ml-auto transition-transform" :class="$store.chat.thinkingOpen ? '' : '-rotate-90'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>
+    </div>
+    <div class="p-3 px-4 text-base-content/70 italic whitespace-pre-wrap max-h-48 overflow-y-auto border-t border-base-300 text-sm" x-show="$store.chat.thinkingOpen" x-text="$store.chat.thinkingText"></div>
+  </div>
 
-      <!-- 错误横幅 -->
-      <div class="error-banner" style="flex-shrink:0" x-show="$store.chat.state === 'ERROR'" x-cloak>
-        <span x-text="$store.chat.errorMsg"></span>
-        <button class="btn btn-ghost btn-sm" @click="$store.chat.state = 'IDLE'; $store.chat.errorMsg = ''"
-                x-text="$store.i18n.t('chat_error_clear')"></button>
-      </div>
+  <!-- Error Banner -->
+  <div class="mx-4 mt-2 alert alert-error shadow-sm shrink-0" x-show="$store.chat.state === 'ERROR'" x-cloak>
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    <span x-text="$store.chat.errorMsg"></span>
+    <button class="btn btn-sm btn-ghost" @click="$store.chat.state = 'IDLE'; $store.chat.errorMsg = ''" x-text="$store.i18n.t('chat_error_clear')"></button>
+  </div>
 
-      <!-- 消息列表 + 滚动按钮包裹层 -->
-      <div class="chat-msg-area">
-      <!-- 滚动到底部按钮 -->
-      <button x-show="!atBottom" @click="scrollBottom()" x-cloak
-              style="position:absolute;bottom:12px;right:16px;z-index:20;width:34px;height:34px;border-radius:50%;background:var(--color-accent);color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,0.5);font-size:16px;opacity:0.9">
-        ↓
-      </button>
-      <div class="message-list" style="height:100%;overflow-y:auto" id="message-list">
-        <div class="max-w-5xl mx-auto w-full flex flex-col min-h-full">
+  <!-- Messages -->
+  <div class="flex-1 min-h-0 relative">
+    <button x-show="!atBottom" @click="scrollBottom()" x-cloak class="btn btn-circle btn-primary btn-sm absolute bottom-4 right-6 z-20 shadow-lg opacity-90">↓</button>
+    <div class="h-full overflow-y-auto p-4 pb-8" id="message-list">
+      <div class="max-w-4xl mx-auto w-full flex flex-col min-h-full">
 
-        <!-- 空状态 -->
-        <div class="empty-state" x-show="$store.chat.messages.length === 0 && $store.chat.state === 'IDLE'" x-cloak>
-          <svg fill="none" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/>
-          </svg>
-          <h3 x-text="$store.i18n.t('chat_empty_title')"></h3>
-          <p x-text="$store.i18n.t('chat_empty_hint')"></p>
+        <!-- Empty State -->
+        <div class="flex flex-col items-center justify-center flex-1 text-base-content/40 space-y-4 py-20" x-show="$store.chat.messages.length === 0 && $store.chat.state === 'IDLE'" x-cloak>
+          <div class="p-4 bg-base-200 rounded-full">
+            <svg class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+          </div>
+          <h3 class="text-xl font-bold text-base-content/80" x-text="$store.i18n.t('chat_empty_title')"></h3>
+          <p class="text-sm max-w-md text-center" x-text="$store.i18n.t('chat_empty_hint')"></p>
         </div>
 
-        <!-- 消息渲染 -->
         <template x-for="(msg, idx) in $store.chat.messages" :key="idx">
-          <div style="margin-bottom: 12px;">
-            <!-- 压缩分隔符 -->
-            <div class="compaction-divider" x-show="msg.compactionAfter" x-cloak style="margin-bottom: 12px;">
-              <span x-text="$store.i18n.t('chat_compressed')"></span>
-            </div>
+          <div class="mb-4">
+            <div class="divider text-xs text-base-content/30" x-show="msg.compactionAfter" x-cloak x-text="$store.i18n.t('chat_compressed')"></div>
 
-            <!-- 用户消息 -->
             <template x-if="msg.role === 'user'">
-              <div class="msg-row msg-row-end">
-                <div class="message-bubble user" style="flex-shrink: 0;"
-                     x-data="{ expanded: false, isOversized: false }"
-                     x-init="$nextTick(() => {
-                       const content = $refs.content;
-                       if (!content) return;
-                       const checkSize = () => { isOversized = content.scrollHeight > 200; };
-                       checkSize();
-                       const ro = new ResizeObserver(checkSize);
-                       ro.observe(content);
-                     })">
-                  <div x-ref="content" class="bubble-content bubble-text" :class="{ 'collapsed': !expanded && isOversized }" x-text="msg.content"></div>
-                  <div class="bubble-action-bar" x-show="isOversized">
-                    <button class="btn btn-ghost btn-sm" @click="expanded = !expanded" x-text="expanded ? '收起' : '展开全部'"></button>
-                  </div>
-                </div>
+              <div class="chat chat-end">
+                <div class="chat-bubble bg-base-200 text-base-content break-words" x-text="msg.content"></div>
               </div>
             </template>
 
-            <!-- Assistant 消息 -->
             <template x-if="msg.role === 'assistant'">
-              <div class="msg-row msg-row-start">
-                <div class="message-bubble assistant" :class="{ aborted: msg.aborted }" style="flex-shrink: 0;"
-                     x-data="{ expanded: false, isOversized: false }"
-                     x-init="$nextTick(() => {
-                       const content = $refs.content;
-                       if (!content) return;
-                       const checkSize = () => { isOversized = content.scrollHeight > 200; };
-                       checkSize();
-                       const ro = new ResizeObserver(checkSize);
-                       ro.observe(content);
-                     })">
-                  <span class="aborted-badge" x-show="msg.aborted" x-text="'⚠ ' + $store.i18n.t('chat_interrupted')"></span>
-                  <div x-ref="content" class="bubble-content" :class="{ 'collapsed': !expanded && isOversized }">
-                    <!-- 工具调用卡片 -->
-                    <template x-for="(tc, ti) in msg.toolCalls" :key="ti">
-                      <div class="tool-call-card" style="margin-bottom:8px">
-                        <div class="tool-call-header">
-                          <span>⚡</span>
-                          <span x-text="tc.name"></span>
-                          <span x-show="tc.output !== null" style="margin-left:auto;font-size:10px;opacity:0.7" x-text="$store.i18n.t('chat_complete')"></span>
-                          <div class="spinner" x-show="tc.output === null"></div>
-                        </div>
-                        <div x-show="tc.output !== null" style="padding:6px 0">
-                          <template x-for="line in (tc.output || '').split('\n')" :key="line">
-                            <div class="tool-output-line">
-                              <span class="tool-prefix">┊</span>
-                              <span x-text="line"></span>
-                            </div>
-                          </template>
-                        </div>
+              <div class="chat chat-start">
+                <div class="chat-bubble bg-base-100 text-base-content border border-base-300 shadow-sm relative" :class="{ 'border-warning': msg.aborted }">
+                  <div class="badge badge-warning badge-xs absolute -top-2 right-2" x-show="msg.aborted" x-text="'⚠ ' + $store.i18n.t('chat_interrupted')"></div>
+                  
+                  <template x-for="(tc, ti) in msg.toolCalls" :key="ti">
+                    <div class="mb-3 rounded-lg border border-primary/30 bg-primary/5 overflow-hidden text-xs">
+                      <div class="flex items-center gap-2 p-2 bg-primary/10 text-primary font-mono font-bold">
+                        <span>⚡</span><span x-text="tc.name"></span>
+                        <span x-show="tc.output !== null" class="ml-auto opacity-70" x-text="$store.i18n.t('chat_complete')"></span>
+                        <span x-show="tc.output === null" class="loading loading-spinner loading-xs ml-auto"></span>
                       </div>
-                    </template>
-                    <!-- 文本内容（Markdown 渲染） -->
-                    <div x-html="renderMarkdown(msg.content)" class="prose bubble-text markdown-body"></div>
-                  </div>
-                  <div class="bubble-action-bar" x-show="isOversized">
-                    <button class="btn btn-ghost btn-sm" @click="expanded = !expanded" x-text="expanded ? '收起' : '展开全部'"></button>
-                  </div>
+                      <div x-show="tc.output !== null" class="p-2 bg-base-100/50 overflow-x-auto max-h-48 overflow-y-auto font-mono text-base-content/70">
+                        <template x-for="line in (tc.output || '').split('\n')" :key="line">
+                          <div class="flex gap-2"><span class="text-primary/50 shrink-0">┊</span><span class="whitespace-pre" x-text="line"></span></div>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+                  
+                  <div x-html="renderMarkdown(msg.content)" class="prose prose-sm max-w-none break-words markdown-body"></div>
                 </div>
               </div>
             </template>
           </div>
         </template>
 
-        <!-- 流式气泡 -->
-        <div class="streaming-bubble" style="margin-top: 12px;"
-             x-show="$store.chat.state === 'STREAMING' || $store.chat.state === 'TOOL_RUNNING'"
-             x-cloak>
-          <div x-html="renderMarkdown($store.chat.currentTokens)" class="prose markdown-body" style="display:inline"></div>
-          <span class="cursor-blink"></span>
-        </div>
-
-        <!-- 正在思考占位 -->
-        <div class="message-bubble assistant w-fit"
-             x-show="$store.chat.state === 'SUBMITTING' || $store.chat.state === 'THINKING'"
-             style="opacity:0.5; margin-top: 12px;"
-             x-cloak>
-          <div class="spinner" style="display:inline-block"></div>
-        </div>
-
-        </div>
-      </div><!-- /message-list -->
-      </div><!-- /消息列表包裹层 -->
-
-      <!-- 输入区 -->
-      <div class="chat-input-area" x-data="chatInput">
-        <div class="max-w-5xl mx-auto w-full">
-        <div style="position:relative">
-          <!-- 斜杠命令菜单 -->
-          <div class="slash-menu" x-show="showSlash" x-cloak>
-            <template x-for="(item, i) in slashItems" :key="item.cmd">
-              <div class="slash-menu-item" :class="{ focused: slashFocus === i }"
-                   @click="selectSlash(item)">
-                <span class="slash-cmd" x-text="item.cmd"></span>
-                <span class="slash-desc" x-text="item.desc"></span>
-              </div>
-            </template>
+        <!-- Streaming Bubble -->
+        <div class="chat chat-start" x-show="$store.chat.state === 'STREAMING' || $store.chat.state === 'TOOL_RUNNING'" x-cloak>
+          <div class="chat-bubble bg-base-100 text-base-content border border-primary/50 shadow-sm">
+            <div x-html="renderMarkdown($store.chat.currentTokens)" class="prose prose-sm max-w-none break-words markdown-body inline"></div>
+            <span class="inline-block w-1 h-3 bg-primary ml-1 animate-pulse"></span>
           </div>
+        </div>
 
-          <!-- 附件预览区 -->
-          <div class="image-previews" x-show="$store.chat.attachments.length > 0" x-cloak style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-            <template x-for="(att, idx) in $store.chat.attachments" :key="idx">
-              <div :title="att.name" style="position:relative; width:60px; height:60px; border-radius:6px; overflow:hidden; border:1px solid var(--color-border); background:var(--bg-secondary); display:flex; flex-direction:column; align-items:center; justify-content:center;">
-                <template x-if="att.dataUrl">
-                  <img :src="att.dataUrl" style="width:100%; height:100%; object-fit:cover;">
-                </template>
-                <template x-if="!att.dataUrl">
-                  <div style="font-size:24px; color:var(--text-secondary);">📄</div>
-                </template>
-                <button @click="$store.chat.removeAttachment(idx)" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:white; border:none; border-radius:50%; width:18px; height:18px; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; z-index:10;">×</button>
-              </div>
-            </template>
+        <!-- Thinking Bubble -->
+        <div class="chat chat-start" x-show="$store.chat.state === 'SUBMITTING' || $store.chat.state === 'THINKING'" x-cloak>
+          <div class="chat-bubble bg-base-100/50 text-base-content border border-base-200">
+            <span class="loading loading-dots loading-sm text-base-content/40"></span>
           </div>
+        </div>
 
-          <textarea
-            class="chat-textarea"
-            name="chat-input"
-            :aria-label="$store.i18n.t('chat_input_aria')"
-            :placeholder="$store.i18n.t('chat_placeholder')"
-            x-model="input"
-            :rows="rows"
-            :disabled="$store.chat.isActive && $store.chat.state !== 'COMPLETE'"
-            @keydown="onKeydown($event)"
-            @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
-            @paste="handlePaste($event)"
-            @drop="handleDrop($event)"
-            @dragover.prevent=""
-          ></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input Area -->
+  <div class="p-4 bg-base-100 shrink-0 w-full max-w-4xl mx-auto">
+    <div class="relative bg-base-200 rounded-3xl border border-base-300 shadow-sm focus-within:border-primary focus-within:shadow-md transition-all flex flex-col p-2 px-3">
+      
+      <!-- Command Menu -->
+      <div class="absolute bottom-full left-0 mb-2 w-full bg-base-100 border border-base-300 rounded-xl shadow-xl z-50 overflow-hidden" x-show="showSlash" x-cloak>
+        <ul class="menu menu-sm bg-base-100 rounded-box p-2">
+          <template x-for="(item, i) in slashItems" :key="item.cmd">
+            <li>
+              <a :class="{ 'active': slashFocus === i }" @click.prevent="selectSlash(item)">
+                <span class="font-mono text-primary font-bold" x-text="item.cmd"></span>
+                <span class="text-base-content/60" x-text="item.desc"></span>
+              </a>
+            </li>
+          </template>
+        </ul>
+      </div>
+
+      <!-- Attachments -->
+      <div class="flex gap-2 mb-2 flex-wrap" x-show="$store.chat.attachments.length > 0" x-cloak>
+        <template x-for="(att, idx) in $store.chat.attachments" :key="idx">
+          <div class="relative w-14 h-14 rounded-lg border border-base-300 bg-base-100 flex items-center justify-center shadow-sm">
+            <template x-if="att.dataUrl"><img :src="att.dataUrl" class="w-full h-full object-cover rounded-lg"></template>
+            <template x-if="!att.dataUrl"><div class="text-2xl opacity-50">📄</div></template>
+            <button @click="$store.chat.removeAttachment(idx)" class="btn btn-xs btn-circle btn-error absolute -top-2 -right-2 w-5 h-5 min-h-0 text-[10px]">✕</button>
+          </div>
+        </template>
+      </div>
+
+      <div class="flex items-end gap-2 w-full">
+        <button class="btn btn-circle btn-ghost btn-sm text-base-content/50" @click="$refs.fileInput.click()">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+
+        <textarea class="textarea bg-transparent border-none focus:outline-none w-full resize-none p-2 leading-relaxed min-h-[44px] max-h-48 overflow-y-auto"
+                  x-model="input" :rows="rows"
+                  :placeholder="$store.i18n.t('chat_placeholder')"
+                  :disabled="$store.chat.isActive && $store.chat.state !== 'COMPLETE'"
+                  @keydown="onKeydown($event)" @input="$el.style.height='auto'; $el.style.height=Math.min($el.scrollHeight, 192)+'px'"
+                  @paste="handlePaste($event)" @drop="handleDrop($event)" @dragover.prevent=""></textarea>
+
+        <div class="flex items-center gap-1">
+          <button class="btn btn-circle btn-ghost btn-sm text-base-content/50" :class="$store.chat.isRecording ? 'text-error bg-error/10' : ''" @click="$store.chat.toggleRecording()">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </button>
           
-          <!-- 隐藏的文件选择器 -->
-          <input type="file" multiple accept="image/*" style="display:none" x-ref="fileInput" @change="handleFileSelect($event)">
-        </div>
+          <button class="btn btn-circle btn-primary btn-sm" x-show="!$store.chat.isActive" @click="submit()" :disabled="!input.trim() && $store.chat.attachments.length === 0">
+            <svg class="w-4 h-4 ml-[-2px] mt-[1px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
 
-        <div class="input-actions">
-          <span class="input-hints" style="display:flex;align-items:center;gap:8px">
-            <button class="btn btn-ghost btn-sm"
-                    :disabled="$store.chat.isActive"
-                    @click="$store.chat.newSession()"
-                    x-text="$store.i18n.t('chat_new')"></button>
-            <!-- 权限模式选择器（对齐 Codex 设计：下拉式快速切换）-->
-            <select id="chat-computer-mode" name="chat-computer-mode" class="form-select"
-                    style="font-size:11px;padding:2px 6px;height:26px;border-radius:6px;min-width:80px"
-                    x-model="$store.computer.mode"
-                    @change="$store.computer.setMode($event.target.value)"
-                    :title="$store.i18n.t('computer_mode_title')">
-              <option value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
-              <option value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
-              <option value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
-            </select>
-            <span style="color:var(--color-text-dim);font-size:11px">
-              <kbd style="font-size:10px;padding:1px 4px;border:1px solid var(--color-border);border-radius:3px">Ctrl+K</kbd> 清空 &nbsp;
-              <kbd style="font-size:10px;padding:1px 4px;border:1px solid var(--color-border);border-radius:3px">Ctrl+C</kbd> 中断
-            </span>
-          </span>
-          <div style="display:flex;gap:8px;align-items:center">
-            <!-- 多模态按钮 -->
-            <button class="btn btn-ghost btn-sm"
-                    style="font-size: 16px; padding: 2px 6px;"
-                    title="上传图片"
-                    @click="$refs.fileInput.click()">
-              📎
-            </button>
-            <button class="btn btn-ghost btn-sm"
-                    style="font-size: 16px; padding: 2px 6px; transition: color 0.3s;"
-                    title="语音输入"
-                    :style="$store.chat.isRecording ? 'color: red;' : ''"
-                    @click="$store.chat.toggleRecording()">
-              🎤
-            </button>
-
-            <button class="btn btn-warn btn-sm"
-                    x-show="$store.chat.isActive"
-                    @click="$store.chat.interrupt('abort')"
-                    x-text="$store.i18n.t('chat_interrupt')">
-            </button>
-            <button class="btn btn-primary btn-sm"
-                    :disabled="!input.trim() || $store.chat.isActive"
-                    @click="submit()"
-                    x-text="$store.i18n.t('chat_send')">
-            </button>
-          </div>
+          <button class="btn btn-circle btn-warning btn-sm" x-show="$store.chat.isActive" @click="$store.chat.interrupt('abort')">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+          </button>
         </div>
       </div>
+      <input type="file" multiple accept="*/*" class="hidden" x-ref="fileInput" @change="handleFileSelect($event)">
+    </div>
 
+    <!-- Actions Footer -->
+    <div class="flex items-center justify-center gap-4 mt-3 text-xs text-base-content/50">
+      <button class="btn btn-xs btn-outline rounded-full" :disabled="$store.chat.isActive" @click="$store.chat.newSession()" x-text="$store.i18n.t('chat_new')"></button>
+      <select class="select select-bordered select-xs rounded-full bg-transparent" x-model="$store.computer.mode" @change="$store.computer.setMode($event.target.value)">
+        <option value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
+        <option value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
+        <option value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
+      </select>
+      <div class="flex items-center gap-2">
+        <span><kbd class="kbd kbd-xs">Ctrl+K</kbd> 清空</span>
+        <span><kbd class="kbd kbd-xs">Ctrl+C</kbd> 中断</span>
       </div>
-    </div><!-- /chat page -->
+    </div>
+  </div>
+</div>

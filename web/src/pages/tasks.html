@@ -18,7 +18,7 @@
 
       <!-- ── 审批 Tab ──────────────────────────────────── -->
       <div x-show="tab === 'approvals'" style="flex:1;min-height:0;overflow-y:auto;padding:24px">
-        <div class="max-w-5xl mx-auto w-full flex flex-col min-h-full">
+        <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
         <div class="page-header">
           <div class="page-title" x-text="$store.i18n.t('approvals_title')"></div>
           <div class="page-subtitle" x-text="$store.i18n.t('approvals_subtitle')"></div>
@@ -87,7 +87,7 @@
 
       <!-- ── 定时任务 Tab ────────────────────────────────── -->
       <div x-show="tab === 'cron'" style="flex:1;min-height:0;overflow-y:auto;padding:24px">
-        <div class="max-w-5xl mx-auto w-full flex flex-col min-h-full">
+        <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
         <div class="page-header">
           <div>
             <div class="page-title" x-text="$store.i18n.t('cron_title')"></div>

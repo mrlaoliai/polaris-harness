@@ -14,7 +14,7 @@
 
       <!-- ── Agent 状态 Tab ─────────────────────────────── -->
       <div x-show="tab === 'agents'" style="flex:1;min-height:0;overflow-y:auto;padding:24px">
-        <div class="max-w-5xl mx-auto w-full flex flex-col min-h-full">
+        <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
         <div class="page-header">
           <div>
             <div class="page-title" x-text="$store.i18n.t('agents_title')"></div>
@@ -157,7 +157,7 @@
 
       <!-- ── 技能库 Tab ─────────────────────────────────── -->
       <div x-show="tab === 'skills'" style="flex:1;min-height:0;overflow-y:auto;padding:24px">
-        <div class="max-w-5xl mx-auto w-full flex flex-col min-h-full">
+        <div class="max-w-4xl mx-auto w-full flex flex-col flex-1">
         <div class="page-header">
           <div class="page-title" x-text="$store.i18n.t('skills_title')"></div>
           <div class="page-subtitle" x-text="`已安装 ${$store.skills.list.length} 个技能`"></div>
