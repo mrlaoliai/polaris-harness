@@ -81,19 +81,13 @@ func (s *Server) handleDoctor(w http.ResponseWriter, r *http.Request) {
 	add("memory", memOK, fmt.Sprintf("%d MB / 8192 MB", sysMB))
 
 	// ── 数据目录可写性 ────────────────────────────────────────────────
-	dataDir := os.Getenv("POLARIS_DATA_DIR")
-	if dataDir == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			dataDir = home + "/.polaris-harness"
-		}
-	}
-	if dataDir != "" {
-		probe := dataDir + "/.doctor_probe"
+	if s.dataDir != "" {
+		probe := s.dataDir + "/.doctor_probe"
 		if err := os.WriteFile(probe, []byte("ok"), 0600); err != nil {
 			add("data_dir", false, fmt.Sprintf("not writable: %v", err))
 		} else {
 			os.Remove(probe) //nolint:errcheck
-			add("data_dir", true, fmt.Sprintf("writable: %s", dataDir))
+			add("data_dir", true, fmt.Sprintf("writable: %s", s.dataDir))
 		}
 	}
 

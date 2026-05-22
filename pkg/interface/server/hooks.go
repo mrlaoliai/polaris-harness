@@ -30,16 +30,11 @@ type HookRunner struct {
 }
 
 // NewHookRunner 构造 HookRunner。
-// 目录优先级：POLARIS_HOOKS_DIR > $POLARIS_DATA_DIR/hooks > ~/.polaris-harness/hooks
-func NewHookRunner() *HookRunner {
+// 目录优先级：POLARIS_HOOKS_DIR > dataDir/hooks
+func NewHookRunner(dataDir string) *HookRunner {
 	dir := os.Getenv("POLARIS_HOOKS_DIR")
 	if dir == "" {
-		base := os.Getenv("POLARIS_DATA_DIR")
-		if base == "" {
-			home, _ := os.UserHomeDir()
-			base = filepath.Join(home, ".polaris-harness")
-		}
-		dir = filepath.Join(base, "hooks")
+		dir = filepath.Join(dataDir, "hooks")
 	}
 	return &HookRunner{dir: dir}
 }

@@ -88,15 +88,6 @@ func tsNow() string {
 	return time.Now().Format(time.RFC3339)
 }
 
-// defaultTranscriptDir 返回默认 transcript 目录：~/.polaris-harness/transcripts/
-func defaultTranscriptDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".polaris-harness", "transcripts")
-	}
-	return filepath.Join(home, ".polaris-harness", "transcripts")
-}
-
 // PruneTranscripts 删除超过 retentionDays 天未修改的 .jsonl transcript 文件。
 // 在服务启动时以 goroutine 调用，非阻塞，目录不存在时静默返回。
 func PruneTranscripts(dir string, retentionDays int) {

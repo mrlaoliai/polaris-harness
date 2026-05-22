@@ -183,7 +183,7 @@ func runBenchmarkRouting(args []string) error { //nolint:gocyclo
 		return nil
 	}
 
-	dbPath := resolveDataDir("polaris.db")
+	dbPath := resolveDataDir(nil, "polaris.db")
 	schemaDir := resolveSchemaDir()
 	store, err := storage.OpenSQLiteFromDir(dbPath, schemaDir)
 	if err != nil {

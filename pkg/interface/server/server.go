@@ -48,6 +48,7 @@ type Server struct {
 	toolExec      func(ctx context.Context, name string, args []byte) (*protocol.ToolResult, error) // tool_use 执行器
 	logStore      *LogStore                                                                         // 日志环形缓冲 + SSE 广播
 	evalRunner    protocol.EvalRunner                                                               // M12 评测套件
+	dataDir       string                                                                            // 项目统一的数据根目录
 }
 
 // SetMCPManager 注入 MCPManager（NewServer 之后、Start 之前调用）。
@@ -90,8 +91,8 @@ func (s *Server) buildToolSchemas() []protocol.ToolSchema {
 
 // NewServer 创建新的 HTTP Server。
 // DEV_MODE=1 时将静态资源请求反向代理到 Vite dev server (:5173)。
-func NewServer(addr string, agent *kernel.Agent, bb protocol.Blackboard, hitlGateway protocol.HITL, db *sql.DB, registry *inference.ProviderRegistry, httpClient *http.Client, safeDialer protocol.SafeDialer) *Server {
-	tDir := defaultTranscriptDir()
+func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Blackboard, hitlGateway protocol.HITL, db *sql.DB, registry *inference.ProviderRegistry, httpClient *http.Client, safeDialer protocol.SafeDialer) *Server {
+	tDir := filepath.Join(dataDir, "transcripts")
 	go PruneTranscripts(tDir, 30) // 启动时异步清理 30 天前的 transcript
 
 	s := &Server{
@@ -103,7 +104,8 @@ func NewServer(addr string, agent *kernel.Agent, bb protocol.Blackboard, hitlGat
 		registry:      registry,
 		httpClient:    httpClient,
 		transcriptDir: tDir,
-		hooks:         NewHookRunner(),
+		hooks:         NewHookRunner(dataDir),
+		dataDir:       dataDir,
 	}
 
 	// 注入内置的 yaml 配置作为种子数据到数据库（SSoT 架构）

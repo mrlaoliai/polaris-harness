@@ -143,7 +143,6 @@ type M12EvalThresholds struct {
 }
 
 type M13InterfaceThresholds struct {
-	HTTPPort                       int `toml:"http.port"`                         // 29999
 	ReadTimeoutSeconds             int `toml:"timeout.read_seconds"`              // 10
 	WriteTimeoutSeconds            int `toml:"timeout.write_seconds"`             // 60
 	IdleTimeoutSeconds             int `toml:"timeout.idle_seconds"`              // 120
@@ -269,7 +268,6 @@ func DefaultThresholds() Thresholds {
 			JudgeSingleConfidence: 0.90,
 		},
 		M13Interface: M13InterfaceThresholds{
-			HTTPPort:                       29999,
 			ReadTimeoutSeconds:             10,
 			WriteTimeoutSeconds:            60,
 			IdleTimeoutSeconds:             120,

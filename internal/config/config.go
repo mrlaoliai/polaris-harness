@@ -24,9 +24,10 @@ type Config struct {
 }
 
 type SystemConfig struct {
-	Tier         int `yaml:"tier"`
-	MaxAgents    int `yaml:"max_agents"`
-	GoMemLimitMB int `yaml:"go_memlimit_mb"`
+	Tier         int    `yaml:"tier"`
+	MaxAgents    int    `yaml:"max_agents"`
+	GoMemLimitMB int    `yaml:"go_memlimit_mb"`
+	DataDir      string `yaml:"data_dir"`
 }
 
 type InferenceConfig struct {
@@ -123,10 +124,12 @@ type EvalConfig struct {
 }
 
 type InterfaceConfig struct {
-	CLI       bool `yaml:"cli"`
-	HTTP      bool `yaml:"http"`
-	GRPC      bool `yaml:"grpc"`
-	WebSocket bool `yaml:"websocket"`
+	Host      string `yaml:"host"`
+	Port      int    `yaml:"port"`
+	CLI       bool   `yaml:"cli"`
+	HTTP      bool   `yaml:"http"`
+	GRPC      bool   `yaml:"grpc"`
+	WebSocket bool   `yaml:"websocket"`
 }
 
 func loadModuleTOML(modulePath string, target interface{}) {

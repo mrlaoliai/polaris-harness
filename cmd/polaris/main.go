@@ -85,8 +85,22 @@ func run() error { //nolint:gocyclo
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// ─── 0.3 日志初始化（stdout + ~/.polaris-harness/polaris.log）─────────────
-	dataDir := resolveDataDirBase()
+	// ─── 1. 配置加载 ────────────────────────────────────────────────────────
+	cfgPath := os.Getenv("POLARIS_CONFIG")
+	if cfgPath == "" {
+		cfgPath = "configs/defaults.yaml"
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "config.Load", err)
+	}
+	slog.Info("polaris: config loaded", "tier", cfg.System.Tier, "max_agents", cfg.System.MaxAgents)
+
+	// ─── 0.3 数据目录解析与初始化 ─────────────────────────────────────────────
+	dataDir := resolveDataDirBase(cfg)
+	initDirectories(dataDir)
+
+	// ─── 0.4 日志初始化（stdout + ~/.polaris-harness/polaris.log）─────────────
 	if logFile := observability.SetupLogger(dataDir); logFile != nil {
 		defer logFile.Close()
 	}
@@ -95,7 +109,7 @@ func run() error { //nolint:gocyclo
 	slog.SetDefault(slog.New(logStore))
 	slog.Info("polaris: logger initialized", "data_dir", dataDir)
 
-	// ─── 0.4 硬件探针 → Tier 判定 → FeatureGate ───────────────────────────
+	// ─── 0.5 硬件探针 → Tier 判定 → FeatureGate ───────────────────────────
 	autoConf, err := observability.NewAutoConfig()
 	if err != nil {
 		slog.Warn("polaris: AutoConfig failed, using Tier0 defaults", "err", err)
@@ -107,7 +121,7 @@ func run() error { //nolint:gocyclo
 		)
 	}
 
-	// ─── 0.5 全局指标生命周期 ──────────────────────────────────────────────────
+	// ─── 0.6 全局指标生命周期 ──────────────────────────────────────────────────
 	go func() {
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
@@ -121,20 +135,9 @@ func run() error { //nolint:gocyclo
 		}
 	}()
 
-	// ─── 0.6 内存压力监控（每 5s 轮询，驱动 FeatureGate 运行时降级）──────────
+	// ─── 0.7 内存压力监控（每 5s 轮询，驱动 FeatureGate 运行时降级）──────────
 	go autoConf.RunMemoryWatcher(ctx)
 	slog.Info("polaris: memory pressure monitor started", "poll_interval_s", 5)
-
-	// ─── 1. 配置加载 ────────────────────────────────────────────────────────
-	cfgPath := os.Getenv("POLARIS_CONFIG")
-	if cfgPath == "" {
-		cfgPath = "configs/defaults.yaml"
-	}
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return perrors.Wrap(perrors.CodeInternal, "config.Load", err)
-	}
-	slog.Info("polaris: config loaded", "tier", cfg.System.Tier, "max_agents", cfg.System.MaxAgents)
 
 	// ─── 2. 存储初始化 (L0 基础设施) ─────────────────────────────────────────
 	dbPath := filepath.Join(dataDir, "polaris.db")
@@ -526,7 +529,8 @@ func run() error { //nolint:gocyclo
 	if autoConf != nil && autoConf.Gate.State(observability.FeatureWebUI) == observability.FeatureDisabled {
 		slog.Warn("polaris: FeatureWebUI disabled by FeatureGate — serving API-only mode, dashboard unavailable")
 	}
-	httpServer := server.NewServer(fmt.Sprintf(":%d", cfg.Thresholds.M13Interface.HTTPPort), agent, blackboard, hitlGateway, store.DB(), reg, safeHTTPClient, dialer)
+	addr := fmt.Sprintf("%s:%d", cfg.Interface.Host, cfg.Interface.Port)
+	httpServer := server.NewServer(addr, dataDir, agent, blackboard, hitlGateway, store.DB(), reg, safeHTTPClient, dialer)
 	httpServer.SetMCPManager(mcpMgr)
 	httpServer.SetToolRegistry(toolReg)
 	httpServer.SetSkillRegistry(skillRegistry)
@@ -566,20 +570,36 @@ func run() error { //nolint:gocyclo
 	return nil
 }
 
-func resolveDataDirBase() string {
+func resolveDataDirBase(cfg *config.Config) string {
 	dir := os.Getenv("POLARIS_DATA_DIR")
+	if dir == "" && cfg != nil && cfg.System.DataDir != "" {
+		dir = cfg.System.DataDir
+	}
 	if dir == "" {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".polaris-harness")
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "."
-	}
 	return dir
 }
 
-func resolveDataDir(filename string) string {
-	return filepath.Join(resolveDataDirBase(), filename)
+func initDirectories(dataDir string) {
+	dirs := []string{
+		dataDir,
+		filepath.Join(dataDir, "logs"),
+		filepath.Join(dataDir, "hooks"),
+		filepath.Join(dataDir, "cache"),
+		filepath.Join(dataDir, "transcripts"),
+		filepath.Join(dataDir, "reports"),
+	}
+	for _, d := range dirs {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			slog.Warn("polaris: failed to create directory", "dir", d, "err", err)
+		}
+	}
+}
+
+func resolveDataDir(cfg *config.Config, filename string) string {
+	return filepath.Join(resolveDataDirBase(cfg), filename)
 }
 
 func resolveSchemaDir() string {

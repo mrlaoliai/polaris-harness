@@ -5,6 +5,7 @@ system:
   tier: 0
   max_agents: 3
   go_memlimit_mb: 150
+  data_dir: ""
 
 inference:
   default_provider: deepseek-v4-flash
@@ -69,6 +70,8 @@ eval:
   shadow_deploy: false
 
 interface:
+  host: "0.0.0.0"
+  port: 29999
   cli: true
   http: true
   grpc: false
