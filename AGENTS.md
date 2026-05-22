@@ -93,32 +93,50 @@ make build-skills
 > 全量 `docs/` ≈ 520K token 必爆。**默认按需加载**，不要预读 M_X.md。
 
 **会话启动必读**（合计 ~26K）：
-- `docs/specs/INDEX.md` — 编码规范导航
+- `docs/specs/INDEX.md` — 编码规范导航入口（先读再选后续文件）
 - `docs/specs/00-Constitution.md` — 反模式 R1~R8 + 命名 SSoT R2.1~R2.6 + HE-Rules 量表
-- `docs/specs/05-Coding-Workflow.md` — Spec-First 四阶段
-- `docs/specs/CHANGELOG.md` — 扫近 5 条规范变更
+- `docs/specs/05-Coding-Workflow.md` — Spec-First 四阶段工作流
+- `docs/specs/CHANGELOG.md` — 扫近 5 条规范变更（确认无破坏性改动）
 
-**编码前装载**（按场景挑 1~3）：
-1. `docs/arch/INDEX.md` → §2 场景表选 1~3 个 `M_X`，按文件头 §跳读 精读章节
+**编码前装载**（按场景挑 1~3，禁止全量预读）：
+1. `docs/arch/INDEX.md` → §2 场景表选 1~3 个 `M_X`，按文件头 §偏移跳读精读章节
 2. `docs/arch/00-Global-Dictionary.md` → `[Concept]` 唯一权威源 + XR-01~07 跨模块规则
-3. `docs/arch/ARCHITECTURE.md` → SSoT 锚点;仅 Staging 7 阶段 / HT0 预算 / 变更控制 / 配置层 4 场景必读
-4. `docs/arch/decisions/` → ADR 档案;**反复被询问的方案 / "为什么不用 X" 先 grep 这里**,避免重提已驳方案
+3. `docs/arch/ARCHITECTURE.md` → SSoT 锚点；仅 Staging 7 阶段 / HT0 预算 / 变更控制 / 配置层 4 场景必读
+4. `docs/arch/decisions/ADR-XXXX-*.md` → 已驳方案档案（ADR-0001~0019）；**"为什么不用 X" 先 grep 这里**，避免重提已驳方案
 5. `docs/arch/spec/state.yaml` → 状态机 + 全模块阈值 SSoT，按 `§par/§staging/§taint/...` 偏移局部读
-6. `docs/specs/0X` → 按域：Go→01 / Rust→02 / Agent→03 / 跨模块→04 / 提交前→06
-7. `docs/specs/07-Reference-Implementation.md` → 写新代码前，定位 canonical
-8. `internal/protocol/` → 跨模块共享类型
+6. `docs/specs/0X-*.md` → 按域选读：Go→01 / Rust→02 / Agent→03 / 跨模块→04 / 审查→06 / 提交前→06
+7. `docs/specs/07-Reference-Implementation.md` → 写新代码前定位 canonical 标杆
+8. `internal/protocol/` → 跨模块共享类型与接口契约
+9. `internal/protocol/schema/NNN_*.sql` → **DDL Schema SSoT**（001~020，共 20 张表）；修改 Schema 前必读目标表文件，禁 ALTER TABLE 补丁（上线前直接改原始文件 + 删库重建）
+
+**docs/arch/decisions/ 文件清单**（ADR-0001~0019，按需 grep 主题词）：
+- 0001 观测单例 · 0002 Skill 注册合并 · 0003 SQLite modernc · 0004 Tier-0 硬件层 · 0005 purego FFI Cedar
+- 0006 state.yaml SSoT · 0007 污点五级 · 0008 沙箱三级回退 · 0009 KillSwitch 三阶段 · 0010 SurrealDB 认知存储
+- 0011 CGO→purego · 0012 spec 一致性测试 · 0013 Lint 阶段1 · 0014 对抗审查 Action · 0015 Codex 特性集成
+- 0016 统一信任扩展模型 · 0017 MCP Streamable HTTP · 0018 MCP 污点解码器 · 0019 扩展实例统一安装表
+
+**internal/protocol/schema/ DDL 清单**（修改 Schema 前按需加载对应文件）：
+```
+001_events · 002_outbox · 003_episodic_memory · 004_semantic_memory · 005_workspace_vfs
+006_decision_log · 007_tasks · 008_skills · 009_rag_chunks · 010_self_improve
+011_providers · 012_channels · 013_chat · 014_cron_jobs · 015_mcp_servers
+016_preferences · 017_automations · 018_plugin_marketplaces · 019_registry_cache · 020_extension_instances
+```
 
 **禁止**：
 - 未读 INDEX 直接加载多个 M_X
-- 将 `ROADMAP.md` `DIAGRAMS.md` 列默认加载(人类参考层,按需读 §跳读)
-- 将 `ARCHITECTURE.md` 全量预读(SSoT 锚点,按场景按 §跳读)
+- 将 `ROADMAP.md` `DIAGRAMS.md` 列为默认加载（人类参考层，按需 §跳读）
+- 将 `ARCHITECTURE.md` 全量预读（SSoT 锚点，按场景按 §跳读）
+- 以 ALTER TABLE / ADD COLUMN 补丁文件修改 Schema（上线前直接改原始 SQL 文件）
 
-**模块上下文**：进入 `pkg/<X>/` 时，`pkg/<X>/CLAUDE.md` 自动注入，无需手动读。
+**模块上下文（重要）**：进入 `pkg/<X>/` 时必读 `pkg/<X>/AGENTS.md`。
+- 各包规范文件名统一为 **AGENTS.md**（非 README.md；README.md 为人类导航，仅重定向至 AGENTS.md）
+- Claude Code 会自动注入 `pkg/<X>/AGENTS.md`；Gemini / GPT / Cursor 等工具**需手动读取**
 
 **arch ↔ specs 分工**：
-- `arch/` = 系统**是什么**(设计):M_X 实现 / ARCH SSoT 锚点 / 00-Dict 概念 / state.yaml 阈值
-- `arch/decisions/` = 决策档案(why-not 单源):ADR 是"反复被驳的方案"档案,与 M_X 是引用关系
-- `specs/` = AI 代码**怎么写**(规范):R1~R8 反模式 + R2 命名 SSoT + 工作流 + 审查清单
+- `arch/` = 系统**是什么**（设计）：M_X 实现 / ARCH SSoT 锚点 / 00-Dict 概念 / state.yaml 阈值
+- `arch/decisions/` = 决策档案（why-not 单源）：ADR 是"反复被驳的方案"档案，与 M_X 是引用关系
+- `specs/` = AI 代码**怎么写**（规范）：R1~R8 反模式 + R2 命名 SSoT + 工作流 + 审查清单
 
 ## 当前阶段
 
