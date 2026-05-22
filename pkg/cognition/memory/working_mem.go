@@ -1,8 +1,10 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"sync"
+	"text/template"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
@@ -47,44 +49,23 @@ func (ic *ImmutableCore) Load(ctx context.Context, userID, sessionID string) (pr
 func (ic *ImmutableCore) PrependToMessages(msgs []protocol.Message) []protocol.Message {
 	content := ""
 
-	// 1. 注入 Agent 身份感知
-	if ic.AgentName != "" {
-		content += "你是 " + ic.AgentName + "，"
-		if ic.AgentRole != "" {
-			content += ic.AgentRole + "。\n"
+	if ic.SystemPromptTemplate != "" {
+		t, err := template.New("sys").Parse(ic.SystemPromptTemplate)
+		if err == nil {
+			var buf bytes.Buffer
+			if err := t.Execute(&buf, ic); err == nil {
+				content = buf.String()
+			} else {
+				content = "Error rendering system prompt: " + err.Error() + "\n"
+			}
 		} else {
-			content += "一个 AI Agent。\n"
+			content = "Error parsing system prompt: " + err.Error() + "\n"
 		}
-	}
-	if ic.ModelID != "" {
-		content += "当前运行模型：" + ic.ModelID + "。\n"
-	}
-
-	// 2. 注入能力清单摘要
-	if ic.BuiltinTools != "" || ic.InstalledPlugins != "" {
-		content += "你具备以下能力：\n"
-		if ic.BuiltinTools != "" {
-			content += "内置工具：\n" + ic.BuiltinTools + "\n"
-		}
-		if ic.InstalledPlugins != "" {
-			content += "已连接插件：\n" + ic.InstalledPlugins + "\n"
-		}
-	}
-
-	// 3. 注入系统全局目标
-	if ic.GlobalGoal != "" {
-		content += "\n[全局目标/System Prompt]\n" + ic.GlobalGoal + "\n"
-	}
-
-	// 4. 注入用户偏好规则
-	var rules []string //nolint:prealloc
-	for _, v := range ic.UserPreferences {
-		rules = append(rules, v)
-	}
-	if len(rules) > 0 {
-		content += "\n[用户偏好规则]\n"
-		for _, r := range rules {
-			content += "- " + r + "\n"
+	} else {
+		// Fallback
+		content += "你是 " + ic.AgentName + "，一个 AI Agent。\n"
+		if ic.ModelID != "" {
+			content += "当前运行模型：" + ic.ModelID + "。\n"
 		}
 	}
 

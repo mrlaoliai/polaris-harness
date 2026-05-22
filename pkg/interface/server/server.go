@@ -136,10 +136,24 @@ func NewServer(addr string, agent *kernel.Agent, bb protocol.Blackboard, hitlGat
 	}
 
 	prefs, _ := LoadAllPreferences(context.Background(), db)
-	if v, ok := prefs["system_prompt"]; ok {
-		if agent != nil && agent.Memory() != nil {
-			if ic, ok := agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
-				ic.GlobalGoal = v
+	sysTmpl, ok := prefs["system_prompt_template"]
+	if !ok {
+		if b, err := os.ReadFile("configs/system_prompt.md"); err == nil {
+			sysTmpl = string(b)
+			db.Exec("INSERT INTO preferences(key, value) VALUES('system_prompt_template', ?)", sysTmpl)
+			prefs["system_prompt_template"] = sysTmpl
+		} else {
+			sysTmpl = "你是 {{.AgentName}}，{{.AgentRole}}。\n当前运行模型：{{.ModelID}}。"
+		}
+	}
+
+	if agent != nil && agent.Memory() != nil {
+		if ic, ok := agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
+			ic.SystemPromptTemplate = sysTmpl
+			if goal, hasGoal := prefs["global_goal"]; hasGoal {
+				ic.GlobalGoal = goal
+			} else if legacyGoal, hasLegacy := prefs["system_prompt"]; hasLegacy {
+				ic.GlobalGoal = legacyGoal
 			}
 		}
 	}

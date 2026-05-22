@@ -78,6 +78,14 @@ func (s *Server) handleSetPreference(w http.ResponseWriter, r *http.Request) {
 		if ic, ok := s.agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
 			ic.GlobalGoal = req.Value
 		}
+	} else if key == "system_prompt_template" && s.agent.Memory() != nil {
+		if ic, ok := s.agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
+			ic.SystemPromptTemplate = req.Value
+		}
+	} else if key == "global_goal" && s.agent.Memory() != nil {
+		if ic, ok := s.agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
+			ic.GlobalGoal = req.Value
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
