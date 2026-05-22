@@ -14,6 +14,7 @@
 | `ARCHITECTURE.md` | 总览 | 10K | SSoT 锚点: 定位/硬约束、Staging 7 阶段、HT0 预算、变更控制、配置层 |
 | `M04-Agent-Kernel.md` | L1 内核 | 26K | 状态机 10 态、S_VALIDATE 四层、System 1/1.5/2 路由、Saga |
 | `M13-Interface-Scheduler.md` | L3 接口 | 28K | HTTP/SSE、HITLGateway、ResourceGovernor、TaskQueue、Web UI 规约（Alpine.js+Tailwind） |
+| `M13-bis-Extension-Registry.md` | L3 扩展 | 5K | 三层模型（Market/Instances/Runtime）、安装流、信任门控、文件系统、调用路由、M9 归并 |
 | `M10-Knowledge-RAG.md` | L2 知识 | 25K | 文档树、6 阶段摄入、GraphRAG、IncrementalIndexer |
 | `M09-Self-Improvement-Engine.md` | L2 自演化 | 25K | 五条无梯度路线、SurpriseIndex 完整版、MEMF、Auto-Curriculum |
 | `M06-Skill-Library.md` | L1 技能 | 23K | 技能三件套、Logic Collapse、Wasm 编译、三级检索 |
@@ -43,6 +44,7 @@
 | 修改 HTTP API / HITL | `00` + `M13` (+ `M11` 如涉 Auth) | ~46~90K |
 | 添加新模块 | `00` + `ARCHITECTURE` + 相邻 1~2 个 `M_X` | ~58~108K |
 | 修改 Test-Time Compute / 推理深度 | `00` + `M01` §5.2-bis + `M04` §5 §7.1(两维度模型见 00 §9-ter) | ~62K |
+| 修改扩展市场 / 安装流 / extension_instances | `00` + `M13-bis` (+ `M11` 如涉信任门控) | ~10~50K |
 | 修改 Plugin Registry / Hook 框架 | `00` + `M07` §14 §15 (+ `M11` 如涉 Taint) | ~63~107K |
 | 修改 Custom Agent / CSV Fan-out | `00` + `M08` §12 §13 (+ `M07` 如涉 Plugin) | ~42~80K |
 | 修改 AgentSkills 技能格式适配 | `00` + `M06` §9 (+ `M07` §14 如涉 Plugin) | ~48~75K |
@@ -92,6 +94,7 @@
 | `[Sandbox-L1/L2/L3]` | 00 | M07 |
 | `[MEMF]` `[FallacyMemoryPool]` | 00 | M09 |
 | `[Logic Collapse]` | 00 | M06 |
+| `[ExtensionInstance]` `[ExtensionOrigin]` | 00 | M13-bis |
 | `[SSRFGuard]` `[SafeDialer]` | 00 | M11 |
 | `[Capability Token]` | 00 | M07 + M11 |
 | `[ReasoningEffort]` `[ReasoningTokens]` `[BestOfN]` `[SelfConsistency]` `[TTC]` | 00 §9-ter | M01 §5.2-bis |

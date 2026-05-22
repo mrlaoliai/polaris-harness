@@ -8,129 +8,179 @@ import (
 	"time"
 )
 
-type CustomSkillReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	RepoURL     string `json:"repo_url"`
-	Entrypoint  string `json:"entrypoint"`
-}
-
+// handleCreateSkill 用户手动创建 Skill 扩展。
+// POST /v1/skills/create
 func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
-	var req CustomSkillReq
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		RepoURL     string `json:"repo_url"`
+		Entrypoint  string `json:"entrypoint"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	id := "csk_" + hex.EncodeToString(b)
+	extID := "ext_" + newHex(8)
+
+	configJSON, _ := json.Marshal(map[string]any{
+		"repo_url":   req.RepoURL,
+		"entrypoint": req.Entrypoint,
+	})
 
 	_, err := s.db.ExecContext(r.Context(),
-		"INSERT INTO skills(id, name, description, repo_url, entrypoint, publisher, trust_tier, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-		id, req.Name, req.Description, req.RepoURL, req.Entrypoint, "user", 1, 1, now, now)
+		`INSERT INTO extension_instances
+		 (id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled,
+		  runtime_id, install_path, config, status, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,'','',?,'installed',?,?)`,
+		extID, "skill", "user", "",
+		req.Name, "user", 1,
+		string(configJSON), now, now)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(req)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": extID, "name": req.Name, "type": "skill",
+	})
 }
 
-type CustomPluginReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ManifestURL string `json:"manifest_url"`
-}
-
+// handleCreatePlugin 用户手动创建 Plugin 扩展（manifest_url 模式）。
+// POST /v1/plugins/create
 func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) {
-	var req CustomPluginReq
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		ManifestURL string `json:"manifest_url"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	id := "cpl_" + hex.EncodeToString(b)
+	extID := "ext_" + newHex(8)
+
+	configJSON, _ := json.Marshal(map[string]any{
+		"manifest_url": req.ManifestURL,
+	})
 
 	_, err := s.db.ExecContext(r.Context(),
-		"INSERT INTO plugins(id, name, description, manifest_url, publisher, trust_tier, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-		id, req.Name, req.Description, req.ManifestURL, "user", 1, 1, now, now)
+		`INSERT INTO extension_instances
+		 (id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled,
+		  runtime_id, install_path, config, status, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,'','',?,'installed',?,?)`,
+		extID, "plugin", "user", "",
+		req.Name, "user", 1,
+		string(configJSON), now, now)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(req)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": extID, "name": req.Name, "type": "plugin",
+	})
 }
 
-type CustomAppReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	URL         string `json:"url"`
-}
-
+// handleCreateApp 用户手动创建 App 扩展（URL 模式）。
+// POST /v1/apps/create
 func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
-	var req CustomAppReq
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		URL         string `json:"url"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	id := "cap_" + hex.EncodeToString(b)
+	extID := "ext_" + newHex(8)
+
+	configJSON, _ := json.Marshal(map[string]any{"url": req.URL})
 
 	_, err := s.db.ExecContext(r.Context(),
-		"INSERT INTO apps(id, name, description, url, publisher, trust_tier, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-		id, req.Name, req.Description, req.URL, "user", 1, 1, now, now)
+		`INSERT INTO extension_instances
+		 (id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled,
+		  runtime_id, install_path, config, status, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,'','',?,'installed',?,?)`,
+		extID, "app", "user", "",
+		req.Name, "user", 1,
+		string(configJSON), now, now)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(req)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": extID, "name": req.Name, "type": "app",
+	})
 }
 
-type CustomMCPReq struct {
-	Name      string            `json:"name"`
-	Transport string            `json:"transport"`
-	Command   string            `json:"command"`
-	Args      []string          `json:"args"`
-	Env       map[string]string `json:"env"`
-	URL       string            `json:"url"`
-}
-
+// handleCreateMCP 用户手动配置 MCP Server。
+// POST /v1/mcp/create
+// MCP 需要实时连接，同时写 mcp_servers（运行时）和 extension_instances（安装 SSoT）。
 func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) {
-	var req CustomMCPReq
+	var req struct {
+		Name      string            `json:"name"`
+		Transport string            `json:"transport"`
+		Command   string            `json:"command"`
+		Args      []string          `json:"args"`
+		Env       map[string]string `json:"env"`
+		URL       string            `json:"url"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
-	b := make([]byte, 4)
-	_, _ = rand.Read(b)
-	id := "cmcp_" + hex.EncodeToString(b)
+	mcpID := "mcp_" + newHex(8)
+	extID := "ext_" + newHex(8)
 
 	argsBytes, _ := json.Marshal(req.Args)
 	envBytes, _ := json.Marshal(req.Env)
 
 	_, err := s.db.ExecContext(r.Context(),
-		"INSERT INTO mcp_servers(id, name, transport, command, args, env, url, enabled, timeout, trust_tier, catalog_id, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-		id, req.Name, req.Transport, req.Command, string(argsBytes), string(envBytes), req.URL, 1, 30, 1, "", now, now)
+		`INSERT INTO mcp_servers(id, name, transport, command, args, env, url, enabled, timeout, trust_tier, catalog_id, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,30,1,'',?,?)`,
+		mcpID, req.Name, req.Transport, req.Command,
+		string(argsBytes), string(envBytes), req.URL, now, now)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "mcp_servers insert: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 启动 MCP Server
+	configJSON, _ := json.Marshal(map[string]any{
+		"transport": req.Transport,
+		"command":   req.Command,
+		"args":      req.Args,
+		"env":       req.Env,
+		"url":       req.URL,
+	})
+
+	_, err = s.db.ExecContext(r.Context(),
+		`INSERT INTO extension_instances
+		 (id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled,
+		  runtime_id, install_path, config, status, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,1,1,?,?,'{}','installed',?,?)`,
+		extID, "mcp", "user", "",
+		req.Name, "user",
+		mcpID, string(configJSON), now, now)
+	if err != nil {
+		// 回滚 mcp_servers
+		s.db.ExecContext(r.Context(), `DELETE FROM mcp_servers WHERE id=?`, mcpID) //nolint:errcheck
+		http.Error(w, "extension_instances insert: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if s.mcpMgr != nil {
 		go s.startMCPServer(MCPServerConfig{
-			ID:        id,
+			ID:        mcpID,
 			Name:      req.Name,
 			Transport: req.Transport,
 			Command:   req.Command,
@@ -145,5 +195,14 @@ func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(req)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id": extID, "mcp_id": mcpID, "name": req.Name, "type": "mcp",
+	})
+}
+
+// newHex 生成 n 字节的随机十六进制字符串。
+func newHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
