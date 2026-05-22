@@ -147,7 +147,7 @@ LoadShedder:
 
 ```
 任务完成 → [EventLog] → 成功: HeuristicsMemory + Logic Collapse → Wasm 技能 [Wasm-Sandbox]
-                       → 失败: Reflexion 反思 → MEMF + [Storage-SurrealDB-Core]
+                       → 失败: Reflexion 反思 → MEMF + [Storage-SurrealDB-Core] + 发布 EventHeuristicGenerated (注入 PromptOptimizer 规避规则)
                        → Consolidation Check → Semantic Memory (M5 L2)
                        → Preference Learner (冷路径异步) → UserProfile
 ```
@@ -196,7 +196,7 @@ SKILL.md → 收集轨迹 → LLM 编译 Wasm → System1 执行
 ### 2.3 外环: 架构演化（周/月级）
 
 ```
-Gate 1: Eval Harness 离线回归 — 全部黄金用例 + Welch's t-test p<0.05
+Gate 1: Eval Harness 离线回归 — 全部黄金用例 + Welch's t-test p<0.05 → 发布 EventEvalCompleted
 Gate 2: Shadow Execution (3-7天) — 成功率/Token/工具正确率/[SurpriseIndex] 无退化。candidate 版本执行真实任务但输出不面用户（仅 M12 ShadowExecutor 对比）。安全护栏: candidate 禁止 write_network + privileged（仅 read_only + write_local 且写入隔离影子 workspace，防候选版本产生不可逆副作用）。影子执行中 write_network 工具调用强制路由至 M7 Shadow Sink（§5.3）mock 模式，输出记录于影子 workspace；影子 vs 基线对比时此类步骤以 tool_call 参数一致性（而非实际输出）作为评估依据。
 Gate 3: Canary Rollout（阶梯权威源 `spec/state.yaml §m9_self_improve.canary_steps`）
   硬停止: error>baseline×1.2 | P95 latency>baseline×1.4 | 安全违规>0 → autoRollback
@@ -204,7 +204,7 @@ Gate 3: Canary Rollout（阶梯权威源 `spec/state.yaml §m9_self_improve.cana
 Gate 4: Full Rollout, 旧版本保留 7 天 rollback target
 ```
 
-实现见 `pkg/swarm/rollout.go` (ProgressiveRollout, RolloutStage)。阶梯与驻留时长权威源 `spec/state.yaml §m9_self_improve.canary_steps` / `canary_dwell_per_step_hours_ht0`。硬停止条件: ErrorRate>baseline×1.2 | P95Latency>baseline×1.4 | SafetyViolations>0 → autoRollback。M9 决策阶段推进，M13 TrafficSplitter 执行分发，M12 ShadowExecutor 对比评估。
+实现见 `pkg/swarm/rollout.go` (ProgressiveRollout, RolloutStage)。阶梯与驻留时长权威源 `spec/state.yaml §m9_self_improve.canary_steps` / `canary_dwell_per_step_hours_ht0`。硬停止条件: ErrorRate>baseline×1.2 | P95Latency>baseline×1.4 | SafetyViolations>0 → autoRollback。M9 外环订阅 `EventEvalCompleted`，更新候选评分，达标即触发 `Activate(CAS)` 激活候选；随后 M9 决策阶段推进，M13 TrafficSplitter 执行分发，M12 ShadowExecutor 对比评估。
 
 ### 2.4 Cross-Module Co-Evolution [Module-Topology] [Blackboard]
 
@@ -377,8 +377,9 @@ QLoRA/PRM/ActivationSteering 的 Tier 门控由 `FeatureGate` 自动化：`Featu
 | M6 Skill Library | Logic Collapse 触发门控（成功次数 >=50 + 语义方差 + Eval Gate）| M6 §2.2 |
 | M8 Orchestrator | Auto-Curriculum PostTask（priority=3）→ Blackboard CAS 认领 | M8 §1 |
 | M11 Policy Safety | PromptOptimizer 输出安全流水线（Taint Gate → SIC → 独立 LLM-as-Judge）| M11 §2 |
-| M12 Eval Harness | Eval 门控（Training/Validation/Holdout 三层分区、PromptOptimizer 早停依据）| M12 §5 |
+| M12 Eval Harness | Eval 门控（Training/Validation/Holdout 三层分区、PromptOptimizer 早停依据），通过 EventEvalCompleted 驱动外环 Rollout | M12 §5 |
 | M13 Interface | TrafficSplitter 执行分发、ResourceGovernor 空闲门控 | M13 §2.5 |
 | 全局字典 | HE-Rule-4 数据驱动迭代、MEMF/HeuristicsMemory/GEPA 定义 | 00-Global-Dictionary §2, §9-bis |
+| 事件总线协议 | EventHeuristicGenerated（内环规避规则注入）、EventEvalCompleted（外环评测结果驱动 Activate） | internal/protocol/event.go |
 | DDL | sys_prompt_versions（Prompt 版本化）、skill_variant_pool（工具描述符变体池）| internal/protocol/schema/010_self_improve.sql |
 | 时序图 | KillSwitch 触发链（自进化在 KillSwitch 各阶段的响应）| DIAGRAMS.md#killswitch |
