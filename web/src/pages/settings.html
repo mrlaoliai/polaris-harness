@@ -33,17 +33,17 @@
           
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="form-control">
-              <label class="label"><span class="label-text text-base-content/70" x-text="$store.i18n.t('roles_default')"></span></label>
+              <label for="store-modelroles-defaultmodelid" class="label"><span class="label-text text-base-content/70" x-text="$store.i18n.t('roles_default')"></span></label>
               <select id="store-modelroles-defaultmodelid" name="store-modelroles-defaultmodelid" class="select select-bordered w-full" x-model="$store.modelRoles.defaultModelID">
                 <option value="" x-text="$store.i18n.t('roles_none')"></option>
                 <template x-for="m in $store.providers.allModels" :key="m.id">
                   <option :value="m.id" x-text="`[${m.providerName}] ${m.model_id}`"></option>
                 </template>
               </select>
-              <label class="label" x-show="$store.modelRoles.defaultModelName"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_current') + `: ${$store.modelRoles.defaultProviderName} / ${$store.modelRoles.defaultModelName}`"></span></label>
+              <label for="store-modelroles-reasoningmodelid" class="label" x-show="$store.modelRoles.defaultModelName"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_current') + `: ${$store.modelRoles.defaultProviderName} / ${$store.modelRoles.defaultModelName}`"></span></label>
             </div>
             <div class="form-control">
-              <label class="label"><span class="label-text text-base-content/70" x-text="$store.i18n.t('roles_reasoning')"></span></label>
+              <label for="store-modelroles-reasoningmodelid" class="label"><span class="label-text text-base-content/70" x-text="$store.i18n.t('roles_reasoning')"></span></label>
               <select id="store-modelroles-reasoningmodelid" name="store-modelroles-reasoningmodelid" class="select select-bordered w-full" x-model="$store.modelRoles.reasoningModelID">
                 <option value="" x-text="$store.i18n.t('roles_none')"></option>
                 <template x-for="m in $store.providers.allModels" :key="m.id">
@@ -289,7 +289,7 @@
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.editMode === 'create' ? $store.i18n.t('providers_modal_create') : $store.i18n.t('providers_modal_edit')"></h3>
         <div class="space-y-4">
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_type')"></span></label>
+            <label for="store-providers-form-type" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_type')"></span></label>
             <select id="store-providers-form-type" name="store-providers-form-type" class="select select-bordered w-full" x-model="$store.providers.form.type">
               <option value="openai_compat" x-text="$store.i18n.t('settings_openai_compat')"></option>
               <option value="anthropic">Anthropic Claude</option>
@@ -298,18 +298,18 @@
             </select>
           </div>
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_name')"></span></label>
+            <label for="store-providers-form-name" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_name')"></span></label>
             <input id="store-providers-form-name" name="store-providers-form-name" type="text" class="input input-bordered w-full" x-model="$store.providers.form.name" :placeholder="$store.i18n.t('providers_name_hint')" />
           </div>
           
           <template x-if="$store.providers.form.type === 'openai_compat' || $store.providers.form.type === 'ollama'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Base URL</span></label>
+                <label for="store-providers-form-base-url" class="label"><span class="label-text font-bold">Base URL</span></label>
                 <input id="store-providers-form-base-url" name="store-providers-form-base-url" type="url" class="input input-bordered w-full" x-model="$store.providers.form.base_url" :placeholder="$store.providers.form.type === 'ollama' ? 'http://localhost:11434' : 'https://api.openai.com'" />
               </div>
               <div class="form-control w-full" x-show="$store.providers.form.type !== 'ollama'">
-                <label class="label"><span class="label-text font-bold">API Key</span></label>
+                <label for="store-providers-form-api-key" class="label"><span class="label-text font-bold">API Key</span></label>
                 <input id="store-providers-form-api-key" name="store-providers-form-api-key" type="password" class="input input-bordered w-full" x-model="$store.providers.form.api_key" placeholder="sk-..." />
               </div>
             </div>
@@ -317,7 +317,7 @@
 
           <template x-if="$store.providers.form.type === 'anthropic'">
             <div class="form-control w-full">
-              <label class="label"><span class="label-text font-bold">API Key</span></label>
+              <label for="store-providers-form-api-key" class="label"><span class="label-text font-bold">API Key</span></label>
               <input id="store-providers-form-api-key" name="store-providers-form-api-key" type="password" class="input input-bordered w-full" x-model="$store.providers.form.api_key" placeholder="sk-ant-..." />
             </div>
           </template>
@@ -325,18 +325,18 @@
           <template x-if="$store.providers.form.type === 'google_agent_platform'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">API Key</span></label>
+                <label for="store-providers-form-api-key" class="label"><span class="label-text font-bold">API Key</span></label>
                 <input id="store-providers-form-api-key" name="store-providers-form-api-key" type="password" class="input input-bordered w-full" x-model="$store.providers.form.api_key" placeholder="AI Studio / GEAP API Key" />
               </div>
               <div class="form-control w-full">
-                <label class="label">
+                <label for="store-providers-form-project-id" class="label">
                   <span class="label-text font-bold">GCP Project ID</span>
                   <span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_geap_optional')"></span>
                 </label>
                 <input id="store-providers-form-project-id" name="store-providers-form-project-id" type="text" class="input input-bordered w-full" x-model="$store.providers.form.project_id" placeholder="my-project-123" />
               </div>
               <div class="form-control w-full">
-                <label class="label">
+                <label for="store-providers-form-location" class="label">
                   <span class="label-text font-bold">Region / Location</span>
                   <span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_us_central1')"></span>
                 </label>
@@ -368,25 +368,25 @@
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.modelEditMode === 'create' ? '添加模型' : '编辑模型'"></h3>
         <div class="space-y-4">
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_model_id')"></span></label>
+            <label for="store-providers-modelform-model-id" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_model_id')"></span></label>
             <input id="store-providers-modelform-model-id" name="store-providers-modelform-model-id" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.model_id" placeholder="例：deepseek-chat / gpt-4o" />
             <label class="label"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_model_doc')"></span></label>
           </div>
           <div class="form-control w-full">
-            <label class="label">
+            <label for="store-providers-modelform-name" class="label">
               <span class="label-text font-bold" x-text="$store.i18n.t('providers_name')"></span>
               <span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_name_optional')"></span>
             </label>
             <input id="store-providers-modelform-name" name="store-providers-modelform-name" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.name" placeholder="例：DeepSeek V3 对话" />
           </div>
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('settings_route_role')"></span></label>
+            <label for="store-providers-modelform-role" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('settings_route_role')"></span></label>
             <select id="store-providers-modelform-role" name="store-providers-modelform-role" class="select select-bordered w-full" x-model="$store.providers.modelForm.role">
               <option value="general" x-text="$store.i18n.t('settings_role_general')"></option>
               <option value="default" x-text="$store.i18n.t('settings_role_chat')"></option>
               <option value="reasoning" x-text="$store.i18n.t('settings_role_reasoning')"></option>
             </select>
-            <label class="label"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_role_unique')"></span></label>
+            <label for="store-providers-modelform-enabled" class="label"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_role_unique')"></span></label>
           </div>
           <div class="form-control mt-4">
             <label class="label cursor-pointer justify-start gap-4">
@@ -409,7 +409,7 @@
         <h3 class="font-bold text-lg mb-4" x-text="$store.channels.editMode === 'create' ? $store.i18n.t('channels_add') : $store.i18n.t('channels_edit')"></h3>
         <div class="space-y-4">
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_type')"></span></label>
+            <label for="store-channels-form-type" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_type')"></span></label>
             <select id="store-channels-form-type" name="store-channels-form-type" class="select select-bordered w-full" x-model="$store.channels.form.type" @change="$store.channels.form.config={}">
               <option value="telegram">✈ Telegram</option>
               <option value="feishu" x-text="'🪁 ' + $store.i18n.t('channels_feishu')"></option>
@@ -419,7 +419,7 @@
             </select>
           </div>
           <div class="form-control w-full">
-            <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_name')"></span></label>
+            <label for="store-channels-form-name" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_name')"></span></label>
             <input id="store-channels-form-name" name="store-channels-form-name" type="text" class="input input-bordered w-full" x-model="$store.channels.form.name" placeholder="如：客服机器人" />
           </div>
 
@@ -427,11 +427,11 @@
           <template x-if="$store.channels.form.type === 'telegram'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Bot Token</span></label>
+                <label for="form-field-8" class="label"><span class="label-text font-bold">Bot Token</span></label>
                 <input id="form-field-8" name="form-field-8" type="password" class="input input-bordered w-full" placeholder="123456:ABC-DEF1234..." :value="$store.channels.form.config.bot_token || ''" @input="$store.channels.form.config.bot_token = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_allow_users')"></span></label>
+                <label for="form-field-9" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_allow_users')"></span></label>
                 <input id="form-field-9" name="form-field-9" type="text" class="input input-bordered w-full" placeholder="123456789,987654321" :value="$store.channels.form.config.allowed_user_ids || ''" @input="$store.channels.form.config.allowed_user_ids = $event.target.value" />
               </div>
               <div class="text-xs text-base-content/50 p-3 bg-base-100 rounded border border-base-300">
@@ -443,19 +443,19 @@
           <template x-if="$store.channels.form.type === 'feishu'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">App ID</span></label>
+                <label for="form-field-10" class="label"><span class="label-text font-bold">App ID</span></label>
                 <input id="form-field-10" name="form-field-10" type="text" class="input input-bordered w-full" placeholder="cli_..." :value="$store.channels.form.config.app_id || ''" @input="$store.channels.form.config.app_id = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">App Secret</span></label>
+                <label for="form-field-11" class="label"><span class="label-text font-bold">App Secret</span></label>
                 <input id="form-field-11" name="form-field-11" type="password" class="input input-bordered w-full" placeholder="App Secret" :value="$store.channels.form.config.app_secret || ''" @input="$store.channels.form.config.app_secret = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Verification Token</span></label>
+                <label for="form-field-12" class="label"><span class="label-text font-bold">Verification Token</span></label>
                 <input id="form-field-12" name="form-field-12" type="text" class="input input-bordered w-full" placeholder="Verification Token" :value="$store.channels.form.config.verification_token || ''" @input="$store.channels.form.config.verification_token = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_encrypt_key')"></span></label>
+                <label for="form-field-13" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_encrypt_key')"></span></label>
                 <input id="form-field-13" name="form-field-13" type="password" class="input input-bordered w-full" placeholder="留空则不加密" :value="$store.channels.form.config.encrypt_key || ''" @input="$store.channels.form.config.encrypt_key = $event.target.value" />
               </div>
             </div>
@@ -464,11 +464,11 @@
           <template x-if="$store.channels.form.type === 'slack'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Bot Token</span></label>
+                <label for="form-field-8" class="label"><span class="label-text font-bold">Bot Token</span></label>
                 <input id="form-field-14" name="form-field-14" type="password" class="input input-bordered w-full" placeholder="xoxb-..." :value="$store.channels.form.config.bot_token || ''" @input="$store.channels.form.config.bot_token = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Signing Secret</span></label>
+                <label for="form-field-15" class="label"><span class="label-text font-bold">Signing Secret</span></label>
                 <input id="form-field-15" name="form-field-15" type="password" class="input input-bordered w-full" placeholder="Signing Secret" :value="$store.channels.form.config.signing_secret || ''" @input="$store.channels.form.config.signing_secret = $event.target.value" />
               </div>
             </div>
@@ -477,11 +477,11 @@
           <template x-if="$store.channels.form.type === 'discord'">
             <div class="space-y-4">
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Bot Token</span></label>
+                <label for="form-field-8" class="label"><span class="label-text font-bold">Bot Token</span></label>
                 <input id="form-field-16" name="form-field-16" type="password" class="input input-bordered w-full" placeholder="Discord Bot Token" :value="$store.channels.form.config.bot_token || ''" @input="$store.channels.form.config.bot_token = $event.target.value" />
               </div>
               <div class="form-control w-full">
-                <label class="label"><span class="label-text font-bold">Public Key</span></label>
+                <label for="form-field-17" class="label"><span class="label-text font-bold">Public Key</span></label>
                 <input id="form-field-17" name="form-field-17" type="text" class="input input-bordered w-full" placeholder="Application Public Key" :value="$store.channels.form.config.public_key || ''" @input="$store.channels.form.config.public_key = $event.target.value" />
               </div>
             </div>
