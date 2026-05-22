@@ -11,15 +11,14 @@
             <span x-text="$store.i18n.t('plugins_subtitle')"></span>
             <div class="badge badge-success badge-sm badge-outline" x-text="`${$store.plugins.catalog.filter(e=>e.installed).length} ` + $store.i18n.t('plugins_installed')"></div>
           </div>
-        </div>
-        <button class="btn btn-ghost btn-sm" @click="$store.plugins.load()" :disabled="$store.plugins.loading">
+        <button class="btn btn-ghost btn-sm border border-base-300 shadow-sm" @click="$store.plugins.load()" :disabled="$store.plugins.loading">
           <span x-show="$store.plugins.loading" class="loading loading-spinner loading-xs"></span>
           <span x-show="!$store.plugins.loading" x-text="$store.i18n.t('plugins_refresh')"></span>
         </button>
       </div>
 
       <div class="flex flex-wrap gap-4 items-center justify-between">
-        <div class="tabs tabs-boxed">
+        <div class="tabs tabs-boxed border border-base-300 bg-base-100/50 shadow-sm">
           <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'plugin' }" @click="$store.plugins.filter = 'plugin'">📦 插件</a>
           <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'app' }" @click="$store.plugins.filter = 'app'">📱 应用</a>
           <a class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'mcp' }" @click="$store.plugins.filter = 'mcp'">⚙ MCP</a>
