@@ -32,6 +32,7 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, eventType string, pay
 //	token     → {"content":"<增量文本>"}
 //	complete  → {"session_id":"<id>"}
 //	error     → {"code":"...","message":"..."}
+//
 // sseImagePart 前端上传的图片载荷（base64 字符串，不含 data URI 前缀）。
 type sseImagePart struct {
 	MimeType string `json:"mimeType"`

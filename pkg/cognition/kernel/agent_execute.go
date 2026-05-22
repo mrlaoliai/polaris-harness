@@ -466,17 +466,16 @@ func (a *Agent) runExecuteDAG(ctx context.Context) error { //nolint:gocyclo
 	if err != nil {
 		if strings.Contains(err.Error(), "tool not found") {
 			a.sCtx.SuspendReason = "capability_gap"
-			if a.memory != nil {
-				_ = a.memory.Episodic().Append(ctx, protocol.Event{
-					ID:        uuid.New().String(),
-					Type:      "m9_capability_gap",
-					Status:    protocol.StatusPending,
-					TaskID:    a.sCtx.SessionID,
-					AgentID:   a.sCtx.AgentID,
-					Payload:   []byte(fmt.Sprintf(`{"error":"%s"}`, err.Error())),
-					CreatedAt: time.Now(),
-				})
+
+			// 通过 outbox 异步投递 m9_capability_gap 事件，触发 GapFillWorker 进行能力补全
+			if a.db != nil {
+				payloadBytes := []byte(fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+				_, _ = a.db.ExecContext(ctx, `
+					INSERT INTO outbox (created_at, target_engine, operation, scope, payload, idempotency_key, status)
+					VALUES (?, ?, ?, ?, ?, ?, ?)
+				`, time.Now().UnixMilli(), "m9_capability_gap", "upsert", "capability_gap", payloadBytes, uuid.New().String(), "pending")
 			}
+
 			go a.SendIntent(protocol.TriggerInterruptReceived)
 			return nil
 		}

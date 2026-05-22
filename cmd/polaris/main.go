@@ -329,6 +329,10 @@ func run() error { //nolint:gocyclo
 	mcpMgr := action.NewMCPManager(inProcSandbox, safeHTTPClient)
 	slog.Info("polaris: builtin tools registered, MCP manager initialized")
 
+	gapFillWorker := swarm.NewGapFillWorker(store.DB(), router, toolReg)
+	outboxWorker.RegisterHandler("m9_capability_gap", gapFillWorker.HandleOutbox)
+	slog.Info("polaris: GapFillWorker registered to outbox for m9_capability_gap")
+
 	// ─── 6.5 Skill Library (L1 M6) ───────────────────────────────────────────
 	skillRegistry := skill.NewSQLiteRegistry(store.DB())
 	skillSelector := skill.NewSelector(skillRegistry)
@@ -410,7 +414,7 @@ func run() error { //nolint:gocyclo
 	orchestrator := swarm.NewOrchestrator(blackboard, agentRegistry, cfg.System.MaxAgents)
 
 	// ─── 10. Agent Kernel (L1 M4) ────────────────────────────────────────────
-	agent := kernel.NewAgent("agent-0", nil, router)
+	agent := kernel.NewAgent("agent-0", store.DB(), nil, router)
 	agent.Config.MaxReplan = cfg.Thresholds.M4Kernel.MaxReplanAttempts
 	agent.Config.DefaultBudget = cfg.Thresholds.M4Kernel.DefaultBudget
 	agent.Config.MaxSteps = cfg.Thresholds.M4Kernel.MaxSteps

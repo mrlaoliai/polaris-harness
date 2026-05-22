@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -19,6 +20,7 @@ import (
 // Agent 是系统核心执行单元——一个 goroutine，空闲时挂起。
 type Agent struct {
 	ID           string
+	db           *sql.DB
 	intent       chan protocol.AgentTrigger
 	sm           *StateMachine
 	sCtx         *StateContext
@@ -41,10 +43,11 @@ type AgentConfig struct {
 	MaxSteps      int
 }
 
-func NewAgent(id string, taintGate TaintGate, provider protocol.Provider) *Agent {
+func NewAgent(id string, db *sql.DB, taintGate TaintGate, provider protocol.Provider) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Agent{
 		ID:     id,
+		db:     db,
 		intent: make(chan protocol.AgentTrigger, 10),
 		sm:     NewStateMachine(),
 		sCtx: &StateContext{
@@ -61,13 +64,13 @@ func NewAgent(id string, taintGate TaintGate, provider protocol.Provider) *Agent
 
 // NewAgentWithPolicyGate 创建带策略引擎的 Agent（主要用于生产环境）。
 func NewAgentWithPolicyGate(id string, taintGate TaintGate, provider protocol.Provider, policyGate protocol.PolicyGate) *Agent {
-	a := NewAgent(id, taintGate, provider)
+	a := NewAgent(id, nil, taintGate, provider)
 	a.policyGate = policyGate
 	return a
 }
 
 func NewAgentWithDefaults(id string) *Agent {
-	return NewAgent(id, &defaultTaintGate{threshold: 2}, nil)
+	return NewAgent(id, nil, &defaultTaintGate{threshold: 2}, nil)
 }
 
 // Run 启动 Agent 事件循环（Suspend-on-Idle）。
