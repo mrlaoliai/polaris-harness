@@ -151,6 +151,12 @@
                   @paste="handlePaste($event)" @drop="handleDrop($event)" @dragover.prevent=""></textarea>
 
         <div class="flex items-center gap-1">
+          <select id="store-computer-mode" name="store-computer-mode" class="select select-ghost select-sm rounded-full font-medium" x-model="$store.computer.mode" @change="$store.computer.setMode($event.target.value)">
+            <option value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
+            <option value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
+            <option value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
+          </select>
+
           <button class="btn btn-circle btn-ghost btn-sm text-base-content/50" :class="$store.chat.isRecording ? 'text-error bg-error/10' : ''" @click="$store.chat.toggleRecording()">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
           </button>
@@ -165,20 +171,6 @@
         </div>
       </div>
       <input id="form-field-20" name="form-field-20" type="file" multiple accept="*/*" class="hidden" x-ref="fileInput" @change="handleFileSelect($event)">
-    </div>
-
-    <!-- Actions Footer -->
-    <div class="flex items-center justify-center gap-4 mt-3 text-sm text-base-content/70">
-      <button class="btn btn-sm btn-outline rounded-full" :disabled="$store.chat.isActive" @click="$store.chat.newSession()" x-text="$store.i18n.t('chat_new')"></button>
-      <select id="store-computer-mode" name="store-computer-mode" class="select select-bordered select-sm rounded-full bg-base-100 shadow-sm w-36" style="z-index: 50;" x-model="$store.computer.mode" @change="$store.computer.setMode($event.target.value)">
-        <option class="bg-base-100" value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
-        <option class="bg-base-100" value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
-        <option class="bg-base-100" value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
-      </select>
-      <div class="flex items-center gap-2">
-        <span><kbd class="kbd kbd-sm">Ctrl+K</kbd> 清空</span>
-        <span><kbd class="kbd kbd-sm">Ctrl+C</kbd> 中断</span>
-      </div>
     </div>
   </div>
 </div>
