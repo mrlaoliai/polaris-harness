@@ -65,12 +65,19 @@ type RetrievalQuery struct {
 // ============================================================================
 
 type ImmutableCore struct {
-	UserPreferences map[string]string `json:"user_preferences"`
-	GlobalGoal      string            `json:"global_goal"`
+	AgentName        string            `json:"agent_name"`
+	AgentRole        string            `json:"agent_role"`
+	ModelID          string            `json:"model_id"`
+	BuiltinTools     string            `json:"builtin_tools"`
+	InstalledPlugins string            `json:"installed_plugins"`
+	UserPreferences  map[string]string `json:"user_preferences"`
+	GlobalGoal       string            `json:"global_goal"`
 }
 
 func NewImmutableCore() *ImmutableCore {
 	return &ImmutableCore{
+		AgentName:       "Polaris", // default name
+		AgentRole:       "一个开源自托管 AI Agent",
 		UserPreferences: make(map[string]string),
 	}
 }

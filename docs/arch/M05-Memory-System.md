@@ -45,7 +45,7 @@ WorkingMemory/ImmutableCore/ActiveContext/Task/Observation/MemoryFragment 类型
 
 **ContextZone**:
 ```
-ZoneImmutable=0      // 用户身份/安全约束/全局目标，仅用户显式 /set 可修改
+ZoneImmutable=0      // 存放系统全局目标、Agent 身份认知(包含底层模型及工具列表)以及用户长期偏好和安全约束，置于最顶部且永不被裁剪
 ZoneMutableSkill=1   // SKILL.md 描述模板，M9 PromptOptimizer 合法优化靶点
 ZoneTaintedData=2    // 外部数据，[TaintLevel] Tracked，永不进入指令区
 ```
@@ -423,7 +423,7 @@ BuildContext 5 Zone 布局和 SessionCompressor 实现见 `pkg/cognition/context
 **Prompt 组装顺序与 KV Cache 优化规范**:
 为了最大化利用支持 Prompt Caching (如 Anthropic/DeepSeek) 模型的 KV Cache 命中率，Prompt 的内部块组装必须遵循严格的静态从长到短顺序，保证最久不变的块位于最前部：
 `ImmutableCore → Procedural (Skills) → Semantic (Knowledge) → Episodic (Recent Events) → Working (Scratchpad) / TaintedData`
-1. **ImmutableCore**: 系统级常量，永不改变，置于首位。
+1. **ImmutableCore**: 系统级常量与动态组装的系统提示词（含 Agent 身份认知、运行模型、工具/插件摘要及全局目标），置于首位且永不被裁剪。
 2. **Procedural**: 当前 Agent 挂载的工具和技能声明，在特定任务会话内保持稳定。
 3. **Semantic & Episodic**: 随会话推进按步增量追加，更新频次中等。
 4. **Working / TaintedData**: 高频读写的临时草稿和不可信外部输入，置于最后，不参与 Cache。

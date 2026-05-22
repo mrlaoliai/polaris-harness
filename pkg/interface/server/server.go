@@ -19,6 +19,7 @@ import (
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
 	"github.com/mrlaoliai/polaris-harness/pkg/interface/channels"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/observability"
@@ -132,6 +133,15 @@ func NewServer(addr string, agent *kernel.Agent, bb protocol.Blackboard, hitlGat
 		}
 	} else {
 		slog.Warn("polaris-server: configs/registry.yaml load failed", "err", err)
+	}
+
+	prefs, _ := LoadAllPreferences(context.Background(), db)
+	if v, ok := prefs["system_prompt"]; ok {
+		if agent != nil && agent.Memory() != nil {
+			if ic, ok := agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
+				ic.GlobalGoal = v
+			}
+		}
 	}
 
 	s.compressor = newCompressor(db, s.hooks)

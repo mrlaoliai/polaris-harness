@@ -45,14 +45,59 @@ func (ic *ImmutableCore) Load(ctx context.Context, userID, sessionID string) (pr
 }
 
 func (ic *ImmutableCore) PrependToMessages(msgs []protocol.Message) []protocol.Message {
+	content := ""
+
+	// 1. 注入 Agent 身份感知
+	if ic.AgentName != "" {
+		content += "你是 " + ic.AgentName + "，"
+		if ic.AgentRole != "" {
+			content += ic.AgentRole + "。\n"
+		} else {
+			content += "一个 AI Agent。\n"
+		}
+	}
+	if ic.ModelID != "" {
+		content += "当前运行模型：" + ic.ModelID + "。\n"
+	}
+
+	// 2. 注入能力清单摘要
+	if ic.BuiltinTools != "" || ic.InstalledPlugins != "" {
+		content += "你具备以下能力：\n"
+		if ic.BuiltinTools != "" {
+			content += "内置工具：\n" + ic.BuiltinTools + "\n"
+		}
+		if ic.InstalledPlugins != "" {
+			content += "已连接插件：\n" + ic.InstalledPlugins + "\n"
+		}
+	}
+
+	// 3. 注入系统全局目标
+	if ic.GlobalGoal != "" {
+		content += "\n[全局目标/System Prompt]\n" + ic.GlobalGoal + "\n"
+	}
+
+	// 4. 注入用户偏好规则
 	var rules []string //nolint:prealloc
 	for _, v := range ic.UserPreferences {
 		rules = append(rules, v)
 	}
-	content := ic.GlobalGoal
-	for _, r := range rules {
-		content += "\n" + r
+	if len(rules) > 0 {
+		content += "\n[用户偏好规则]\n"
+		for _, r := range rules {
+			content += "- " + r + "\n"
+		}
 	}
+
+	// 去除多余的尾部换行
+	if len(content) > 0 && content[len(content)-1] == '\n' {
+		content = content[:len(content)-1]
+	}
+
+	// 如果全部为空，给一个默认提示词
+	if content == "" {
+		content = "你是 Polaris AI Agent。"
+	}
+
 	return append([]protocol.Message{{Role: "system", Content: content}}, msgs...)
 }
 

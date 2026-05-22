@@ -11,6 +11,7 @@ import (
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
 )
 
 // writeSSE 写出标准 text/event-stream 帧：event: <type>\ndata: <json>\n\n
@@ -104,6 +105,11 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 	}
 	isFirstTurn := len(history) == 0
 
+	// 注入 System Prompt
+	if isFirstTurn {
+		history = s.injectSystemPrompt(history)
+	}
+
 	// ── Transcript ────────────────────────────────────────────────────────
 	// 非阻塞：打开失败只警告，不中断对话。
 	tw, twErr := openTranscript(s.transcriptDir, sessionID, isFirstTurn)
@@ -165,7 +171,12 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 
 	const maxToolRounds = 10
 	for range maxToolRounds {
+		modelID := s.registry.PickProviderName("default")
+		if modelID == "" {
+			modelID = s.registry.PickProviderName("general")
+		}
 		inferReq := &protocol.InferRequest{
+			Model:       modelID,
 			Messages:    history,
 			MaxTokens:   4096,
 			Temperature: 0.7,
@@ -332,4 +343,44 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 	})
 
 	writeSSE(w, flusher, "complete", map[string]any{"session_id": sessionID})
+}
+
+func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Message {
+	if s.agent == nil || s.agent.Memory() == nil {
+		return history
+	}
+
+	ic, ok := s.agent.Memory().Working().Immutable().(*memory.ImmutableCore)
+	if !ok {
+		return history
+	}
+
+	// Sync identity and capabilities
+	modelID := s.registry.PickProviderName("default")
+	if modelID == "" {
+		modelID = s.registry.PickProviderName("general")
+	}
+	ic.ModelID = modelID
+
+	// Built-in tools
+	if s.toolReg != nil {
+		var builtin []string
+		for _, t := range s.toolReg.List() {
+			builtin = append(builtin, t.Name+" - "+t.Description)
+		}
+		ic.BuiltinTools = strings.Join(builtin, "\n")
+	}
+
+	// MCP plugins
+	if s.mcpMgr != nil {
+		var mcp []string
+		for _, srv := range s.mcpMgr.ListServers() {
+			if srv.Connected {
+				mcp = append(mcp, srv.Name)
+			}
+		}
+		ic.InstalledPlugins = strings.Join(mcp, ", ")
+	}
+
+	return ic.PrependToMessages(history)
 }

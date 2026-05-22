@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
 )
 
 func LoadAllPreferences(ctx context.Context, db *sql.DB) (map[string]string, error) {
@@ -72,6 +74,11 @@ func (s *Server) handleSetPreference(w http.ResponseWriter, r *http.Request) {
 
 	// Hot reload preference in Agent
 	s.agent.SetPreferences(map[string]string{key: req.Value})
+	if key == "system_prompt" && s.agent.Memory() != nil {
+		if ic, ok := s.agent.Memory().Working().Immutable().(*memory.ImmutableCore); ok {
+			ic.GlobalGoal = req.Value
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "key": key, "value": req.Value})
