@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -533,9 +534,9 @@ func calcNextRun(expr, fromRFC3339 string) string {
 	return ""
 }
 
-// ─── 自动化模板 ───────────────────────────────────────────────────────────────
+// ─── 自动化模板市场 ───────────────────────────────────────────────────────────
 
-// automationTemplate 对应 automations/templates/*.yaml 中的单条记录。
+// automationTemplate 对应 automations/templates/*.yaml 或远程 index.json 中的单条记录。
 type automationTemplate struct {
 	Icon            string   `yaml:"icon"             json:"icon"`
 	Name            string   `yaml:"name"             json:"name"`
@@ -549,6 +550,37 @@ type automationTemplate struct {
 	Author          string   `yaml:"author"           json:"author,omitempty"`
 }
 
+// automationSource 对应 configs/automation_sources.yaml 中的单条来源配置。
+type automationSource struct {
+	ID          string `yaml:"id"`
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"` // local | remote
+	Path        string `yaml:"path"` // type=local 时有效
+	URL         string `yaml:"url"`  // type=remote 时有效
+	Description string `yaml:"description"`
+	Enabled     bool   `yaml:"enabled"`
+	TrustTier   int    `yaml:"trust_tier"`
+}
+
+// remoteIndex 是远程 index.json 的顶层结构。
+type remoteIndex struct {
+	Templates []automationTemplate `json:"templates"`
+}
+
+// templateCache 存放远程拉取结果，避免每次请求都走网络。
+type templateCache struct {
+	templates []automationTemplate
+	fetchedAt time.Time
+}
+
+// Server 侧的模板缓存（按来源 ID 存储）。
+// 用 sync.Map 保证并发安全；TTL 1h，超时则重新拉取。
+var templateCacheMap = struct {
+	m map[string]*templateCache
+}{m: make(map[string]*templateCache)}
+
+const templateCacheTTL = time.Hour
+
 // loadLocalTemplates 扫描 dir 下所有 *.yaml 文件，合并解析为模板列表。
 func loadLocalTemplates(dir string) []automationTemplate {
 	entries, err := os.ReadDir(dir)
@@ -557,6 +589,7 @@ func loadLocalTemplates(dir string) []automationTemplate {
 	}
 	var all []automationTemplate
 	for _, e := range entries {
+		// 跳过示例文件和非 yaml 文件
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
 			continue
 		}
@@ -575,13 +608,115 @@ func loadLocalTemplates(dir string) []automationTemplate {
 	return all
 }
 
+// fetchRemoteTemplates 拉取远程 index.json，命中缓存则直接返回。
+func (s *Server) fetchRemoteTemplates(src automationSource) []automationTemplate {
+	if c, ok := templateCacheMap.m[src.ID]; ok && time.Since(c.fetchedAt) < templateCacheTTL {
+		return c.templates
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, src.URL, nil)
+	if err != nil {
+		slog.Warn("automation-templates: bad remote url", "id", src.ID, "err", err)
+		return nil
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "polaris-harness/1.0")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		slog.Warn("automation-templates: fetch failed", "id", src.ID, "err", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("automation-templates: remote returned non-200", "id", src.ID, "status", resp.StatusCode)
+		return nil
+	}
+
+	var idx remoteIndex
+	if err := json.NewDecoder(resp.Body).Decode(&idx); err != nil {
+		slog.Warn("automation-templates: decode failed", "id", src.ID, "err", err)
+		return nil
+	}
+
+	// 注入来源标识（覆盖远程可能缺失的 source 字段）
+	for i := range idx.Templates {
+		if idx.Templates[i].Source == "" {
+			idx.Templates[i].Source = src.ID
+		}
+	}
+
+	templateCacheMap.m[src.ID] = &templateCache{templates: idx.Templates, fetchedAt: time.Now()}
+	slog.Info("automation-templates: remote fetched", "id", src.ID, "count", len(idx.Templates))
+	return idx.Templates
+}
+
+// loadSources 读取 configs/automation_sources.yaml，失败则返回空切片（不影响内置模板）。
+func loadSources() []automationSource {
+	b, err := os.ReadFile("configs/automation_sources.yaml")
+	if err != nil {
+		return nil
+	}
+	var srcs []automationSource
+	if err := yaml.Unmarshal(b, &srcs); err != nil {
+		slog.Warn("automation-sources: parse failed", "err", err)
+		return nil
+	}
+	return srcs
+}
+
 // GET /v1/automation-templates
-// 返回本地 automations/templates/*.yaml 中的所有模板（后续可扩展远程源）。
+// 合并所有已启用来源（local YAML + 远程 index）返回模板列表。
+// 查询参数：?source=<id> 可过滤单一来源；?tag=<tag> 过滤标签。
 func (s *Server) handleListAutomationTemplates(w http.ResponseWriter, r *http.Request) {
-	templates := loadLocalTemplates("automations/templates")
-	if templates == nil {
-		templates = []automationTemplate{}
+	filterSource := r.URL.Query().Get("source")
+	filterTag := r.URL.Query().Get("tag")
+
+	srcs := loadSources()
+	var all []automationTemplate
+
+	for _, src := range srcs {
+		if !src.Enabled {
+			continue
+		}
+		if filterSource != "" && src.ID != filterSource {
+			continue
+		}
+		var tpls []automationTemplate
+		switch src.Type {
+		case "local":
+			tpls = loadLocalTemplates(src.Path)
+		case "remote":
+			if src.URL != "" {
+				tpls = s.fetchRemoteTemplates(src)
+			}
+		}
+		all = append(all, tpls...)
+	}
+
+	// 若 automation_sources.yaml 不存在或全为 remote 且未配，fallback 到本地默认目录
+	if len(all) == 0 && filterSource == "" {
+		all = loadLocalTemplates("automations/templates")
+	}
+
+	// 标签过滤
+	if filterTag != "" {
+		var filtered []automationTemplate
+		for _, t := range all {
+			if slices.Contains(t.Tags, filterTag) {
+				filtered = append(filtered, t)
+			}
+		}
+		all = filtered
+	}
+
+	if all == nil {
+		all = []automationTemplate{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"templates": templates}) //nolint:errcheck
+	json.NewEncoder(w).Encode(map[string]any{"templates": all}) //nolint:errcheck
 }
