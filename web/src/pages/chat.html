@@ -170,10 +170,10 @@
     <!-- Actions Footer -->
     <div class="flex items-center justify-center gap-4 mt-3 text-sm text-base-content/70">
       <button class="btn btn-sm btn-outline rounded-full" :disabled="$store.chat.isActive" @click="$store.chat.newSession()" x-text="$store.i18n.t('chat_new')"></button>
-      <select id="store-computer-mode" name="store-computer-mode" class="select select-bordered select-sm rounded-full bg-transparent" x-model="$store.computer.mode" @change="$store.computer.setMode($event.target.value)">
-        <option value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
-        <option value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
-        <option value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
+      <select id="store-computer-mode" name="store-computer-mode" class="select select-bordered select-sm rounded-full bg-base-100 shadow-sm w-36" style="z-index: 50;" x-model="$store.computer.mode" @change="$store.computer.setMode($event.target.value)">
+        <option class="bg-base-100" value="default" x-text="$store.i18n.t('computer_mode_default_short')"></option>
+        <option class="bg-base-100" value="auto_review" x-text="$store.i18n.t('computer_mode_auto_short')"></option>
+        <option class="bg-base-100" value="full_access" x-text="$store.i18n.t('computer_mode_full_short')"></option>
       </select>
       <div class="flex items-center gap-2">
         <span><kbd class="kbd kbd-sm">Ctrl+K</kbd> 清空</span>
