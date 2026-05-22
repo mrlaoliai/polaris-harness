@@ -110,8 +110,8 @@
   </div>
 
   <!-- Input Area -->
-  <div class="p-4 pb-8 bg-base-100 shrink-0 w-full max-w-4xl mx-auto" x-data="chatInput">
-    <div class="relative bg-base-200 rounded-box border border-base-300 shadow-sm focus-within:border-primary focus-within:shadow-md transition-all flex flex-col p-2 px-3">
+  <div class="p-4 pb-8 shrink-0 w-full max-w-4xl mx-auto" x-data="chatInput">
+    <div class="relative bg-base-100 rounded-[32px] shadow-md border border-base-200 focus-within:border-primary/30 focus-within:shadow-lg transition-all flex flex-col p-2 px-4">
       
       <!-- Command Menu -->
       <div class="absolute bottom-full left-0 mb-2 w-full bg-base-100 border border-base-300 rounded-box shadow-xl z-50 overflow-hidden" x-show="showSlash" x-cloak>
@@ -143,7 +143,7 @@
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
         </button>
 
-        <textarea id="input" name="input" class="textarea bg-transparent border-none focus:outline-none w-full resize-none p-2 leading-relaxed min-h-[44px] max-h-48 overflow-y-auto"
+        <textarea id="input" name="input" class="w-full bg-transparent border-0 focus:ring-0 focus:outline-none resize-none px-2 py-3 leading-relaxed min-h-[48px] max-h-48 overflow-y-auto"
                   x-model="input" :rows="rows"
                   :placeholder="$store.i18n.t('chat_placeholder')"
                   :disabled="$store.chat.isActive && $store.chat.state !== 'COMPLETE'"
