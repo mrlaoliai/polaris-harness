@@ -55,8 +55,8 @@ func formatName(s string) string {
 	return strings.Join(parts, " ")
 }
 
-// parseSkillEntry 解析技能市场的 SKILL.md 文件并返回 CatalogEntry。
-func parseSkillEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry, error) {
+// parseSkillEntry 解析技能市场的 SKILL.md 文件并返回 RegistryEntry。
+func parseSkillEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
 	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func parseSkillEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry, 
 		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
 	}
 
-	return &CatalogEntry{
+	return &RegistryEntry{
 		ID:          mp.ID + "/" + relPath,
 		Publisher:   mp.Publisher,
 		Type:        "skill",
@@ -95,8 +95,8 @@ func parseSkillEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry, 
 	}, nil
 }
 
-// parsePluginEntry 解析插件市场的 plugin.json 文件并返回 CatalogEntry。
-func parsePluginEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry, error) {
+// parsePluginEntry 解析插件市场的 plugin.json 文件并返回 RegistryEntry。
+func parsePluginEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
 	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func parsePluginEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry,
 		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
 	}
 
-	return &CatalogEntry{
+	return &RegistryEntry{
 		ID:          mp.ID + "/" + relPath,
 		Publisher:   mp.Publisher,
 		Type:        "plugin",
@@ -153,10 +153,64 @@ func parsePluginEntry(path string, mpDir string, mp Marketplace) (*CatalogEntry,
 	}, nil
 }
 
+// parseMCPEntry 解析市场的 mcp.json 文件并返回 RegistryEntry。
+func parseMCPEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
+	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	relPath := filepath.ToSlash(relDir)
+
+	contentBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var mJSON struct {
+		Name        string            `json:"name"`
+		Description string            `json:"description"`
+		Transport   string            `json:"transport"`
+		Command     string            `json:"command"`
+		Args        []string          `json:"args"`
+		Env         map[string]string `json:"env"`
+		Keywords    []string          `json:"keywords"`
+	}
+	if err := json.Unmarshal(contentBytes, &mJSON); err != nil {
+		return nil, err
+	}
+
+	name := mJSON.Name
+	if name == "" {
+		name = filepath.Base(relDir)
+		name = formatName(name)
+	}
+
+	url := mp.RepoURL
+	if strings.Contains(url, "github.com") {
+		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
+	}
+
+	return &RegistryEntry{
+		ID:          mp.ID + "/" + relPath,
+		Publisher:   mp.Publisher,
+		Type:        "mcp",
+		TrustTier:   mp.TrustTier,
+		Name:        name,
+		Description: mJSON.Description,
+		URL:         url,
+		Tags:        mJSON.Keywords,
+		Timeout:     60,
+		Transport:   mJSON.Transport,
+		Command:     mJSON.Command,
+		Args:        mJSON.Args,
+		Env:         mJSON.Env,
+	}, nil
+}
+
 // discoverMarketplaceEntries 递归遍历市场目录，自动发现所有的插件和技能。
 // 这解决了插件/技能页面只列出整个市场仓库的系统漏洞。
-func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]CatalogEntry, error) {
-	var entries []CatalogEntry
+func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]RegistryEntry, error) {
+	var entries []RegistryEntry
 
 	err := filepath.Walk(mpDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -191,6 +245,17 @@ func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]CatalogEntry, e
 			}
 		}
 
+		// 寻找所有 mcp.json
+		if info.Name() == "mcp.json" {
+			entry, err := parseMCPEntry(path, mpDir, mp)
+			if err != nil {
+				return err
+			}
+			if entry != nil {
+				entries = append(entries, *entry)
+			}
+		}
+
 		return nil
 	})
 
@@ -199,7 +264,7 @@ func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]CatalogEntry, e
 
 // handleSyncMarketplaces 刷新/同步市场
 func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) {
-	mps := append([]Marketplace{}, builtinMarketplaces...)
+	var mps []Marketplace
 	rows, err := s.db.QueryContext(r.Context(), "SELECT id, name, type, publisher, repo_url, description, is_builtin, trust_tier, enabled, created_at FROM plugin_marketplaces WHERE enabled=1")
 	if err == nil {
 		for rows.Next() {
@@ -215,8 +280,8 @@ func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) 
 	tmpDir := filepath.Join(home, ".polaris-harness", "tmp", "marketplaces")
 	_ = os.MkdirAll(tmpDir, 0755)
 
-	// Clean cache
-	_, _ = s.db.ExecContext(r.Context(), "DELETE FROM catalog_cache")
+	// Clean cache, keeping the seeded built-in ones
+	_, _ = s.db.ExecContext(r.Context(), "DELETE FROM registry_cache WHERE marketplace_id != 'builtin'")
 
 	syncedCount := 0
 	for _, mp := range mps {
@@ -239,33 +304,16 @@ func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) 
 
 		b, err := os.ReadFile(filepath.Join(mpDir, "catalog.json"))
 		if err != nil {
-			// 若不存在 catalog.json，则通过扫描目录动态提取各个插件/技能
+			// 若不存在 catalog.json，则通过扫描目录动态提取各个插件/技能/mcp
 			entries, scanErr := discoverMarketplaceEntries(mpDir, mp)
 			if scanErr == nil && len(entries) > 0 {
 				b, _ = json.Marshal(entries)
 			} else {
-				// 若扫描结果为空或失败，再退化到原有的 mock 模式，确保系统鲁棒性
-				mockEntries := []CatalogEntry{
-					{
-						ID:          mp.ID + "/example-plugin",
-						Name:        mp.Name + " - Core Module",
-						Description: "Auto-detected core module from repository.",
-						Type:        "plugin",
-						URL:         mp.RepoURL,
-					},
-					{
-						ID:          mp.ID + "/example-skill",
-						Name:        mp.Name + " - Assistant Skill",
-						Description: "Auto-detected assistant skill from repository.",
-						Type:        "skill",
-						URL:         mp.RepoURL,
-					},
-				}
-				b, _ = json.Marshal(mockEntries)
+				continue // 没有发现条目则跳过
 			}
 		}
 
-		var entries []CatalogEntry
+		var entries []RegistryEntry
 		if err := json.Unmarshal(b, &entries); err != nil {
 			continue
 		}
@@ -278,8 +326,8 @@ func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) 
 			payload, _ := json.Marshal(e)
 
 			_, _ = s.db.ExecContext(r.Context(),
-				`INSERT INTO catalog_cache(id, marketplace_id, type, name, description, publisher, trust_tier, url, payload) 
-                 VALUES(?,?,?,?,?,?,?,?,?)`,
+				`INSERT INTO registry_cache(id, marketplace_id, type, name, description, publisher, trust_tier, url, payload) 
+				VALUES(?,?,?,?,?,?,?,?,?)`,
 				e.ID, mp.ID, e.Type, e.Name, e.Description, mp.Publisher, mp.TrustTier, e.URL, string(payload))
 			syncedCount++
 		}

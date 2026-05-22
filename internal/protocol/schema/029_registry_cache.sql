@@ -1,6 +1,6 @@
--- 029_catalog_cache.sql
+-- 029_registry_cache.sql
 -- Table to cache marketplace catalog items after syncing
-CREATE TABLE IF NOT EXISTS catalog_cache (
+CREATE TABLE IF NOT EXISTS registry_cache (
     id             TEXT PRIMARY KEY,
     marketplace_id TEXT NOT NULL,
     type           TEXT NOT NULL, -- mcp, skill, plugin, app

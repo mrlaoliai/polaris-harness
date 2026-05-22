@@ -23,6 +23,8 @@ import (
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/observability"
 	webui "github.com/mrlaoliai/polaris-harness/web"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Server 包装 HTTP 与 WebSocket 服务，作为 M13 的对外网关。
@@ -102,6 +104,36 @@ func NewServer(addr string, agent *kernel.Agent, bb protocol.Blackboard, hitlGat
 		transcriptDir: tDir,
 		hooks:         NewHookRunner(),
 	}
+
+	// 注入内置的 yaml 配置作为种子数据到数据库（SSoT 架构）
+	if b, err := os.ReadFile("configs/marketplaces.yaml"); err == nil {
+		var mps []Marketplace
+		if err := yaml.Unmarshal(b, &mps); err == nil {
+			now := time.Now().UTC().Format(time.RFC3339)
+			for _, mp := range mps {
+				_, _ = db.Exec(`INSERT OR IGNORE INTO plugin_marketplaces(id, name, type, publisher, repo_url, description, is_builtin, trust_tier, enabled, created_at) 
+				                VALUES(?,?,?,?,?,?,1,?,1,?)`,
+					mp.ID, mp.Name, mp.Type, mp.Publisher, mp.RepoURL, mp.Description, mp.TrustTier, now)
+			}
+		}
+	} else {
+		slog.Warn("polaris-server: configs/marketplaces.yaml load failed", "err", err)
+	}
+
+	if b, err := os.ReadFile("configs/registry.yaml"); err == nil {
+		var entries []RegistryEntry
+		if err := yaml.Unmarshal(b, &entries); err == nil {
+			for _, e := range entries {
+				payload, _ := json.Marshal(e)
+				_, _ = db.Exec(`INSERT OR IGNORE INTO registry_cache(id, marketplace_id, type, name, description, publisher, trust_tier, url, payload) 
+				                VALUES(?,?,?,?,?,?,?,?,?)`,
+					e.ID, "builtin", e.Type, e.Name, e.Description, e.Publisher, e.TrustTier, e.URL, string(payload))
+			}
+		}
+	} else {
+		slog.Warn("polaris-server: configs/registry.yaml load failed", "err", err)
+	}
+
 	s.compressor = newCompressor(db, s.hooks)
 	s.channelMgr = channels.NewManager(httpClient, func(channelType, channelID string, cfg map[string]any, msg channels.Message) {
 		s.dispatchChannelMessage(channelType, channelID, cfg, msg)
