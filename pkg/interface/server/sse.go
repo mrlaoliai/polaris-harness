@@ -164,6 +164,7 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 		p = s.registry.PickProvider("general")
 	}
 	if p == nil {
+		slog.Warn("server: no enabled LLM provider configured", "session", sessionID)
 		if tw != nil {
 			tw.WriteError("no_provider", "未配置任何启用的 LLM 厂商")
 		}
