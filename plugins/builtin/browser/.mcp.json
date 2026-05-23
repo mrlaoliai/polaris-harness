@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "browser": {
+      "command": "uvx",
+      "args": ["browser-use-mcp"]
+    }
+  }
+}

@@ -1,11 +1,13 @@
 package plugin
 
 import (
-	"bufio"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -98,5 +100,46 @@ func ParseSKILLmd(path string) (*protocol.SkillMeta, error) {
 	return SkillMetaFromSKILLmd(path, defaultSigningKey())
 }
 
-// bufioScanner utility for line scanning (避免重复 strings.Split)
-var _ = bufio.NewScanner
+// LoadPlugin 从指定目录加载完整的 Codex 插件树。
+func LoadPlugin(dir string) (*Plugin, error) {
+	manifestPath := filepath.Join(dir, ".codex-plugin", "plugin.json")
+	manifest, err := ParseManifest(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+
+	plugin := &Plugin{
+		Manifest: *manifest,
+		Dir:      dir,
+		Enabled:  true,
+		MCPs:     make(map[string]MCPServerDef),
+	}
+
+	// 尝试加载 .mcp.json
+	if manifest.MCPServers != "" {
+		mcpPath := manifest.MCPServers
+		if !filepath.IsAbs(mcpPath) {
+			mcpPath = filepath.Join(dir, mcpPath)
+		}
+		if mcpConfig, err := loadMCPConfig(mcpPath); err == nil {
+			plugin.MCPs = mcpConfig.MCPServers
+		} else if !errors.Is(err, os.ErrNotExist) {
+			// 如果不是文件不存在导致的错误，则返回解析错误
+			return nil, perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("loader: failed to load %s: %v", mcpPath, err), err)
+		}
+	}
+
+	return plugin, nil
+}
+
+func loadMCPConfig(path string) (*MCPConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var c MCPConfig
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}

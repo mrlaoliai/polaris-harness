@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,8 +76,8 @@ func (r *Registry) ListEnabled() []*Plugin {
 	return out
 }
 
-// ScanDir 扫描目录（每个子目录下的 plugin.yaml），注册所有找到的 Plugin。
-// 忽略无 plugin.yaml 的子目录。
+// ScanDir 扫描目录（每个子目录作为一个 Plugin），加载所有找到的 Plugin。
+// 忽略无 .codex-plugin/plugin.json 的子目录。
 func (r *Registry) ScanDir(dir string) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -91,18 +92,13 @@ func (r *Registry) ScanDir(dir string) (int, error) {
 		if !e.IsDir() {
 			continue
 		}
-		manifestPath := filepath.Join(dir, e.Name(), "plugin.yaml")
-		m, err := ParseManifest(manifestPath)
+		pluginDir := filepath.Join(dir, e.Name())
+		p, err := LoadPlugin(pluginDir)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
 			return count, err
-		}
-		p := &Plugin{
-			Manifest: *m,
-			Dir:      filepath.Join(dir, e.Name()),
-			Enabled:  true,
 		}
 		if regErr := r.Register(p); regErr != nil {
 			// 已注册则跳过，不报错
@@ -113,11 +109,12 @@ func (r *Registry) ScanDir(dir string) (int, error) {
 	return count, nil
 }
 
-// DefaultScanPaths 返回惯例扫描路径（用户级 + 项目级）。
+// DefaultScanPaths 返回惯例扫描路径（内置级 + 项目级 + 用户级）。
 func DefaultScanPaths() []string {
 	home, _ := os.UserHomeDir()
 	cwd, _ := os.Getwd()
 	return []string{
+		filepath.Join(cwd, "plugins", "builtin"),
 		filepath.Join(home, ".polaris-harness", "plugins"),
 		filepath.Join(cwd, ".polaris", "plugins"),
 	}

@@ -1,0 +1,7 @@
+{
+  "name": "computer",
+  "version": "1.0.0",
+  "description": "Control Mac apps from Codex",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json"
+}
