@@ -15,8 +15,9 @@ import (
 	"time"
 
 	"github.com/mrlaoliai/polaris-harness/internal/config"
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/mrlaoliai/polaris-harness/internal/protocol/schema"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
 	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
@@ -35,6 +36,7 @@ import (
 	knowledgepkg "github.com/mrlaoliai/polaris-harness/pkg/swarm/knowledge"
 	si "github.com/mrlaoliai/polaris-harness/pkg/swarm/self_improve"
 	"github.com/mrlaoliai/polaris-harness/pkg/swarm/supervisor"
+	"github.com/mrlaoliai/polaris-harness/skills/builtin"
 )
 
 func main() {
@@ -93,7 +95,7 @@ func run() error { //nolint:gocyclo
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		return perrors.Wrap(perrors.CodeInternal, "config.Load", err)
+		return errors.Wrap(errors.CodeInternal, "config.Load", err)
 	}
 	slog.Info("polaris: config loaded", "tier", cfg.System.Tier, "max_agents", cfg.System.MaxAgents)
 
@@ -142,10 +144,9 @@ func run() error { //nolint:gocyclo
 
 	// ─── 2. 存储初始化 (L0 基础设施) ─────────────────────────────────────────
 	dbPath := filepath.Join(dataDir, "polaris.db")
-	schemaDir := resolveSchemaDir()
-	store, err := storage.OpenSQLiteFromDir(dbPath, schemaDir)
+	store, err := storage.OpenSQLite(dbPath, schema.FS)
 	if err != nil {
-		return perrors.Wrap(perrors.CodeInternal, "storage.OpenSQLiteFromDir", err)
+		return errors.Wrap(errors.CodeInternal, "storage.OpenSQLite", err)
 	}
 	defer store.Close()
 	slog.Info("polaris: storage initialized", "db", dbPath)
@@ -153,7 +154,7 @@ func run() error { //nolint:gocyclo
 	// ─── 2.5 SurrealDB Core 认知存储（FeatureSurrealDBCore 门控，Tier0 内存，Tier1+ HNSW）──
 	// 门控必须在此检查：无 FFI 隔离时 OpenSurrealDBCore 在内存压力下可触发 OOM。
 	var surrealStore *storage.SurrealDBCoreStore
-	if autoConf == nil || autoConf.Gate.State(observability.FeatureSurrealDBCore) != observability.FeatureDisabled {
+	if autoConf != nil && autoConf.Gate.State(observability.FeatureSurrealDBCore) != observability.FeatureDisabled {
 		useHNSW := autoConf != nil && autoConf.Config.SurrealVecMode == observability.SurrealVecHNSW
 		var tier int32
 		if autoConf != nil {
@@ -333,10 +334,9 @@ func run() error { //nolint:gocyclo
 	skillSelector := skill.NewSelector(skillRegistry)
 	_ = skillSelector
 
-	// WasmSkillExecutor：注入 WazeroRuntime 适配器 + 文件系统加载器
 	wasmRT := action.NewWazeroRuntime(ctx)
 	wasmRunner := action.NewWasmRunnerAdapter(wasmRT)
-	wasmLoader := skill.NewFilesystemWasmLoader("skills/builtin")
+	wasmLoader := skill.NewEmbedWasmLoader(builtin.FS)
 	skillExecutor := skill.NewWasmSkillExecutor(skillRegistry, wasmRunner, wasmLoader)
 	_ = skillExecutor
 	slog.Info("polaris: skill library initialized (wazero-backed)")
@@ -562,7 +562,6 @@ func run() error { //nolint:gocyclo
 	_ = store.DB().QueryRow("SELECT COUNT(*) FROM providers").Scan(&providerCount)
 
 	if providerCount == 0 {
-		time.Sleep(100 * time.Millisecond) // 等待本地 HTTP Server 完全启动以便 runInit 调 API
 		if cliTTY {
 			_ = runInit()
 		} else {
@@ -619,17 +618,6 @@ func initDirectories(dataDir string) {
 			slog.Warn("polaris: failed to create directory", "dir", d, "err", err)
 		}
 	}
-}
-
-func resolveDataDir(cfg *config.Config, filename string) string {
-	return filepath.Join(resolveDataDirBase(cfg), filename)
-}
-
-func resolveSchemaDir() string {
-	if dir := os.Getenv("POLARIS_SCHEMA_DIR"); dir != "" {
-		return dir
-	}
-	return "internal/protocol/schema"
 }
 
 func printStartupSummary(cfg *config.Config, components ...any) {

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mrlaoliai/polaris-harness/configs"
 	"github.com/mrlaoliai/polaris-harness/internal/config"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
@@ -111,7 +112,7 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 	}
 
 	// 注入内置的 yaml 配置作为种子数据到数据库（SSoT 架构）
-	if b, err := os.ReadFile("configs/marketplaces.yaml"); err == nil {
+	if b, err := configs.FS.ReadFile("marketplaces.yaml"); err == nil {
 		var mps []Marketplace
 		if err := yaml.Unmarshal(b, &mps); err == nil {
 			now := time.Now().UTC().Format(time.RFC3339)
@@ -125,7 +126,7 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 		slog.Warn("polaris-server: configs/marketplaces.yaml load failed", "err", err)
 	}
 
-	if b, err := os.ReadFile("configs/registry.yaml"); err == nil {
+	if b, err := configs.FS.ReadFile("registry.yaml"); err == nil {
 		var entries []RegistryEntry
 		if err := yaml.Unmarshal(b, &entries); err == nil {
 			for _, e := range entries {

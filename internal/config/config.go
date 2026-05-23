@@ -160,7 +160,7 @@ func Load(path string) (*Config, error) {
 
 		// Attempt to export the defaults to the path for future edits
 		if errMkdir := os.MkdirAll(filepath.Dir(path), 0755); errMkdir == nil {
-			os.WriteFile(path, data, 0644) //nolint:errcheck
+			os.WriteFile(path, data, 0600) //nolint:errcheck
 		}
 	}
 	cfg := &Config{Thresholds: DefaultThresholds()}

@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 // ── ANSI 颜色（仅 TTY 生效）─────────────────────────────────────────────────
@@ -324,8 +326,8 @@ func runInit() error { //nolint:gocyclo
 	fmt.Println(clr(ansiOk+ansiBold, t("init_done")))
 	fmt.Println()
 	fmt.Println(t("init_next"))
-	fmt.Printf("  %s      开始终端对话\n", clr(ansiAccent+ansiBold, "polaris chat"))
-	fmt.Printf("  %s   打开 Web UI\n", clr(ansiAccent+ansiBold, "open http://localhost:29999"))
+	fmt.Printf("  %s %s\n", clr(ansiAccent+ansiBold, "polaris chat"), t("init_next_chat"))
+	fmt.Printf("  %s %s\n", clr(ansiAccent+ansiBold, "open http://localhost:29999"), t("init_next_web"))
 	fmt.Println()
 	return nil
 }
@@ -597,10 +599,12 @@ func initPrompt(sc *bufio.Scanner, label, defaultVal string) string {
 
 func initPromptSecret(sc *bufio.Scanner, label string) string {
 	fmt.Printf("%s: ", label)
-	if !sc.Scan() {
+	b, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(sc.Text())
+	return strings.TrimSpace(string(b))
 }
 
 func initPromptBool(sc *bufio.Scanner, label string, def bool) bool {

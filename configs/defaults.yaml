@@ -73,7 +73,7 @@ eval:
   shadow_deploy: false
 
 interface:
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 29999
   cli: true
   http: true

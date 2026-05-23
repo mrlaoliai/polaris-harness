@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"log/slog"
@@ -45,7 +44,7 @@ var envSeeds = []envProviderSeed{
 		baseURL: "",
 		envKey:  "ANTHROPIC_API_KEY",
 		models: []envModelSeed{
-			{modelID: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", role: "general"},
+			{modelID: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet", role: "general"},
 		},
 	},
 	{
@@ -125,9 +124,6 @@ func SeedProvidersFromEnv(ctx context.Context, db *sql.DB) {
 
 // modelEnvID 生成稳定的 model 记录 ID（seed ID + 短 hash，避免与用户创建的 mdl_ 前缀冲突）。
 func modelEnvID(providerID, modelID string) string {
-	b := make([]byte, 4)
-	rand.Read(b) //nolint:errcheck
-	_ = b
 	// 使用确定性 ID：providerID_modelID 的截断，保证 INSERT OR IGNORE 幂等
 	raw := providerID + "_" + modelID
 	if len(raw) > 32 {

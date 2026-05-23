@@ -7,10 +7,12 @@ import (
 	"sort"
 
 	"context"
+	"path/filepath"
 	"time"
 
 	"github.com/mrlaoliai/polaris-harness/internal/config"
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/internal/protocol/schema"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/storage"
 )
 
@@ -183,9 +185,8 @@ func runBenchmarkRouting(args []string) error { //nolint:gocyclo
 		return nil
 	}
 
-	dbPath := resolveDataDir(nil, "polaris.db")
-	schemaDir := resolveSchemaDir()
-	store, err := storage.OpenSQLiteFromDir(dbPath, schemaDir)
+	dbPath := filepath.Join(resolveDataDirBase(nil), "polaris.db")
+	store, err := storage.OpenSQLite(dbPath, schema.FS)
 	if err != nil {
 		fmt.Printf("polaris benchmark: skip persistence (db open: %v)\n", err)
 		return nil
