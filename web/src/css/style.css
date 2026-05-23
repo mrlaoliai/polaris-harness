@@ -23,6 +23,7 @@
 
 :root, [data-theme] {
   --radius-box: 2.5rem !important;
+  --radius-field: 1rem !important;
 }
 
 /* 强制覆盖所有页面的选项卡，使其具有独立的边框、背景悬停和全局统一的极大圆角 */
