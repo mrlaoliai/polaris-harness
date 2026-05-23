@@ -61,7 +61,7 @@
             <div class="divider text-xs text-base-content/30" x-show="msg.compactionAfter" x-cloak x-text="$store.i18n.t('chat_compressed')"></div>
 
             <template x-if="msg.role === 'user'">
-              <div class="chat chat-end">
+              <div class="chat chat-start">
                 <div class="chat-bubble bg-base-300 text-base-content break-words relative group text-left"
                      x-data="{ expanded: false, isLong: false }"
                      x-init="$nextTick(() => { if($refs.content) isLong = $refs.content.scrollHeight > $refs.content.clientHeight + 10 }); window.addEventListener('resize', () => { if($refs.content) isLong = $refs.content.scrollHeight > $refs.content.clientHeight + 10 })">
