@@ -114,6 +114,10 @@ fi
 npm run build
 cd ..
 
+# ── 3.5 构建内置 Skills (Wasm) ───────────────────────────
+echo "→ 构建内置 Skills (Wasm)..."
+make build-skills
+
 # ── 4. 复制 dylib 并构建 Go 后端 ─────────────────────────
 echo "→ 构建 Go 后端..."
 mkdir -p bin/lib
@@ -127,7 +131,8 @@ eval $GO_CMD
 
 # ── 5. 启动 ───────────────────────────────────────────────
 echo "→ 启动 Polaris..."
-nohup ./bin/polaris --config "$CONFIG" >> "$LOG_FILE" 2>&1 &
+# Polaris 遵循配置层规范，通过环境变量而非命令行参数传递路径
+POLARIS_CONFIG="$PROJECT_ROOT/$CONFIG" nohup ./bin/polaris >> "$LOG_FILE" 2>&1 &
 
 # 等待最多 5s 确认端口监听
 for i in {1..10}; do
