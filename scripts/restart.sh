@@ -131,7 +131,8 @@ eval $GO_CMD
 # ── 5. 启动 ───────────────────────────────────────────────
 echo "→ 启动 Polaris..."
 # Polaris 遵循配置层规范，默认使用 ~/.polaris-harness/config.yaml
-nohup ./bin/polaris >> "$LOG_FILE" 2>&1 &
+# 注意：不能 >> polaris.log，因为进程内部的 logger 已经同时写文件和 stdout，重定向同文件会导致日志翻倍
+nohup ./bin/polaris >> "$DATA_DIR/polaris.stdout.log" 2>&1 &
 
 # 等待最多 5s 确认端口监听
 for i in {1..10}; do

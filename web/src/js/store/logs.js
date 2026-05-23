@@ -20,6 +20,7 @@ Alpine.store('logs', {
   connect() {
     this.disconnect()
     this.connected = false
+    this.entries = [] // 重新连接时清空，防止收到 server 的 recent 批次导致重复
     const url = this.levelFilter
       ? `/v1/logs/stream?level=${this.levelFilter}`
       : '/v1/logs/stream'
