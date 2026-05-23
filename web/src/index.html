@@ -10,8 +10,8 @@
 <body class="bg-base-100 text-base-content antialiased h-screen overflow-hidden">
 <div class="drawer drawer-end h-full" x-data>
   <input id="logs-drawer" type="checkbox" class="drawer-toggle" x-model="$store.logs.drawerOpen" />
-  <div class="drawer-content flex h-full">
-    <div id="app" class="flex w-full h-full">
+  <div class="drawer-content flex flex-col h-full min-h-0">
+    <div id="app" class="flex flex-1 w-full h-full min-h-0">
 
   <!-- ── 侧边栏 ────────────────────────────────────── -->
   <aside id="sidebar" class="w-64 bg-base-200/50 border-r border-base-300 flex flex-col flex-shrink-0">
