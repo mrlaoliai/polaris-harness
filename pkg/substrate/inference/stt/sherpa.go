@@ -108,7 +108,7 @@ func NewEngine(modelDir string) (*Engine, error) {
 	*(*int32)(unsafe.Pointer(cfgPtr + OffsetFeatFeatureDim)) = 50
 
 	// ModelConfig (SenseVoice)
-	modelPath := filepath.Join(modelDir, "model.int8.onnx")
+	modelPath := filepath.Join(modelDir, "model.onnx")
 	tokensPath := filepath.Join(modelDir, "tokens.txt")
 	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceModel)) = cString(modelPath)
 	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceLanguage)) = cString("auto")
