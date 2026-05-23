@@ -29,23 +29,23 @@
 
 /* 强制覆盖所有页面的选项卡，使其具有独立的边框、背景悬停和全局统一的极大圆角 */
 .tabs .tab {
-  border: 1px solid oklch(var(--bc) / 0.15) !important; /* 加深边框颜色 */
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 15%, transparent) !important;
   border-radius: var(--radius-box) !important;
   margin: 0 4px;
-  background: var(--fallback-b1,oklch(var(--b1))) !important;
-  color: oklch(var(--bc) / 0.7) !important; /* 默认文字颜色稍微柔和 */
+  background: var(--color-base-100) !important;
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent) !important;
   transition: all 0.2s ease;
 }
 .tabs .tab:hover {
-  background: oklch(var(--bc) / 0.06) !important; /* 鼠标悬停加深背景 */
-  border-color: oklch(var(--bc) / 0.25) !important; /* 悬停时边框稍微变深 */
-  color: var(--fallback-bc,oklch(var(--bc))) !important;
+  background: color-mix(in oklab, var(--color-base-content) 6%, var(--color-base-100)) !important;
+  border-color: color-mix(in oklab, var(--color-base-content) 25%, transparent) !important;
+  color: var(--color-base-content) !important;
 }
 .tabs .tab.tab-active, .tabs .tab.active {
-  background: oklch(var(--bc) / 0.12) !important; /* 选中时背景更深一点 */
-  border-color: oklch(var(--bc) / 0.35) !important; /* 选中时边框最明显 */
+  background: color-mix(in oklab, var(--color-base-content) 12%, var(--color-base-100)) !important;
+  border-color: color-mix(in oklab, var(--color-base-content) 35%, transparent) !important;
   font-weight: 600 !important;
-  color: var(--fallback-bc,oklch(var(--bc))) !important;
+  color: var(--color-base-content) !important;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 .tabs-boxed {
