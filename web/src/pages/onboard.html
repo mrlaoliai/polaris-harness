@@ -125,13 +125,13 @@
         <button class="btn btn-ghost" @click="$store.onboard.step = 2" x-text="$store.i18n.t('onboard_back')"></button>
       </div>
       <div x-show="$store.onboard.models.length === 0"
-           style="font-size:12px;color:var(--color-text-dim);margin-top:10px" x-text="$store.i18n.t('onboard_need_model')"></div>
+           class="text-xs text-base-content/60 mt-2.5" x-text="$store.i18n.t('onboard_need_model')"></div>
     </div>
 
     <!-- ─── Step 4: 消息渠道（可选） ───────────────────────────── -->
     <div x-show="$store.onboard.step === 4" class="onboard-step">
       <h2 class="text-2xl font-bold mb-2">Step 3 · 消息渠道
-        <span style="font-size:13px;color:var(--color-text-dim);font-weight:400" x-text="$store.i18n.t('onboard_optional')"></span>
+        <span class="text-[13px] text-base-content/60 font-normal" x-text="$store.i18n.t('onboard_optional')"></span>
       </h2>
       <p class="text-base-content/70 mb-6" x-text="$store.i18n.t('onboard_step3_desc')"></p>
 
