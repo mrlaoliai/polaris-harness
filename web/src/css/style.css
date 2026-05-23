@@ -29,10 +29,11 @@
 
 /* 针对聊天气泡的局部降级处理：防止大圆角导致多行文本被截断或外观呈椭圆状 */
 .chat {
-  --radius-box: 0.75rem !important;
+  --radius-box: 1rem !important;
+  --radius-field: 1rem !important;
 }
 .chat-bubble {
-  padding: 0.875rem 1.25rem !important;
+  padding: 1rem 1.25rem !important;
 }
 
 /* 强制覆盖所有页面的选项卡，使其具有独立的边框、背景悬停和全局统一的极大圆角 */
@@ -80,7 +81,7 @@
 .markdown-body h1 { font-size: 1.25em; }
 .markdown-body h2 { font-size: 1.1em; }
 .markdown-body h3 { font-size: 1em; }
-.markdown-body ul,.markdown-body ol { padding-left: 20px; margin: 6px 0; list-style: disc; }
+.markdown-body ul,.markdown-body ol { padding-left: 20px; margin: 6px 0; list-style: disc inside; }
 .markdown-body li { margin: 2px 0; }
 .markdown-body blockquote {
   border-left: 3px solid var(--fallback-p,oklch(var(--p)));
