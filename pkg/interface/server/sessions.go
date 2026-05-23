@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
@@ -92,7 +93,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := s.db.QueryContext(r.Context(),
-		`SELECT role, content FROM chat_messages WHERE session_id=? ORDER BY id`, sessionID)
+		`SELECT role, content, tool_calls, created_at, updated_at FROM chat_messages WHERE session_id=? ORDER BY id`, sessionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -100,16 +101,34 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type msgRow struct {
-		Role    string `json:"role"`
-		Content string `json:"content"`
+		Role         string          `json:"role"`
+		Content      string          `json:"content"`
+		ToolCalls    json.RawMessage `json:"tool_calls,omitempty"`
+		TaskDuration int64           `json:"task_duration,omitempty"` // in ms
 	}
 	var msgs []msgRow
 	total := 0
 	for rows.Next() {
 		var m msgRow
-		if err := rows.Scan(&m.Role, &m.Content); err != nil {
+		var tc sql.NullString
+		var createdStr, updatedStr string
+		if err := rows.Scan(&m.Role, &m.Content, &tc, &createdStr, &updatedStr); err != nil {
 			continue
 		}
+		if tc.Valid && tc.String != "" {
+			m.ToolCalls = json.RawMessage(tc.String)
+		}
+
+		// Parse duration if both exist
+		if createdStr != "" && updatedStr != "" {
+			layout := "2006-01-02T15:04:05Z"
+			tC, _ := time.Parse(layout, createdStr)
+			tU, _ := time.Parse(layout, updatedStr)
+			if !tU.IsZero() && !tC.IsZero() {
+				m.TaskDuration = tU.Sub(tC).Milliseconds()
+			}
+		}
+
 		total += len(m.Content)
 		if total > maxChars {
 			break
@@ -162,10 +181,17 @@ func (s *Server) loadMessages(ctx context.Context, sessionID string) ([]protocol
 	return msgs, nil
 }
 
-func (s *Server) saveMessage(ctx context.Context, sessionID, role, content string) error {
+func (s *Server) saveMessage(ctx context.Context, sessionID, role, content string, toolCalls string, durationMs int64) error {
+	if durationMs > 0 {
+		_, err := s.db.ExecContext(ctx,
+			`INSERT INTO chat_messages(session_id, role, content, tool_calls, created_at, updated_at) 
+			 VALUES(?,?,?,?, datetime('now', '-' || ? || ' seconds'), datetime('now'))`,
+			sessionID, role, content, toolCalls, float64(durationMs)/1000.0)
+		return err
+	}
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO chat_messages(session_id, role, content) VALUES(?,?,?)`,
-		sessionID, role, content)
+		`INSERT INTO chat_messages(session_id, role, content, tool_calls) VALUES(?,?,?,?)`,
+		sessionID, role, content, toolCalls)
 	return err
 }
 

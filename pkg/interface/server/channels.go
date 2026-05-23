@@ -277,13 +277,14 @@ func (s *Server) dispatchChannelMessage(channelType, channelID string, cfg map[s
 
 	history, _ := s.loadMessages(ctx, sessionKey)
 	history = append(history, protocol.Message{Role: "user", Content: msg.Text})
-	if err := s.saveMessage(ctx, sessionKey, "user", msg.Text); err != nil {
+	if err := s.saveMessage(ctx, sessionKey, "user", msg.Text, "", 0); err != nil {
 		slog.Error("channel dispatch: saveMessage user", "err", err)
 	}
 
 	toolSchemas := s.buildToolSchemas()
 	var sb strings.Builder
 	const maxToolRounds = 10
+	startInfer := time.Now()
 	for range maxToolRounds {
 		ch, err := p.StreamInfer(ctx, &protocol.InferRequest{
 			Messages:    history,
@@ -321,6 +322,7 @@ func (s *Server) dispatchChannelMessage(channelType, channelID string, cfg map[s
 		// 构造 assistant message (含 tool_use parts) + user message (tool_result parts)
 		assistantParts := make([]any, 0, 1+len(toolCalls))
 		if roundText.Len() > 0 {
+			assistantParts = assistantParts[0:0] // Reset to reuse slice
 			assistantParts = append(assistantParts, map[string]any{"type": "text", "text": roundText.String()})
 		}
 		toolResultParts := make([]any, 0, len(toolCalls))
@@ -357,12 +359,13 @@ func (s *Server) dispatchChannelMessage(channelType, channelID string, cfg map[s
 			protocol.Message{Role: "user", Parts: toolResultParts},
 		)
 	}
+	inferLatencyMs := time.Since(startInfer).Milliseconds()
 
 	reply := sb.String()
 	if reply == "" {
 		return
 	}
-	if err := s.saveMessage(ctx, sessionKey, "assistant", reply); err != nil {
+	if err := s.saveMessage(ctx, sessionKey, "assistant", reply, "", inferLatencyMs); err != nil {
 		slog.Error("channel dispatch: saveMessage assistant", "err", err)
 	}
 	_ = s.updateSessionTitle(ctx, sessionKey, msg.Text)

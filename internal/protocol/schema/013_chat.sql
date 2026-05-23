@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     session_id TEXT    NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
     role       TEXT    NOT NULL CHECK(role IN ('user','assistant','system')),
     content    TEXT    NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+    tool_calls TEXT,
+    created_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+    updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id, id);

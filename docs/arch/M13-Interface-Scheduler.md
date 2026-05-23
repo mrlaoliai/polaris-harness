@@ -479,6 +479,7 @@ const legacyPageMap = {
 
 - **流端点**: `POST /v1/agent/stream` (`text/event-stream`)。因需 POST body，使用 `fetch+ReadableStream`（`sse.js:SSEClient`），非原生 `EventSource`。
 - **状态机** `(inv_webui_08)`: `IDLE → SUBMITTING → THINKING → STREAMING → TOOL_RUNNING → STREAMING → COMPLETE → IDLE`。
+- **工具生命周期推送**: 在 `TOOL_RUNNING` 期间，要求 SSE 额外推送细粒度事件 (`tool_start`, `tool_progress`, `tool_success`, `tool_error`)，支持中间态渲染。
 - **异常退避**: 1s→2s→4s→8s→16s→30s，超 10 次转 ERROR。
 - **中断恢复**: 接收 `error(interrupted)`，保留 `currentTokens` 并打橙色"⚠ 已中断"徽章，消息持久化入列。
 - **幂等去重** `(inv_webui_10)`: `dedupeRunID(sessionID, input)` 在 5s 窗口内对相同 (sessionID, input) 返回同一 runID，防止重复提交。
@@ -503,6 +504,7 @@ const legacyPageMap = {
 
 | 组件/交互 | 触发/机制/结果 |
 |----------|--------------|
+| **ToolExecutionAccordion** (工具执行折叠面板) | **渲染机制**: 顶部固定显示工具执行总耗时（基于底层 `created_at` 和 `updated_at` 差值，对标 Codex 体验）。<br>**状态**: 折叠态（如 "正在使用 Browser 搜索..."）；展开态（内嵌 Markdown/Terminal，不仅实时回显输出，还必须**高亮显示实际执行的具体命令**）；<br>**文件内容与 Diff (对标 Codex)**：针对创建或修改文件的操作，UI 需支持点击展开查看完整文件内容及 Diff 差异对比；<br>结束态（成功绿勾 / 失败红叉+重试按钮）。 |
 | **StatusBar** | 10s 轮询 `/v1/status`。Token 烧率 >80% 出橙色徽章，>95% 红色告警并提醒将压缩。 |
 | **ApprovalCard** | 风险分级色阶（蓝/橙/红），含闪烁倒计时。任务导航项显示待审数量角标。 |
 | **CompactionDivider** | 遇压缩检查点 `at_message_id` 注入占位块，支持从此分支发起新会话。 |
@@ -689,6 +691,7 @@ POST   /v1/automations/{id}/trigger 手动立即触发
 | key | value 示例 | 说明 |
 |-----|-----------|------|
 | `computer_use.permission_mode` | `"safe"\|"workspace"\|"god"` | 全局权限模式 |
+| `computer_use.perception_mode` | `"auto"\|"local_omniparser"\|"cloud_vlm"` | 视觉感知引擎策略（允许高性能机器强制走云端大模型，如 DeepSeek V4 多模态） |
 | `computer_use.allowed_applications` | `["chrome","vscode","terminal"]` | 受控应用白名单（JSON 数组） |
 | `computer_use.chrome_cdp_enabled` | `"true"` | 是否启用 Chrome CDP 深度交互 |
 

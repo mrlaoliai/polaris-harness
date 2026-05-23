@@ -242,6 +242,12 @@ Alpine.store('chat', {
           this.sessionID = data.session_id
           localStorage.setItem('polaris_session_id', data.session_id)
         }
+        if (data && data.duration_ms) {
+          const last = this.messages[this.messages.length - 1];
+          if (last && last.role === 'assistant') {
+            last.taskDuration = data.duration_ms;
+          }
+        }
         this._onComplete()
         break
       case 'error':
@@ -340,6 +346,7 @@ Alpine.store('chat', {
         role: m.role,
         content: sanitizeContent(m.content),
         toolCalls: m.tool_calls || [],
+        taskDuration: m.task_duration || 0,
         aborted: m.aborted || false,
         compactionAfter: d.compaction_events?.some(e => e.at_message_id === m.id) || false,
       }))

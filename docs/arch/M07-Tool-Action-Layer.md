@@ -327,23 +327,25 @@ Planner 决定调用工具 → 生成 ToolIntent（不签发 Token）→ M8 Blac
 
 ## 7. 动作空间扩展
 
-### 7.1 Computer Use / GUI
+### 7.1 Computer Use / GUI 自动化架构
 
-接口定义见 `pkg/action/computer_use.go`（ComputerUseTool struct + ScreenshotProvider / MouseController / KeyboardController 三接口）。当前无 X11 / Quartz / Win32 平台实现，工具无法注册和执行。平台实现完成后结构体扩展为: ScreenshotCap / MouseAction / KeyboardAction / DisplayWidth × DisplayHeight (默认 1280×800)。
+**架构定位**: 采用外置的独立 **Rust MCP Sidecar (`polaris-computer-mcp`)** 作为底层驱动，确保主干 Agent 进程的绝对安全与 `Zero-CGO` 纯洁性。严禁在 Sidecar 中内嵌任何 AI 模型（OmniParser / VLM 均保留在主干推理网关）。
 
-Execute: ForegroundIntent→physical；BackgroundTask/AutoCurriculum→headless。所有操作强制[Sandbox-L3]，禁止L1/L2。
+**核心技术栈**:
+1. **感知层 (Sensor)**:
+   - **截图**: 使用 `xcap` ([GitHub](https://github.com/nashaofu/xcap)) 跨平台截屏。
+   - **语义 UI 树**: 直接调用 OS 原生 API (Win: `uiautomation-rs`, Mac: `axuielement`, Linux: `AT-SPI2`)，弃用抽象封装库以确保精度。
+2. **执行层 (Actuator)**:
+   - **键鼠注入**: 使用 `enigo` ([GitHub](https://github.com/enigo-rs/enigo)) 跨平台模拟。
+   - **Linux 特化兜底**: 弃用实验性的 Wayland `libei`，直接采用 `evdev` 向 `/dev/uinput` 写入内核级输入信号。
 
-**physical 模式**（前台用户操作辅助）:
-  Tier 0 macOS / Windows 可启用（远程 VLM + L2 Wasm + 物理屏幕受用户视觉监督）
-  Tier 1+ 完整支持
+Execute: ForegroundIntent→physical；BackgroundTask/AutoCurriculum→headless。
+- **physical 模式**: 依赖 `polaris-computer-mcp` 本地微服务。
+- **headless 模式**: Tier 1+ → `Xvfb :99 -screen 0 1280x800x24` 启动虚拟显示器执行。
 
-**headless 模式**（后台 Auto-Curriculum）:
-  Tier 0 全平台禁用（无人监督，ErrFeatureUnavailableInTier0）
-  Tier 1+ → Xvfb :99 -screen 0 1280x800x24 + VLM
+**执行耗时追踪**: 底层追踪表（如 `decision_log` 或 `agent_actions`）必须录入 `created_at` 与 `updated_at` 时间戳，供前端渲染耗时。
 
-GOOS守卫: deployTier==Tier0 && mode=="headless" → 跳过注册。
-
-GUI Action Loop: see→decide→act循环maxSteps次。Capture→VLM Describe→VLM DecideAction→done返回成功/impossible返回失败→executeAction(left_click/right_click/type/key/scroll/mouse_move)→GUIResult
+GUI Action Loop: see→decide→act循环maxSteps次。Capture+UITree→VLM DecideAction(在主干)→发送MCP Command→executeAction(left_click/type等)→GUIResult
 
 **HITL 拦截门控**（`interceptComputerUse`，`pkg/cognition/kernel/agent_execute.go`）:
 - 触发工具: `computer_use` 和 `browser_use`（均需经此门控）
@@ -384,8 +386,9 @@ reasoning:  推理说明（仅日志，不转发 executor）
 
 **LAMConfig**:
 ```
-Enabled:       bool    // false 时 ExecuteAction 立即返回 disabled 错误
-ResolverModel: string  // VLM 动作解析模型，默认 "deepseek-chat"（budget 层）
+Enabled:        bool
+PerceptionMode: string  // "auto" (按内存自动降级) | "local_omniparser" (强制本地) | "cloud_vlm" (强制云端多模态)
+ResolverModel:  string  // 视觉解析模型，如 "deepseek-chat" 或 "claude-3-5-sonnet"
 ```
 
 **ActionDiscretizer** `[接口预留，Tier-1+ 连续动作空间]`: 类型定义见 `pkg/action/continuous_action.go`。连续向量 → 离散工具调用投影，Vision 解析路径待激活。Discretize 算法设计见文件注释。

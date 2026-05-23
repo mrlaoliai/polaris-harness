@@ -212,7 +212,7 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 	}
 
 	history = append(history, userMsg)
-	if err := s.saveMessage(ctx, sessionID, "user", finalInput); err != nil {
+	if err := s.saveMessage(ctx, sessionID, "user", finalInput, "", 0); err != nil {
 		slog.Error("server: saveMessage user", "session", sessionID, "err", err)
 	}
 	if tw != nil {
@@ -255,6 +255,13 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 	var sb strings.Builder
 	var inferErr string
 	var totalTokens int
+
+	type ExecutedTool struct {
+		Name   string `json:"name"`
+		Input  any    `json:"input"`
+		Output string `json:"output"`
+	}
+	var executedToolCalls []ExecutedTool
 
 	const maxToolRounds = 10
 	for range maxToolRounds {
@@ -374,6 +381,16 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 				"tool_use_id": toolID,
 				"content":     resultText,
 			})
+
+			var inputObj any
+			if len(inputRaw) > 0 {
+				json.Unmarshal(inputRaw, &inputObj) //nolint:errcheck
+			}
+			executedToolCalls = append(executedToolCalls, ExecutedTool{
+				Name:   toolName,
+				Input:  inputObj,
+				Output: resultText,
+			})
 		}
 		history = append(history, protocol.Message{Role: "user", Parts: toolResultParts})
 	}
@@ -393,8 +410,13 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 
 	// ── 持久化 assistant 回复 ─────────────────────────────────────────────
 	reply := sb.String()
-	if reply != "" {
-		if err := s.saveMessage(ctx, sessionID, "assistant", reply); err != nil {
+	if reply != "" || len(executedToolCalls) > 0 {
+		var tcJson string
+		if len(executedToolCalls) > 0 {
+			b, _ := json.Marshal(executedToolCalls)
+			tcJson = string(b)
+		}
+		if err := s.saveMessage(ctx, sessionID, "assistant", reply, tcJson, inferLatencyMs); err != nil {
 			slog.Error("server: saveMessage assistant", "session", sessionID, "err", err)
 		}
 		if tw != nil {
@@ -420,7 +442,10 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 		"POLARIS_CHANNEL":    "web",
 	})
 
-	writeSSE(w, flusher, "complete", map[string]any{"session_id": sessionID})
+	writeSSE(w, flusher, "complete", map[string]any{
+		"session_id":  sessionID,
+		"duration_ms": inferLatencyMs,
+	})
 }
 
 func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Message {
