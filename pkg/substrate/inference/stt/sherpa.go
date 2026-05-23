@@ -16,6 +16,9 @@ type SherpaOnnxOfflineRecognizer struct{}
 // SherpaOnnxOfflineStream is an opaque pointer
 type SherpaOnnxOfflineStream struct{}
 
+// SherpaOnnxOfflinePunctuation is an opaque pointer
+type SherpaOnnxOfflinePunctuation struct{}
+
 var (
 	CreateOfflineRecognizer        func(config uintptr) *SherpaOnnxOfflineRecognizer
 	DestroyOfflineRecognizer       func(recognizer *SherpaOnnxOfflineRecognizer)
@@ -25,6 +28,11 @@ var (
 	DecodeOfflineStream            func(recognizer *SherpaOnnxOfflineRecognizer, stream *SherpaOnnxOfflineStream)
 	GetOfflineStreamResult         func(stream *SherpaOnnxOfflineStream) uintptr
 	DestroyOfflineRecognizerResult func(result uintptr)
+
+	CreateOfflinePunctuation   func(config uintptr) *SherpaOnnxOfflinePunctuation
+	DestroyOfflinePunctuation  func(punct *SherpaOnnxOfflinePunctuation)
+	OfflinePunctuationAddPunct func(punct *SherpaOnnxOfflinePunctuation, text uintptr) uintptr
+	OfflinePunctuationFreeText func(text uintptr)
 )
 
 var (
@@ -58,6 +66,11 @@ func LoadLibrary(libPath string) error {
 	purego.RegisterLibFunc(&GetOfflineStreamResult, lib, "SherpaOnnxGetOfflineStreamResult")
 	purego.RegisterLibFunc(&DestroyOfflineRecognizerResult, lib, "SherpaOnnxDestroyOfflineRecognizerResult")
 
+	purego.RegisterLibFunc(&CreateOfflinePunctuation, lib, "SherpaOnnxCreateOfflinePunctuation")
+	purego.RegisterLibFunc(&DestroyOfflinePunctuation, lib, "SherpaOnnxDestroyOfflinePunctuation")
+	purego.RegisterLibFunc(&OfflinePunctuationAddPunct, lib, "SherpaOfflinePunctuationAddPunct")
+	purego.RegisterLibFunc(&OfflinePunctuationFreeText, lib, "SherpaOfflinePunctuationFreeText")
+
 	loaded = true
 	loadErr = nil
 	return nil
@@ -65,13 +78,13 @@ func LoadLibrary(libPath string) error {
 
 // Engine 包装了 STT 引擎实例
 type Engine struct {
-	recognizer *SherpaOnnxOfflineRecognizer
 	mu         sync.Mutex
+	recognizer *SherpaOnnxOfflineRecognizer
+	punct      *SherpaOnnxOfflinePunctuation
 }
 
-// NewEngine 初始化引擎。
-// 库未加载时返回 recognizer=nil 的桩实例，Transcribe 内会走 mock 路径。
-func NewEngine(modelDir string) (*Engine, error) {
+// NewEngine 构造新的 Sherpa-ONNX 离线推理引擎
+func NewEngine(modelDir, punctDir string) (*Engine, error) {
 	if !loaded {
 		return &Engine{recognizer: nil}, nil
 	}
@@ -111,7 +124,7 @@ func NewEngine(modelDir string) (*Engine, error) {
 	modelPath := filepath.Join(modelDir, "model.onnx")
 	tokensPath := filepath.Join(modelDir, "tokens.txt")
 	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceModel)) = cString(modelPath)
-	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceLanguage)) = cString("zh")
+	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceLanguage)) = cString("auto")
 	*(*int32)(unsafe.Pointer(cfgPtr + OffsetModelSenseVoiceUseItn)) = 1
 	*(*uintptr)(unsafe.Pointer(cfgPtr + OffsetModelTokens)) = cString(tokensPath)
 	*(*int32)(unsafe.Pointer(cfgPtr + OffsetModelNumThreads)) = 1
@@ -127,9 +140,47 @@ func NewEngine(modelDir string) (*Engine, error) {
 		return nil, errors.New("failed to create offline recognizer")
 	}
 
+	// 实例化 Punctuation 模型（若有）
+	var punct *SherpaOnnxOfflinePunctuation
+	if punctDir != "" {
+		const PunctConfigSize = 24
+		const PunctOffsetModel = 0
+		const PunctOffsetNumThreads = 8
+		const PunctOffsetDebug = 12
+		const PunctOffsetProvider = 16
+
+		punctConfigData := make([]byte, PunctConfigSize)
+		pCfgPtr := uintptr(unsafe.Pointer(&punctConfigData[0]))
+		defer runtime.KeepAlive(punctConfigData)
+
+		punctModelPath := filepath.Join(punctDir, "model.onnx")
+		*(*uintptr)(unsafe.Pointer(pCfgPtr + PunctOffsetModel)) = cString(punctModelPath)
+		*(*int32)(unsafe.Pointer(pCfgPtr + PunctOffsetNumThreads)) = 1
+		*(*int32)(unsafe.Pointer(pCfgPtr + PunctOffsetDebug)) = 0
+		*(*uintptr)(unsafe.Pointer(pCfgPtr + PunctOffsetProvider)) = cString("cpu")
+
+		punct = CreateOfflinePunctuation(pCfgPtr)
+	}
+
 	return &Engine{
 		recognizer: rec,
+		punct:      punct,
 	}, nil
+}
+
+// Close 释放 C 引擎资源
+func (e *Engine) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.recognizer != nil {
+		DestroyOfflineRecognizer(e.recognizer)
+		e.recognizer = nil
+	}
+	if e.punct != nil {
+		DestroyOfflinePunctuation(e.punct)
+		e.punct = nil
+	}
 }
 
 // Transcribe 传入 16000Hz 16-bit PCM 单声道音频数据并返回文本
@@ -167,14 +218,33 @@ func (e *Engine) Transcribe(samples []float32, sampleRate int) (string, error) {
 	}
 
 	// 简单的 C 字符串转 Go 字符串
+	rawText := parseCString(uintptr(unsafe.Pointer(textPtr)))
+
+	if e.punct != nil && rawText != "" {
+		cRawText := append([]byte(rawText), 0)
+		cRawPtr := uintptr(unsafe.Pointer(&cRawText[0]))
+		punctuatedPtr := OfflinePunctuationAddPunct(e.punct, cRawPtr)
+		if punctuatedPtr != 0 {
+			defer OfflinePunctuationFreeText(punctuatedPtr)
+			rawText = parseCString(punctuatedPtr)
+		}
+		runtime.KeepAlive(cRawText)
+	}
+
+	return rawText, nil
+}
+
+func parseCString(ptr uintptr) string {
+	if ptr == 0 {
+		return ""
+	}
 	var bytes []byte
 	for i := 0; ; i++ {
-		b := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(textPtr)) + uintptr(i)))
+		b := *(*byte)(unsafe.Pointer(ptr + uintptr(i)))
 		if b == 0 {
 			break
 		}
 		bytes = append(bytes, b)
 	}
-
-	return string(bytes), nil
+	return string(bytes)
 }

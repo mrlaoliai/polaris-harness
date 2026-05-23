@@ -315,7 +315,7 @@ func InitSTTEngine(ctx context.Context, dataDir string, gate *observability.Feat
 	sttDir := filepath.Join(dataDir, "models", "sensevoice")
 
 	// 立即设置 mock 引擎，保证接口可用
-	if mockEngine, err := stt.NewEngine(""); err == nil {
+	if mockEngine, err := stt.NewEngine("", ""); err == nil {
 		SetSTTEngine(mockEngine)
 	}
 
@@ -327,7 +327,7 @@ func InitSTTEngine(ctx context.Context, dataDir string, gate *observability.Feat
 
 	// 异步下载 + 重载：不阻塞启动路径
 	go func() {
-		if err := stt.EnsureAssets(ctx, sttDir, httpClient, sttConfig.SherpaVersion, sttConfig.SenseVoiceModelURL); err != nil {
+		if err := stt.EnsureAssets(ctx, sttDir, httpClient, sttConfig.SherpaVersion, sttConfig.SenseVoiceModelURL, sttConfig.PunctModelURL); err != nil {
 			slog.Warn("stt: asset download failed, keeping mock engine", "err", err)
 			return
 		}
@@ -339,7 +339,11 @@ func InitSTTEngine(ctx context.Context, dataDir string, gate *observability.Feat
 		}
 
 		modelDir := stt.ModelDir(sttDir)
-		engine, err := stt.NewEngine(modelDir)
+		punctDir := ""
+		if sttConfig.PunctModelURL != "" {
+			punctDir = stt.PunctModelDir(sttDir)
+		}
+		engine, err := stt.NewEngine(modelDir, punctDir)
 		if err != nil {
 			slog.Warn("stt: engine init failed, keeping mock engine", "err", err)
 			return

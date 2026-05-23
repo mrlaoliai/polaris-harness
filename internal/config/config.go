@@ -43,8 +43,9 @@ type InferenceConfig struct {
 }
 
 type STTConfig struct {
-	SherpaVersion      string `yaml:"sherpa_version"`
-	SenseVoiceModelURL string `yaml:"sense_voice_model_url"`
+	SherpaVersion      string `yaml:"sherpa_version" toml:"sherpa_version"`
+	SenseVoiceModelURL string `yaml:"sense_voice_model_url" toml:"sense_voice_model_url"`
+	PunctModelURL      string `yaml:"punct_model_url" toml:"punct_model_url"`
 }
 
 type CacheConfig struct {

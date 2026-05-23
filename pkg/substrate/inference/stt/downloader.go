@@ -48,7 +48,7 @@ func libDownloadURL(version string) (string, error) {
 
 // EnsureAssets 确保 sttDir 下存在可用的动态库与模型文件。
 // 缺失时通过 httpClient（SafeHTTPClient）从 GitHub Releases 流式下载并解压，幂等。
-func EnsureAssets(ctx context.Context, sttDir string, httpClient *http.Client, version, modelURL string) error {
+func EnsureAssets(ctx context.Context, sttDir string, httpClient *http.Client, version, modelURL, punctModelURL string) error {
 	if err := os.MkdirAll(sttDir, 0o755); err != nil {
 		return fmt.Errorf("stt: mkdir %s: %w", sttDir, err)
 	}
@@ -81,12 +81,32 @@ func EnsureAssets(ctx context.Context, sttDir string, httpClient *http.Client, v
 		slog.Info("stt: model already present, skipping download", "dir", modelDir)
 	}
 
+	// ── 3. 标点模型文件 ───────────────────────────────────────────────
+	if punctModelURL != "" {
+		punctDir := filepath.Join(sttDir, "punct_model")
+		if _, err := os.Stat(filepath.Join(punctDir, "model.onnx")); os.IsNotExist(err) {
+			slog.Info("stt: downloading punctuation model", "url", punctModelURL, "dest", punctDir)
+			// Punctuation model only needs model.onnx
+			if err := downloadExtractModel(ctx, httpClient, punctModelURL, punctDir); err != nil {
+				return fmt.Errorf("stt: punctuation model download: %w", err)
+			}
+			slog.Info("stt: punctuation model ready", "dir", punctDir)
+		} else {
+			slog.Info("stt: punctuation model already present, skipping download", "dir", punctDir)
+		}
+	}
+
 	return nil
 }
 
 // ModelDir 返回模型目录（sttDir/model），供 NewEngine 使用。
 func ModelDir(sttDir string) string {
 	return filepath.Join(sttDir, "model")
+}
+
+// PunctModelDir 返回标点模型目录（sttDir/punct_model），供 NewEngine 使用。
+func PunctModelDir(sttDir string) string {
+	return filepath.Join(sttDir, "punct_model")
 }
 
 // modelFilesPresent 检查所有必要模型文件是否已存在。
@@ -129,10 +149,8 @@ func downloadExtractModel(ctx context.Context, client *http.Client, url, modelDi
 
 	return extractTarBz2(resp.Body, func(name string) (string, bool) {
 		base := filepath.Base(name)
-		for _, f := range modelRequiredFiles {
-			if base == f {
-				return filepath.Join(modelDir, base), true
-			}
+		if base == "model.onnx" || base == "tokens.txt" {
+			return filepath.Join(modelDir, base), true
 		}
 		return "", false
 	})
