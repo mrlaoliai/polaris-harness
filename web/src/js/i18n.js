@@ -405,11 +405,11 @@ export const zh = {
   agents_no_mcp: '暂无 MCP 服务器，请前往「插件」安装。',
 
   // ── 插件目录新增 key ──────────────────────────────────────────────────────
-  plugins_tab_plugin:          '📦 插件',
-  plugins_tab_app:             '📱 应用',
-  plugins_tab_mcp:             '⚙ MCP',
-  plugins_tab_skill:           '⚡ 技能',
-  plugins_tab_marketplace:     '🛒 市场',
+  plugins_tab_plugin:          '插件',
+  plugins_tab_app:             '应用',
+  plugins_tab_mcp:             'MCP',
+  plugins_tab_skill:           '技能',
+  plugins_tab_marketplace:     '市场',
   plugins_search_marketplace:  '搜索市场...',
   plugins_search_prefix:       '搜索',
   plugins_btn_add_market:      '添加市场',
@@ -910,11 +910,11 @@ export const en = {
   // ── Agent monitor tab ─────────────────────────────────────────────────────
   agents_no_mcp: 'No MCP servers installed. Go to "Plugins" to install one.',
 
-  plugins_tab_plugin: '📦 Plugins',
-  plugins_tab_app: '📱 Apps',
-  plugins_tab_mcp: '⚙ MCP',
-  plugins_tab_skill: '⚡ Skills',
-  plugins_tab_marketplace: '🛒 Marketplace',
+  plugins_tab_plugin: 'Plugins',
+  plugins_tab_app: 'Apps',
+  plugins_tab_mcp: 'MCP',
+  plugins_tab_skill: 'Skills',
+  plugins_tab_marketplace: 'Marketplace',
   plugins_search_marketplace: 'Search marketplace...',
   plugins_search_prefix: 'Search ',
   plugins_btn_add_market: 'Add Market',
