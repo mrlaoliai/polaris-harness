@@ -162,11 +162,8 @@ func run() error { //nolint:gocyclo
 	// 门控必须在此检查：无 FFI 隔离时 OpenSurrealDBCore 在内存压力下可触发 OOM。
 	var surrealStore *storage.SurrealDBCoreStore
 	if autoConf != nil && autoConf.Gate.State(observability.FeatureSurrealDBCore) != observability.FeatureDisabled {
-		useHNSW := autoConf != nil && autoConf.Config.SurrealVecMode == observability.SurrealVecHNSW
-		var tier int32
-		if autoConf != nil {
-			tier = int32(autoConf.Config.Tier)
-		}
+		useHNSW := autoConf.Config.SurrealVecMode == observability.SurrealVecHNSW
+		tier := int32(autoConf.Config.Tier)
 		surrealDBPath := filepath.Join(dataDir, "surreal_rust.db")
 		if surrealCore, sErr := storage.OpenSurrealDBCore(tier, surrealDBPath, useHNSW); sErr != nil {
 			slog.Warn("polaris: SurrealDB Core init failed, cognitive axis falls back to SQLite", "err", sErr)
@@ -364,7 +361,7 @@ func run() error { //nolint:gocyclo
 		graphTier = int(autoConf.Config.Tier)
 	}
 	var graphPipeline *swarm.GraphBuildPipeline
-	if autoConf == nil || autoConf.Gate.State(observability.FeatureGraphRAGFull) != observability.FeatureDisabled {
+	if autoConf != nil && autoConf.Gate.State(observability.FeatureGraphRAGFull) != observability.FeatureDisabled {
 		graphPipeline = swarm.NewGraphBuildPipeline(graphLLMClient, graphTier, mem.Semantic())
 		slog.Info("polaris: knowledge graph pipeline initialized", "tier", graphTier)
 	} else {

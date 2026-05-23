@@ -209,36 +209,5 @@ func LoadThresholds(dataDir string) (*Thresholds, error) {
 		}
 	}
 
-	t = applyThresholdDefaults(t)
 	return &t, nil
-}
-
-// applyThresholdDefaults 合并外部配置到默认值：外部值为 0 时回退默认。
-func applyThresholdDefaults(t Thresholds) Thresholds {
-	def := DefaultThresholds()
-	if t.M1Router.CircuitBreakerFailureCount == 0 {
-		t.M1Router.CircuitBreakerFailureCount = def.M1Router.CircuitBreakerFailureCount
-	}
-	if t.M1Router.CircuitBreakerCooldownSeconds == 0 {
-		t.M1Router.CircuitBreakerCooldownSeconds = def.M1Router.CircuitBreakerCooldownSeconds
-	}
-	if t.M2Storage.SurrealBufferPoolMB == 0 {
-		t.M2Storage.SurrealBufferPoolMB = def.M2Storage.SurrealBufferPoolMB
-	}
-	if t.M3Observability.MemCautionMB == 0 {
-		t.M3Observability.MemCautionMB = def.M3Observability.MemCautionMB
-	}
-	if t.M3Observability.MemWarningMB == 0 {
-		t.M3Observability.MemWarningMB = def.M3Observability.MemWarningMB
-	}
-	if t.M3Observability.MemCriticalMB == 0 {
-		t.M3Observability.MemCriticalMB = def.M3Observability.MemCriticalMB
-	}
-	if t.M4Kernel.MaxReplanAttempts == 0 {
-		t.M4Kernel.MaxReplanAttempts = def.M4Kernel.MaxReplanAttempts
-	}
-	if t.M8Orchestrator.LeaseTTLSeconds == 0 {
-		t.M8Orchestrator.LeaseTTLSeconds = def.M8Orchestrator.LeaseTTLSeconds
-	}
-	return t
 }

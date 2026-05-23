@@ -106,13 +106,3 @@ func TestDefaultThresholds_NonZero(t *testing.T) {
 		t.Error("expected non-zero M3Observability.MemCautionMB")
 	}
 }
-
-func TestApplyThresholdDefaults_ZeroFallback(t *testing.T) {
-	// 零值应该回退到默认值
-	empty := Thresholds{}
-	result := applyThresholdDefaults(empty)
-	def := DefaultThresholds()
-	if result.M1Router.CircuitBreakerFailureCount != def.M1Router.CircuitBreakerFailureCount {
-		t.Errorf("expected fallback to default CircuitBreakerFailureCount")
-	}
-}
