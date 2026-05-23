@@ -6,10 +6,19 @@ import (
 	"testing"
 )
 
-func TestLoad_FileNotFound(t *testing.T) {
-	_, err := Load("/nonexistent/path/config.yaml")
-	if err == nil {
-		t.Fatal("expected error for missing file")
+func TestLoad_FallbackToDefaults(t *testing.T) {
+	dir := t.TempDir()
+	fallbackPath := filepath.Join(dir, "nonexistent", "config.yaml")
+	cfg, err := Load(fallbackPath)
+	if err != nil {
+		t.Fatalf("expected successful fallback, got error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("expected non-nil config from fallback")
+	}
+	// Verify that it wrote the file
+	if _, err := os.Stat(fallbackPath); os.IsNotExist(err) {
+		t.Fatal("expected fallback to create the default config file")
 	}
 }
 

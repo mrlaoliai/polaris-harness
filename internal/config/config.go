@@ -6,6 +6,8 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
+
+	"github.com/mrlaoliai/polaris-harness/configs"
 )
 
 type Config struct {
@@ -150,7 +152,16 @@ func loadModuleTOML(modulePath string, target interface{}) {
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		// Fallback to embedded configs
+		data, err = configs.FS.ReadFile("defaults.yaml")
+		if err != nil {
+			return nil, err
+		}
+
+		// Attempt to export the defaults to the path for future edits
+		if errMkdir := os.MkdirAll(filepath.Dir(path), 0755); errMkdir == nil {
+			os.WriteFile(path, data, 0644) //nolint:errcheck
+		}
 	}
 	cfg := &Config{Thresholds: DefaultThresholds()}
 	if err := yaml.Unmarshal(data, cfg); err != nil {

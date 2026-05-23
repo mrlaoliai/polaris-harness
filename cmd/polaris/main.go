@@ -88,7 +88,8 @@ func run() error { //nolint:gocyclo
 	// ─── 1. 配置加载 ────────────────────────────────────────────────────────
 	cfgPath := os.Getenv("POLARIS_CONFIG")
 	if cfgPath == "" {
-		cfgPath = "configs/defaults.yaml"
+		home, _ := os.UserHomeDir()
+		cfgPath = filepath.Join(home, ".polaris-harness", "config.yaml")
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -556,7 +557,21 @@ func run() error { //nolint:gocyclo
 	// ─── 12. 启动摘要 ─────────────────────────────────────────────────────────
 	printStartupSummary(cfg, gate, router, mem, ingester, retriever, evalRunner, blackboard, sched, hitlGateway, agent, dagExec, httpServer)
 
-	// ─── 13. 等待终止信号 (优雅退出) ─────────────────────────────────────────
+	// ─── 13. 开箱引导 (Zero-Provider Detection) ──────────────────────────────
+	var providerCount int
+	_ = store.DB().QueryRow("SELECT COUNT(*) FROM providers").Scan(&providerCount)
+
+	if providerCount == 0 {
+		time.Sleep(100 * time.Millisecond) // 等待本地 HTTP Server 完全启动以便 runInit 调 API
+		if cliTTY {
+			_ = runInit()
+		} else {
+			slog.Warn("polaris: [Zero-Provider] No AI providers found in the database.")
+			slog.Warn("polaris: Please visit http://localhost:29999 or run `polaris init` to configure the system.")
+		}
+	}
+
+	// ─── 14. 等待终止信号 (优雅退出) ─────────────────────────────────────────
 	slog.Info("polaris: system ready — waiting for signals (SIGINT/SIGTERM to exit)")
 	<-ctx.Done()
 
