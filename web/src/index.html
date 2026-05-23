@@ -7,8 +7,11 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>⭐</text></svg>" />
   <link rel="stylesheet" href="./css/style.css" />
 </head>
-<body class="bg-base-100 text-base-content antialiased h-screen overflow-hidden flex">
-<div id="app" x-data class="flex w-full h-full">
+<body class="bg-base-100 text-base-content antialiased h-screen overflow-hidden">
+<div class="drawer drawer-end h-full" x-data>
+  <input id="logs-drawer" type="checkbox" class="drawer-toggle" x-model="$store.logs.drawerOpen" />
+  <div class="drawer-content flex h-full">
+    <div id="app" class="flex w-full h-full">
 
   <!-- ── 侧边栏 ────────────────────────────────────── -->
   <aside id="sidebar" class="w-64 bg-base-200/50 border-r border-base-300 flex flex-col flex-shrink-0">
@@ -157,9 +160,48 @@
       <page-fragment src="/pages/automation.html"></page-fragment>
     </div>
   </main>
-</div>
+</div><!-- /#app -->
+</div><!-- /drawer-content -->
 
-<!-- ── 浮动日志抽屉 ─────────────────────────────────────────── -->
+<div class="drawer-side z-[360]">
+  <label for="logs-drawer" aria-label="close drawer" class="drawer-overlay" @click="$store.logs.closeDrawer()"></label>
+  <div class="w-[480px] max-w-[95vw] min-h-full bg-base-100 border-l border-base-300 flex flex-col shadow-2xl">
+    <div class="flex items-center justify-between p-4 border-b border-base-300">
+      <div class="flex items-center gap-3">
+        <span class="font-bold" x-text="$store.i18n.t('logs_title')"></span>
+        <span x-show="$store.logs.connected" class="badge badge-success badge-sm badge-outline">LIVE</span>
+        <span x-show="!$store.logs.connected" class="badge badge-ghost badge-sm badge-outline" x-text="$store.i18n.t('status_conn_fail')"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="store-logs-levelfilter" name="store-logs-levelfilter" class="select select-bordered select-xs" x-model="$store.logs.levelFilter" @change="$store.logs.setLevel($store.logs.levelFilter)">
+          <option value="" x-text="$store.i18n.t('logs_filter_all', '全部')"></option>
+          <option value="debug">DEBUG+</option>
+          <option value="info">INFO+</option>
+          <option value="warn">WARN+</option>
+          <option value="error">ERROR</option>
+        </select>
+        <button class="btn btn-ghost btn-xs" @click="$store.logs.clear()" x-text="$store.i18n.t('logs_clear')"></button>
+        <button class="btn btn-ghost btn-xs btn-square" @click="$store.logs.closeDrawer()">✕</button>
+      </div>
+    </div>
+    <div id="log-entries-drawer" class="flex-1 overflow-y-auto font-mono text-[11px] p-3 space-y-1" x-ref="logEntries">
+      <div x-show="$store.logs.entries.length === 0" class="text-center py-8 text-base-content/70">暂无日志</div>
+      <template x-for="(e, idx) in $store.logs.entries" :key="idx">
+        <div class="flex gap-2 border-b border-base-200/50 pb-1"
+             :class="{'text-error': e.level==='error', 'text-warning': e.level==='warn'}">
+          <span class="text-base-content/60 shrink-0 mt-[1px]" x-text="e.ts"></span>
+          <span class="shrink-0 font-bold w-10 mt-[1px]"
+                :class="{'text-error': e.level==='error', 'text-warning': e.level==='warn', 'text-base-content/60': e.level==='debug', 'text-success': !['error','warn','debug'].includes(e.level)}"
+                x-text="(e.level || 'info').toUpperCase()"></span>
+          <span class="flex-1 break-all" x-text="e.message || e.msg || ''"></span>
+        </div>
+      </template>
+    </div>
+  </div>
+</div>
+</div><!-- /drawer -->
+
+<!-- ── 浮动日志抽屉触发按钮 ─────────────────────────────────────────── -->
 <button class="btn btn-circle shadow-lg fixed bottom-6 right-6 z-50 border-base-300" x-data @click="$store.logs.openDrawer()"
         :class="{ 'btn-primary': $store.logs.drawerOpen, 'bg-base-100 text-base-content': !$store.logs.drawerOpen }"
         :title="$store.i18n.t('nav_logs')">
@@ -168,42 +210,6 @@
   </svg>
   <span x-show="$store.logs.entries.length > 0 && !$store.logs.drawerOpen" class="badge badge-success badge-xs absolute top-0 right-0"></span>
 </button>
-
-<div class="fixed inset-0 bg-black/30 z-[350] transition-opacity" x-data x-show="$store.logs.drawerOpen" x-cloak @click="$store.logs.closeDrawer()"></div>
-
-<div class="fixed top-0 right-0 w-[480px] max-w-[95vw] h-full bg-base-100 border-l border-base-300 z-[360] flex flex-col shadow-2xl transition-transform duration-300" x-data :class="$store.logs.drawerOpen ? 'translate-x-0' : 'translate-x-full'" x-cloak>
-  <div class="flex items-center justify-between p-4 border-b border-base-300">
-    <div class="flex items-center gap-3">
-      <span class="font-bold" x-text="$store.i18n.t('logs_title')"></span>
-      <span x-show="$store.logs.connected" class="badge badge-success badge-sm badge-outline">LIVE</span>
-      <span x-show="!$store.logs.connected" class="badge badge-ghost badge-sm badge-outline" x-text="$store.i18n.t('status_conn_fail')"></span>
-    </div>
-    <div class="flex items-center gap-2">
-      <select id="store-logs-levelfilter" name="store-logs-levelfilter" class="select select-bordered select-xs" x-model="$store.logs.levelFilter" @change="$store.logs.setLevel($store.logs.levelFilter)">
-        <option value="" x-text="$store.i18n.t('logs_filter_all', '全部')"></option>
-        <option value="debug">DEBUG+</option>
-        <option value="info">INFO+</option>
-        <option value="warn">WARN+</option>
-        <option value="error">ERROR</option>
-      </select>
-      <button class="btn btn-ghost btn-xs" @click="$store.logs.clear()" x-text="$store.i18n.t('logs_clear')"></button>
-      <button class="btn btn-ghost btn-xs btn-square" @click="$store.logs.closeDrawer()">✕</button>
-    </div>
-  </div>
-  <div id="log-entries-drawer" class="flex-1 overflow-y-auto font-mono text-[11px] p-3 space-y-1" x-ref="logEntries">
-    <div x-show="$store.logs.entries.length === 0" class="text-center py-8 text-base-content/70">暂无日志</div>
-    <template x-for="(e, idx) in $store.logs.entries" :key="idx">
-      <div class="flex gap-2 border-b border-base-200/50 pb-1"
-           :class="{'text-error': e.level==='error', 'text-warning': e.level==='warn'}">
-        <span class="text-base-content/60 shrink-0 mt-[1px]" x-text="e.ts"></span>
-        <span class="shrink-0 font-bold w-10 mt-[1px]"
-              :class="{'text-error': e.level==='error', 'text-warning': e.level==='warn', 'text-base-content/60': e.level==='debug', 'text-success': !['error','warn','debug'].includes(e.level)}"
-              x-text="(e.level || 'info').toUpperCase()"></span>
-        <span class="flex-1 break-all" x-text="e.message || e.msg || ''"></span>
-      </div>
-    </template>
-  </div>
-</div>
 
 <!-- Toast Container -->
 <div class="toast toast-bottom toast-end z-[1000]" x-data>
