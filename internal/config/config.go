@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -140,13 +141,21 @@ type InterfaceConfig struct {
 	WebSocket bool   `yaml:"websocket"`
 }
 
-func loadModuleTOML(modulePath string, target interface{}) {
-	if _, err := os.Stat(modulePath); err == nil {
-		data, err := os.ReadFile(modulePath)
-		if err == nil {
-			toml.Unmarshal(data, target) //nolint:errcheck
-		}
+func loadModuleTOML(modulePath string, target interface{}) error {
+	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
+		return nil
 	}
+	data, err := os.ReadFile(modulePath)
+	if err != nil {
+		slog.Error("polaris: failed to read threshold override", "file", modulePath, "err", err)
+		return err
+	}
+	if err := toml.Unmarshal(data, target); err != nil {
+		slog.Error("polaris: failed to parse threshold override", "file", modulePath, "err", err)
+		return err
+	}
+	slog.Info("polaris: threshold override loaded", "file", modulePath)
+	return nil
 }
 
 func Load(path string) (*Config, error) {
@@ -168,28 +177,40 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	return cfg, nil
+}
+
+func LoadThresholds(dataDir string) (*Thresholds, error) {
+	t := DefaultThresholds()
 	configDir := os.Getenv("POLARIS_THRESHOLDS_DIR")
 	if configDir == "" {
-		configDir = "config"
+		configDir = filepath.Join(dataDir, "config")
 	}
 
-	loadModuleTOML(filepath.Join(configDir, "m1_router.toml"), &cfg.Thresholds.M1Router)
-	loadModuleTOML(filepath.Join(configDir, "m2_storage.toml"), &cfg.Thresholds.M2Storage)
-	loadModuleTOML(filepath.Join(configDir, "m3_observability.toml"), &cfg.Thresholds.M3Observability)
-	loadModuleTOML(filepath.Join(configDir, "m4_kernel.toml"), &cfg.Thresholds.M4Kernel)
-	loadModuleTOML(filepath.Join(configDir, "m5_memory.toml"), &cfg.Thresholds.M5Memory)
-	loadModuleTOML(filepath.Join(configDir, "m6_skill.toml"), &cfg.Thresholds.M6Skill)
-	loadModuleTOML(filepath.Join(configDir, "m7_tool.toml"), &cfg.Thresholds.M7Tool)
-	loadModuleTOML(filepath.Join(configDir, "m8_orchestrator.toml"), &cfg.Thresholds.M8Orchestrator)
-	loadModuleTOML(filepath.Join(configDir, "m9_self_improve.toml"), &cfg.Thresholds.M9SelfImprove)
-	loadModuleTOML(filepath.Join(configDir, "m10_knowledge.toml"), &cfg.Thresholds.M10Knowledge)
-	loadModuleTOML(filepath.Join(configDir, "m11_policy.toml"), &cfg.Thresholds.M11Policy)
-	loadModuleTOML(filepath.Join(configDir, "m12_eval.toml"), &cfg.Thresholds.M12Eval)
-	loadModuleTOML(filepath.Join(configDir, "m13_interface.toml"), &cfg.Thresholds.M13Interface)
+	modules := map[string]interface{}{
+		"m1_router.toml":        &t.M1Router,
+		"m2_storage.toml":       &t.M2Storage,
+		"m3_observability.toml": &t.M3Observability,
+		"m4_kernel.toml":        &t.M4Kernel,
+		"m5_memory.toml":        &t.M5Memory,
+		"m6_skill.toml":         &t.M6Skill,
+		"m7_tool.toml":          &t.M7Tool,
+		"m8_orchestrator.toml":  &t.M8Orchestrator,
+		"m9_self_improve.toml":  &t.M9SelfImprove,
+		"m10_knowledge.toml":    &t.M10Knowledge,
+		"m11_policy.toml":       &t.M11Policy,
+		"m12_eval.toml":         &t.M12Eval,
+		"m13_interface.toml":    &t.M13Interface,
+	}
 
-	cfg.Thresholds = applyThresholdDefaults(cfg.Thresholds)
+	for file, target := range modules {
+		if err := loadModuleTOML(filepath.Join(configDir, file), target); err != nil {
+			return nil, err
+		}
+	}
 
-	return cfg, nil
+	t = applyThresholdDefaults(t)
+	return &t, nil
 }
 
 // applyThresholdDefaults 合并外部配置到默认值：外部值为 0 时回退默认。

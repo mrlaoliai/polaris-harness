@@ -103,6 +103,13 @@ func run() error { //nolint:gocyclo
 	dataDir := resolveDataDirBase(cfg)
 	initDirectories(dataDir)
 
+	// ─── 0.3.5 Thresholds 覆盖加载 ────────────────────────────────────────────
+	thresholds, err := config.LoadThresholds(dataDir)
+	if err != nil {
+		return errors.Wrap(errors.CodeInternal, "config.LoadThresholds", err)
+	}
+	cfg.Thresholds = *thresholds
+
 	// ─── 0.4 日志初始化（stdout + ~/.polaris-harness/polaris.log）─────────────
 	if logFile := observability.SetupLogger(dataDir); logFile != nil {
 		defer logFile.Close()

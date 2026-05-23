@@ -1,4 +1,4 @@
-.PHONY: build run test lint clean rust-build rust-test build-skills build-ui dev-ui docs-sync docs-check docs-lint
+.PHONY: build run test lint clean rust-build rust-test build-skills build-ui dev-ui docs-sync docs-check docs-lint gen-threshold-examples
 
 GO := go
 CARGO := cargo
@@ -79,4 +79,7 @@ benchmark-routing:
 build-skills:
 	@./scripts/build_skills.sh
 
-all: tidy fmt lint test build build-skills
+gen-threshold-examples:
+	$(GO) run scripts/gen_threshold_examples.go config/
+
+all: tidy fmt lint test build build-skills gen-threshold-examples
