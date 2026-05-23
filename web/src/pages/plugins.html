@@ -20,11 +20,11 @@
 
       <div class="flex flex-wrap gap-4 items-center justify-between">
         <div role="tablist" class="tabs tabs-boxed">
-          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'plugin' }" @click="$store.plugins.filter = 'plugin'" x-text="'📦 ' + $store.i18n.t('plugins_tab_plugin')"></a>/a>
-          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'app' }" @click="$store.plugins.filter = 'app'" x-text="'📱 ' + $store.i18n.t('plugins_tab_app')"></a>/a>
-          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'mcp' }" @click="$store.plugins.filter = 'mcp'" x-text="'⚙ ' + $store.i18n.t('plugins_tab_mcp')"></a>/a>
-          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'skill' }" @click="$store.plugins.filter = 'skill'" x-text="'⚡ ' + $store.i18n.t('plugins_tab_skill')"></a>/a>
-          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'marketplace' }" @click="$store.plugins.filter = 'marketplace'" x-text="'🛒 ' + $store.i18n.t('plugins_tab_marketplace')"></a>/a>
+          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'plugin' }" @click="$store.plugins.filter = 'plugin'" x-text="'📦 ' + $store.i18n.t('plugins_tab_plugin')"></a>
+          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'app' }" @click="$store.plugins.filter = 'app'" x-text="'📱 ' + $store.i18n.t('plugins_tab_app')"></a>
+          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'mcp' }" @click="$store.plugins.filter = 'mcp'" x-text="'⚙ ' + $store.i18n.t('plugins_tab_mcp')"></a>
+          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'skill' }" @click="$store.plugins.filter = 'skill'" x-text="'⚡ ' + $store.i18n.t('plugins_tab_skill')"></a>
+          <a role="tab" class="tab" :class="{ 'tab-active font-bold': $store.plugins.filter === 'marketplace' }" @click="$store.plugins.filter = 'marketplace'" x-text="'🛒 ' + $store.i18n.t('plugins_tab_marketplace')"></a>
         </div>
 
         <div class="flex gap-2 w-full md:w-auto">
@@ -35,7 +35,7 @@
           <button class="btn btn-primary btn-sm" @click="$store.plugins.openCreateModal()" x-text="`+ ${$store.plugins.filter === 'marketplace' ? $store.i18n.t('plugins_btn_add_market') : $store.i18n.t('plugins_btn_create')}`"></button>
           <button class="btn btn-outline btn-sm" @click="$store.plugins.syncMarketplaces()" :disabled="$store.plugins.syncing">
             <span x-show="$store.plugins.syncing" class="loading loading-spinner loading-xs"></span>
-            <span x-show="!$store.plugins.syncing" x-text="'⟳ ' + $store.i18n.t('plugins_btn_sync')"> " + $store.i18n.t('plugins_btn_sync')</span>
+            <span x-show="!$store.plugins.syncing" x-text="'⟳ ' + $store.i18n.t('plugins_btn_sync')"></span>
           </button>
         </div>
       </div>
@@ -58,7 +58,7 @@
       
       <div x-show="!$store.plugins.loading && $store.plugins.filteredMarketplaces.length === 0 && $store.plugins.filter === 'marketplace'" class="flex flex-col items-center justify-center py-20 text-base-content/60 bg-base-200/50 rounded-box border border-dashed border-base-300">
         <div class="text-4xl mb-4 opacity-50">🛒</div>
-        <p class="text-lg" x-text="$store.i18n.t('plugins_empty_market')"></p>/p>
+        <p class="text-lg" x-text="$store.i18n.t('plugins_empty_market')"></p>
       </div>
 
       <!-- Plugin Grid -->
@@ -124,7 +124,7 @@
                     </div>
                   </template>
                 </div>
-                <a x-show="entry.homepage" :href="entry.homepage" target="_blank" rel="noopener" class="btn btn-ghost btn-sm text-xs px-2 shrink-0" x-text="$store.i18n.t('plugins_btn_details')"></a>/a>
+                <a x-show="entry.homepage" :href="entry.homepage" target="_blank" rel="noopener" class="btn btn-ghost btn-sm text-xs px-2 shrink-0" x-text="$store.i18n.t('plugins_btn_details')"></a>
               </div>
             </div>
           </div>
@@ -141,7 +141,7 @@
                 <div class="flex-1 min-w-0">
                   <h3 class="font-bold text-sm truncate" x-text="entry.name"></h3>
                   <div class="flex flex-wrap gap-1.5 mt-1.5 items-center">
-                    <span class="badge badge-secondary badge-xs badge-outline font-bold uppercase" x-text="$store.i18n.t('plugins_badge_market')"></span>/span>
+                    <span class="badge badge-secondary badge-xs badge-outline font-bold uppercase" x-text="$store.i18n.t('plugins_badge_market')"></span>
                     <span class="text-[10px] font-mono text-base-content/70 truncate max-w-full" x-text="entry.publisher"></span>
                   </div>
                 </div>
@@ -153,8 +153,8 @@
                 <div class="truncate"><span class="opacity-60" x-text="$store.i18n.t('plugins_label_url')"></span> <a :href="entry.repo_url" target="_blank" class="link link-primary font-mono" x-text="entry.repo_url"></a></div>
               </div>
               <div class="card-actions mt-auto pt-4 border-t border-base-300 justify-end">
-                <button x-show="entry.is_builtin === 0" class="btn btn-ghost btn-sm text-error hover:bg-error/10" @click="fetch(`/v1/plugins/marketplaces/${entry.id}`, {method:'DELETE'}).then(()=>$store.plugins.load())" x-text="$store.i18n.t('plugins_btn_del_market')"></button>/button>
-                <div x-show="entry.is_builtin === 1" class="text-xs text-base-content/60 px-3 py-1.5" x-text="$store.i18n.t('plugins_builtin_nodel')"></div>/div>
+                <button x-show="entry.is_builtin === 0" class="btn btn-ghost btn-sm text-error hover:bg-error/10" @click="fetch(`/v1/plugins/marketplaces/${entry.id}`, {method:'DELETE'}).then(()=>$store.plugins.load())" x-text="$store.i18n.t('plugins_btn_del_market')"></button>
+                <div x-show="entry.is_builtin === 1" class="text-xs text-base-content/60 px-3 py-1.5" x-text="$store.i18n.t('plugins_builtin_nodel')"></div>
               </div>
             </div>
           </div>
@@ -265,7 +265,7 @@
         </div>
         <div class="modal-action">
           <button class="btn btn-ghost" @click="$store.plugins.showCreateModal=false" x-text="$store.i18n.t('cancel')"></button>
-          <button class="btn btn-primary" @click="$store.plugins.submitCreation()" x-text="$store.i18n.t('plugins_btn_save')"></button>/button>
+          <button class="btn btn-primary" @click="$store.plugins.submitCreation()" x-text="$store.i18n.t('plugins_btn_save')"></button>
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.plugins.showCreateModal=false"></div>

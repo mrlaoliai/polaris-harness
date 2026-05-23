@@ -11,7 +11,7 @@
       <li class="step step-primary" x-text="$store.i18n.t('onboard_welcome')"></li>
       <li class="step" :class="$store.onboard.step >= 2 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step1')"></li>
       <li class="step" :class="$store.onboard.step >= 3 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step2')"></li>
-      <li class="step" :class="$store.onboard.step >= 4 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step_channel')"></li>/li>
+      <li class="step" :class="$store.onboard.step >= 4 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step_channel')"></li>
     </ul>
 
     <!-- ─── Step 1: 欢迎 ─────────────────────────────────────── -->
@@ -71,7 +71,7 @@
       <div class="modal-action mt-6">
         <button class="btn btn-primary" @click="$store.onboard.saveProvider()" :disabled="$store.onboard.saving">
           <span x-show="$store.onboard.saving" class="loading loading-spinner loading-xs"></span>
-          <span x-text="$store.i18n.t('onboard_btn_next')"></span>
+          下一步 →
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.testProvider()"
                 :disabled="$store.onboard.testingProvider || $store.onboard.saving">
@@ -120,7 +120,7 @@
         </button>
         <button class="btn btn-primary" @click="$store.onboard.step = 4"
                 :disabled="$store.onboard.models.length === 0">
-          <span x-text="$store.i18n.t('onboard_btn_next')"></span>
+          下一步 →
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.step = 2" x-text="$store.i18n.t('onboard_back')"></button>
       </div>
@@ -165,7 +165,7 @@
       <div class="modal-action mt-6">
         <button class="btn btn-primary" @click="$store.onboard.saveChannelAndFinish()" :disabled="$store.onboard.saving">
           <span x-show="$store.onboard.saving" class="loading loading-spinner loading-xs"></span>
-          <span x-text="$store.i18n.t('onboard_btn_finish')"></span>
+          保存渠道并完成
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.finish()" x-text="$store.i18n.t('onboard_finish')"></button>
         <button class="btn btn-ghost" @click="$store.onboard.step = 3" x-text="$store.i18n.t('onboard_back')"></button>
