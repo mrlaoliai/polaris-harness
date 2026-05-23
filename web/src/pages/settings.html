@@ -83,7 +83,7 @@
                   <h3 class="font-bold text-lg" x-text="p.name"></h3>
                   <div class="flex flex-wrap gap-2 text-xs text-base-content/70 font-mono mt-1">
                     <span x-show="p.base_url" x-text="p.base_url"></span>
-                    <span x-show="p.project_id" x-text="`项目: ${p.project_id}`"></span>
+                    <span x-show="p.project_id" x-text="`${$store.i18n.t('settings_project')} ${p.project_id}`"></span>
                   </div>
                 </div>
                 <input id="form-field-3" name="form-field-3" type="checkbox" class="toggle toggle-primary toggle-sm" :checked="p.enabled" @change="$store.providers.toggle(p)">
@@ -91,7 +91,7 @@
 
               <div class="mt-4 pt-4 border-t border-base-300">
                 <h4 class="text-xs font-bold text-base-content/70 uppercase tracking-wider mb-3" x-text="$store.i18n.t('nav_providers')"></h4>
-                <div x-show="!p.models || p.models.length === 0" class="text-xs text-base-content/60 mb-3">暂无模型，点击下方按钮添加</div>
+                <div x-show="!p.models || p.models.length === 0" class="text-xs text-base-content/60 mb-3" x-text="$store.i18n.t('settings_no_model')"></div>/div>
                 
                 <div class="space-y-2 mb-3">
                   <template x-for="m in (p.models || [])" :key="m.id">
@@ -156,7 +156,7 @@
                     <h3 class="font-bold text-lg" x-text="c.name"></h3>
                   </div>
                 </div>
-                <input id="form-field-5" name="form-field-5" type="checkbox" class="toggle toggle-primary toggle-sm" :checked="c.enabled" @change="$store.channels.toggle(c)" :aria-label="c.name + ' 启用状态'">
+                <input id="form-field-5" name="form-field-5" type="checkbox" class="toggle toggle-primary toggle-sm" :checked="c.enabled" @change="$store.channels.toggle(c)" :aria-label="c.name + $store.i18n.t('settings_enable_status')">
               </div>
 
               <div x-show="c.webhook_url" class="mt-4 pt-4 border-t border-base-300">
@@ -365,11 +365,11 @@
     <!-- You can find original functionality preserved below -->
     <div class="modal" :class="$store.providers.showModelModal ? 'modal-open' : ''">
       <div class="modal-box bg-base-200 border border-base-300">
-        <h3 class="font-bold text-lg mb-4" x-text="$store.providers.modelEditMode === 'create' ? '添加模型' : '编辑模型'"></h3>
+        <h3 class="font-bold text-lg mb-4" x-text="$store.providers.modelEditMode === 'create' ? $store.i18n.t('settings_add_model') : $store.i18n.t('settings_edit_model')"></h3>
         <div class="space-y-4">
           <div class="form-control w-full">
             <label for="store-providers-modelform-model-id" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('providers_model_id')"></span></label>
-            <input id="store-providers-modelform-model-id" name="store-providers-modelform-model-id" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.model_id" placeholder="例：deepseek-chat / gpt-4o" />
+            <input id="store-providers-modelform-model-id" name="store-providers-modelform-model-id" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.model_id" :placeholder="$store.i18n.t('settings_ph_model_id')" />
             <div class="label"><span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_model_doc')"></span></div>
           </div>
           <div class="form-control w-full">
@@ -377,7 +377,7 @@
               <span class="label-text font-bold" x-text="$store.i18n.t('providers_name')"></span>
               <span class="label-text-alt text-base-content/50" x-text="$store.i18n.t('settings_name_optional')"></span>
             </label>
-            <input id="store-providers-modelform-name" name="store-providers-modelform-name" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.name" placeholder="例：DeepSeek V3 对话" />
+            <input id="store-providers-modelform-name" name="store-providers-modelform-name" type="text" class="input input-bordered w-full" x-model="$store.providers.modelForm.name" :placeholder="$store.i18n.t('settings_ph_model_name')" />
           </div>
           <div class="form-control w-full">
             <label for="store-providers-modelform-role" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('settings_route_role')"></span></label>
@@ -420,7 +420,7 @@
           </div>
           <div class="form-control w-full">
             <label for="store-channels-form-name" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_name')"></span></label>
-            <input id="store-channels-form-name" name="store-channels-form-name" type="text" class="input input-bordered w-full" x-model="$store.channels.form.name" placeholder="如：客服机器人" />
+            <input id="store-channels-form-name" name="store-channels-form-name" type="text" class="input input-bordered w-full" x-model="$store.channels.form.name" :placeholder="$store.i18n.t('settings_ph_channel_name')" />
           </div>
 
           <!-- Channel specific fields -->
@@ -456,7 +456,7 @@
               </div>
               <div class="form-control w-full">
                 <label for="form-field-13" class="label"><span class="label-text font-bold" x-text="$store.i18n.t('channels_encrypt_key')"></span></label>
-                <input id="form-field-13" name="form-field-13" type="password" class="input input-bordered w-full" placeholder="留空则不加密" :value="$store.channels.form.config.encrypt_key || ''" @input="$store.channels.form.config.encrypt_key = $event.target.value" />
+                <input id="form-field-13" name="form-field-13" type="password" class="input input-bordered w-full" :placeholder="$store.i18n.t('settings_ph_encrypt')" :value="$store.channels.form.config.encrypt_key || ''" @input="$store.channels.form.config.encrypt_key = $event.target.value" />
               </div>
             </div>
           </template>
@@ -489,14 +489,14 @@
 
           <template x-if="$store.channels.form.type === 'webhook'">
             <div class="text-xs text-base-content/50 p-3 bg-base-100 rounded border border-base-300">
-              <span x-text="$store.i18n.t('channels_webhook_hint')"></span> <code>{"content":"消息文本"}</code> <span x-text="$store.i18n.t('channels_webhook_hint2')"></span>
+              <span x-text="$store.i18n.t('channels_webhook_hint')"></span> <code>{"content":"Message text"}</code> <span x-text="$store.i18n.t('channels_webhook_hint2')"></span>
             </div>
           </template>
 
           <div class="form-control mt-4">
             <label class="label cursor-pointer justify-start gap-4">
               <input id="store-channels-form-enabled" name="store-channels-form-enabled" type="checkbox" class="toggle toggle-primary" x-model="$store.channels.form.enabled">
-              <span class="label-text font-bold">启用</span>
+              <span class="label-text font-bold" x-text="$store.i18n.t('settings_enable')"></span>/span>
             </label>
           </div>
         </div>

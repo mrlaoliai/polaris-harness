@@ -11,7 +11,7 @@
       <li class="step step-primary" x-text="$store.i18n.t('onboard_welcome')"></li>
       <li class="step" :class="$store.onboard.step >= 2 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step1')"></li>
       <li class="step" :class="$store.onboard.step >= 3 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step2')"></li>
-      <li class="step" :class="$store.onboard.step >= 4 ? 'step-primary' : ''">渠道</li>
+      <li class="step" :class="$store.onboard.step >= 4 ? 'step-primary' : ''" x-text="$store.i18n.t('onboard_step_channel')"></li>/li>
     </ul>
 
     <!-- ─── Step 1: 欢迎 ─────────────────────────────────────── -->
@@ -43,7 +43,7 @@
         <div class="label"><span class="label-text font-medium"  x-text="$store.i18n.t('providers_name')"></span></div>
         <input id="ob-provider-name" name="ob-provider-name" class="input input-bordered w-full" type="text"
                x-model="$store.onboard.providerForm.name"
-               :placeholder="{ openai_compat: 'DeepSeek V4', anthropic: 'Claude', google_agent_platform: 'Gemini', ollama: 'Ollama 本地' }[$store.onboard.providerForm.type]" />
+               :placeholder="$store.i18n.t('onboard_ph_provider')[$store.onboard.providerForm.type]" />
         </label>
       <template x-if="$store.onboard.providerForm.type === 'openai_compat' || $store.onboard.providerForm.type === 'ollama'">
         <label class="form-control w-full mb-4">
@@ -71,7 +71,7 @@
       <div class="modal-action mt-6">
         <button class="btn btn-primary" @click="$store.onboard.saveProvider()" :disabled="$store.onboard.saving">
           <span x-show="$store.onboard.saving" class="loading loading-spinner loading-xs"></span>
-          下一步 →
+          <span x-text="$store.i18n.t('onboard_btn_next')"></span>
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.testProvider()"
                 :disabled="$store.onboard.testingProvider || $store.onboard.saving">
@@ -92,7 +92,7 @@
         <template x-for="m in $store.onboard.models" :key="m.model_id">
           <div class="badge badge-lg gap-2">
             <span x-text="m.model_id"></span>
-            <span class="badge badge-sm badge-neutral"  x-text="{ default: '对话', reasoning: '推理', general: '通用' }[m.role]"></span>
+            <span class="badge badge-sm badge-neutral"  x-text="$store.i18n.t('onboard_role_map')[m.role]"></span>
           </div>
         </template>
       </div>
@@ -102,7 +102,7 @@
         <input id="ob-model-id" name="ob-model-id" class="input input-bordered w-full" type="text"
                x-model="$store.onboard.modelForm.model_id"
                @keydown.enter.prevent="$store.onboard.addModel()"
-               placeholder="如：deepseek-chat / claude-sonnet-4-5 / llama3.2" />
+               :placeholder="$store.i18n.t('onboard_ph_model')" />
         </label>
       <label class="form-control w-full mb-4">
         <div class="label"><span class="label-text font-medium"  x-text="$store.i18n.t('onboard_model_usage')"></span></div>
@@ -116,11 +116,11 @@
       <div class="modal-action mt-6">
         <button class="btn btn-ghost" @click="$store.onboard.addModel()" :disabled="$store.onboard.saving">
           <span x-show="$store.onboard.saving" class="loading loading-spinner loading-xs"></span>
-          + 添加
+          <span x-text="'+ ' + $store.i18n.t('onboard_btn_add')"></span>
         </button>
         <button class="btn btn-primary" @click="$store.onboard.step = 4"
                 :disabled="$store.onboard.models.length === 0">
-          下一步 →
+          <span x-text="$store.i18n.t('onboard_btn_next')"></span>
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.step = 2" x-text="$store.i18n.t('onboard_back')"></button>
       </div>
@@ -130,7 +130,7 @@
 
     <!-- ─── Step 4: 消息渠道（可选） ───────────────────────────── -->
     <div x-show="$store.onboard.step === 4" class="onboard-step">
-      <h2 class="text-2xl font-bold mb-2">Step 3 · 消息渠道
+      <h2 class="text-2xl font-bold mb-2" x-text="'Step 3 · ' + $store.i18n.t('onboard_step_channel')">
         <span class="text-[13px] text-base-content/60 font-normal" x-text="$store.i18n.t('onboard_optional')"></span>
       </h2>
       <p class="text-base-content/70 mb-6" x-text="$store.i18n.t('onboard_step3_desc')"></p>
@@ -149,7 +149,7 @@
         <div class="label"><span class="label-text font-medium"  x-text="$store.i18n.t('onboard_channel_name')"></span></div>
         <input id="ob-channel-name" name="ob-channel-name" class="input input-bordered w-full" type="text"
                x-model="$store.onboard.channelForm.name"
-               placeholder="如：我的 Telegram Bot" />
+               :placeholder="$store.i18n.t('onboard_ph_channel')" />
         </label>
       <template x-if="$store.onboard.channelConfigLabel($store.onboard.channelForm.type)">
         <label class="form-control w-full mb-4">
@@ -165,7 +165,7 @@
       <div class="modal-action mt-6">
         <button class="btn btn-primary" @click="$store.onboard.saveChannelAndFinish()" :disabled="$store.onboard.saving">
           <span x-show="$store.onboard.saving" class="loading loading-spinner loading-xs"></span>
-          保存渠道并完成
+          <span x-text="$store.i18n.t('onboard_btn_finish')"></span>
         </button>
         <button class="btn btn-ghost" @click="$store.onboard.finish()" x-text="$store.i18n.t('onboard_finish')"></button>
         <button class="btn btn-ghost" @click="$store.onboard.step = 3" x-text="$store.i18n.t('onboard_back')"></button>

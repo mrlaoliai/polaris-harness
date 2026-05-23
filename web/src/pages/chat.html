@@ -70,12 +70,12 @@
                   <!-- Gradient Overlay & Hover Badge -->
                   <div x-show="isLong && !expanded" @click="expanded = true"
                        class="absolute bottom-0 left-0 w-full h-16 bg-gradient-to-t from-base-300 to-transparent flex items-end justify-center pb-1 cursor-pointer transition-opacity">
-                    <div class="badge badge-sm badge-ghost opacity-0 group-hover:opacity-100 transition-opacity shadow-sm mb-1 border-none">点击展开</div>
+                    <div class="badge badge-sm badge-ghost opacity-0 group-hover:opacity-100 transition-opacity shadow-sm mb-1 border-none" x-text="$store.i18n.t('chat_click_expand')"></div>/div>
                   </div>
                   
                   <!-- Collapse Button -->
                   <div x-show="expanded" class="text-center mt-2 -mb-2">
-                    <button class="btn btn-xs btn-ghost text-base-content opacity-70 hover:opacity-100" @click="expanded = false">收起全部</button>
+                    <button class="btn btn-xs btn-ghost text-base-content opacity-70 hover:opacity-100" @click="expanded = false" x-text="$store.i18n.t('chat_collapse_all')"></button>/button>
                   </div>
                 </div>
               </div>
@@ -112,12 +112,12 @@
                   <!-- Gradient Overlay & Hover Badge -->
                   <div x-show="isLong && !expanded" @click="expanded = true"
                        class="absolute bottom-0 left-0 w-full h-24 bg-gradient-to-t from-base-200 via-base-200/80 to-transparent flex items-end justify-center pb-2 cursor-pointer transition-opacity">
-                    <div class="badge badge-outline bg-base-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm mb-1">点击展开全部</div>
+                    <div class="badge badge-outline bg-base-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm mb-1" x-text="$store.i18n.t('chat_click_expand_all')"></div>/div>
                   </div>
                   
                   <!-- Collapse Button -->
                   <div x-show="expanded" class="text-center mt-3 -mb-1">
-                    <button class="btn btn-xs btn-ghost" @click="expanded = false; $nextTick(() => { $el.closest('.chat-bubble').scrollIntoView({behavior:'smooth', block:'center'}) })">收起全部</button>
+                    <button class="btn btn-xs btn-ghost" @click="expanded = false; $nextTick(() => { $el.closest('.chat-bubble').scrollIntoView({behavior:'smooth', block:'center'}) })" x-text="$store.i18n.t('chat_collapse_all')"></button>/button>
                   </div>
                 </div>
               </div>
@@ -210,8 +210,8 @@
     
     <!-- Shortcuts Hints -->
     <div class="text-center mt-3 text-xs font-medium text-base-content/60" x-show="$store.chat.messages.length === 0" x-transition.opacity.duration.500ms x-cloak>
-      <kbd class="kbd kbd-xs bg-transparent border-base-300 shadow-none text-base-content/60">Ctrl+K</kbd> 清空会话 &nbsp;&nbsp;
-      <kbd class="kbd kbd-xs bg-transparent border-base-300 shadow-none text-base-content/60">Ctrl+C</kbd> 中断生成
+      <kbd class="kbd kbd-xs bg-transparent border-base-300 shadow-none text-base-content/60">Ctrl+K</kbd> <span x-html="$store.i18n.t('chat_clear_session') + ' &amp;nbsp;&amp;nbsp;'"></span>
+      <kbd class="kbd kbd-xs bg-transparent border-base-300 shadow-none text-base-content/60">Ctrl+C</kbd> <span x-text="$store.i18n.t('chat_interrupt')"></span>
     </div>
   </div>
 </div>
