@@ -403,6 +403,111 @@ export const zh = {
 
   // ── Agent 监控 tab ───────────────────────────────────────────────────────
   agents_no_mcp: '暂无 MCP 服务器，请前往「插件」安装。',
+
+  // ── 插件目录新增 key ──────────────────────────────────────────────────────
+  plugins_tab_plugin:          '📦 插件',
+  plugins_tab_app:             '📱 应用',
+  plugins_tab_mcp:             '⚙ MCP',
+  plugins_tab_skill:           '⚡ 技能',
+  plugins_tab_marketplace:     '🛒 市场',
+  plugins_search_marketplace:  '搜索市场...',
+  plugins_search_prefix:       '搜索',
+  plugins_btn_add_market:      '添加市场',
+  plugins_btn_create:          '创建',
+  plugins_btn_sync:            '同步',
+  plugins_empty_market:        '暂无插件市场',
+  plugins_btn_details:         '详情',
+  plugins_badge_market:        '市场',
+  plugins_badge_builtin:       '系统内置',
+  plugins_label_type:          '包含类型:',
+  plugins_label_url:           '地址:',
+  plugins_btn_del_market:      '删除市场',
+  plugins_builtin_nodel:       '系统内置不可删除',
+  plugins_placeholder_env:     '请输入',
+  plugins_create_title:        '创建',
+  plugins_label_name:          '名称',
+  plugins_placeholder_name:    '输入名称',
+  plugins_label_desc:          '描述',
+  plugins_placeholder_desc:    '输入描述信息',
+  plugins_label_repo:          'Git 仓库地址',
+  plugins_label_entry:         '执行入口 (Entrypoint)',
+  plugins_label_repo_url:      'URL / 仓库地址',
+  plugins_label_transport:     'Transport 类型',
+  plugins_label_cmd:           '执行命令 (Command)',
+  plugins_label_args:          '参数 (Args - JSON Array)',
+  plugins_label_env:           '环境变量 (Env - JSON Object)',
+  plugins_btn_save:            '保存',
+
+  // ── 自动化页新增 key ─────────────────────────────────────────────────────
+  automation_tab_routine:          '日常',
+  automation_tab_triggers:         '触发器',
+  automation_tab_approvals:        '待办审批',
+  automation_tasks_title:          '自动化任务',
+  automation_tasks_desc:           '按计划或按需运行 Agent 任务，结果自动归入会话历史',
+  automation_btn_new:              '新建',
+  automation_empty_title:          '创建首个自动化',
+  automation_empty_desc:           '选择模板快速开始，或自定义配置',
+  automation_label_reasoning:      '推理：',
+  automation_run_count:            '共 {0} 次',
+  automation_never_run:            '从未运行',
+  automation_btn_history:          '历史',
+  automation_btn_run:              '运行',
+  automation_btn_edit:             '编辑',
+  automation_btn_delete:           '删除',
+  automation_webhook_title:        'Webhook 入站端点',
+  automation_webhook_desc:         '在"设置 → 渠道"中创建 Webhook 渠道，然后在自动化任务中将触发类型选为 Webhook 并绑定对应渠道。入站地址格式：POST /v1/webhooks/webhook/{channelID}',
+  automation_webhook_goto:         '前往渠道设置 →',
+  automation_webhook_list_title:   '已配置 Webhook 触发的自动化',
+  automation_webhook_channel_id:   '渠道 ID: ',
+  automation_webhook_unbound:      '未绑定',
+  automation_webhook_empty:        '暂无 Webhook 触发任务。',
+  automation_approvals_timeout:    '已超时',
+
+  // ── 配置向导新增 key ──────────────────────────────────────────────────────
+  onboard_step_channel:  '渠道',
+  onboard_ph_provider:   { openai_compat: 'DeepSeek V4', anthropic: 'Claude', google_agent_platform: 'Gemini', ollama: 'Ollama 本地' },
+  onboard_btn_next:      '下一步 →',
+  onboard_role_map:      { default: '对话', reasoning: '推理', general: '通用' },
+  onboard_ph_model:      '如：deepseek-chat / claude-sonnet-4-5 / llama3.2',
+  onboard_btn_add:       '添加',
+  onboard_ph_channel:    '如：我的 Telegram Bot',
+  onboard_btn_finish:    '保存渠道并完成',
+
+  // ── 搜索页新增 key ────────────────────────────────────────────────────────
+  search_text:       '搜索',
+  search_role_user:  '用户',
+  search_role_ai:    'AI',
+
+  // ── 会话页新增 key ────────────────────────────────────────────────────────
+  sessions_total:     '共 {0} 个会话',
+  sessions_msg_count: '{0} 条消息',
+
+  // ── 设置页新增 key ────────────────────────────────────────────────────────
+  settings_project:          '项目:',
+  settings_no_model:         '暂无模型，点击下方按钮添加',
+  settings_enable_status:    ' 启用状态',
+  settings_add_model:        '添加模型',
+  settings_edit_model:       '编辑模型',
+  settings_ph_model_id:      '例：deepseek-chat / gpt-4o',
+  settings_ph_model_name:    '例：DeepSeek V3 对话',
+  settings_ph_channel_name:  '如：客服机器人',
+  settings_ph_encrypt:       '留空则不加密',
+  settings_enable:           '启用',
+
+  // ── 监控页新增 key ────────────────────────────────────────────────────────
+  monitor_recheck:        '重新检查',
+  monitor_period:         '统计周期',
+  monitor_export_fmt:     '导出格式',
+  monitor_days_sessions:  '{0}天 会话',
+  monitor_days_msgs:      '{0}天 消息',
+  monitor_count_msgs:     '{0} 条',
+  monitor_tools:          '{0} 工具',
+
+  // ── 对话页新增 key ────────────────────────────────────────────────────────
+  chat_click_expand:      '点击展开',
+  chat_collapse_all:      '收起全部',
+  chat_click_expand_all:  '点击展开全部',
+  chat_clear_session:     '清空会话',
 }
 
 export const en = {
