@@ -55,7 +55,7 @@ Skill 三件套（`skills/builtin/SKILL.md + schema.json + wasm.wasm`）：
 创作 → Logic Collapse（System 2 轨迹编译为 Wasm）→ 注册 → System 1 零推理执行
 ```
 
-- Skill 元数据和 Wasm 实体分开存储：元数据在 `skills/builtin/`，blob 在 DB
+- Skill 三件套（SKILL.md + schema.json + impl.wasm）均在 `skills/builtin/` 目录，impl.wasm 通过 `go:embed` 随二进制分发；元数据注册信息（skill ID、版本、签名）写入 skills 表
 - AI 生成的 Skill 必须经过 M6 四层 S_VALIDATE
 
 ## AGENT-5 SurpriseIndex 路由决策

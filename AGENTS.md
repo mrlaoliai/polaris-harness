@@ -43,7 +43,7 @@ api/proto/        Protobuf 原始定义
 cmd/polaris/      主入口
 configs/          启动配置
 policies/         Cedar 策略 + ESCALATE/KILLSWITCH 协议
-skills/builtin/   内置 Skill 元数据（Wasm 实体待生成）
+skills/builtin/   内置 Skill 三件套（SKILL.md + schema.json + impl.wasm），embed 进二进制随版本发布
 
 pkg/substrate/    L0: inference/storage/observability/policy
 pkg/cognition/    L1: kernel/memory/skill
@@ -58,7 +58,8 @@ internal/protocol/ 跨模块共享类型 + 接口契约 + DDL + protoc 生成
 
 rust/substrate/   Rust FFI 性能路径（purego 桥）
 
-~/.polaris-harness/  运行时数据根（polaris.db / logs / hooks / cache）
+~/.polaris-harness/  运行时数据根（polaris.db / logs / hooks / cache / config/）
+                     config/ 为 Operator-Developer 的阈值覆盖目录（m*.toml，可选）
 ```
 
 **禁止访问**：`bake/`（用户手维护备份；权威以 `docs/arch/` `internal/` `pkg/` 为准）。

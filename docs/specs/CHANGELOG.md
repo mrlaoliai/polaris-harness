@@ -4,6 +4,20 @@
 
 格式：`YYYY-MM-DD | 文件 | 变更摘要`
 
+## 2026-05-23（初始化链路重构）
+
+**BUG 修复**:
+- `cmd/polaris/main.go` | schema 加载从相对路径 OpenSQLiteFromDir 改为 embed.FS OpenSQLite，消灭已安装二进制启动失败
+- `internal/config/config.go` | Threshold 加载从 config.Load() 内剥离为独立 LoadThresholds(dataDir)，解决 chicken-and-egg；TOML 默认路径改为 ~/.polaris-harness/config/
+- `skills/builtin` | Wasm 加载从 FilesystemWasmLoader 改为 EmbedWasmLoader，impl.wasm embed 进二进制
+- `configs/defaults.yaml` | interface.host 从 0.0.0.0 修正为 127.0.0.1，符合 ARCHITECTURE.md §1 硬约束
+- `pkg/substrate/observability/` | SurrealDB Core 启动条件改为 autoConf != nil &&，防止硬件未知时 OOM
+
+**安全**:
+- `cmd/polaris/cli.go` | initPromptSecret 改用 term.ReadPassword 屏蔽 API Key 回显
+
+**可观测性**:
+- `internal/config/config.go` | loadModuleTOML 错误不再静默吞噬：文件不存在 Debug，解析失败 Error + Fail-Fast
 ## 2026-05-22（集成接口规范 + DB 写路径澄清）
 
 **规范新增**：
