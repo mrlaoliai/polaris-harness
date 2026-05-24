@@ -1,6 +1,7 @@
 package action
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -251,3 +252,65 @@ var ErrSandboxResourceExhausted = &SandboxError{"sandbox resource exhausted"}
 type SandboxError struct{ msg string }
 
 func (e *SandboxError) Error() string { return e.msg }
+
+// RunWasm implements standard WASI-based Wasm execution (capturing stdout instead of using custom ABI).
+func (wr *WazeroRuntime) RunWasm(ctx context.Context, skillName string, input []byte, config *ExecuteConfig, taintLevel protocol.TaintLevel) (*protocol.ToolResult, error) {
+	// TOCTOU 防护: write_network / privileged 操作强制注入 deadline
+	if config.Capability >= 2 && config.LeaseExpiresAt > 0 {
+		leaseDeadline := time.Unix(config.LeaseExpiresAt, 0)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, leaseDeadline)
+		defer cancel()
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	var compiled wazero.CompiledModule
+	if len(config.WasmBytes) > 0 {
+		var err error
+		compiled, err = wr.runtime.CompileModule(ctx, config.WasmBytes)
+		if err != nil {
+			return nil, perrors.Wrap(perrors.CodeInternal, "wazero compile failed", err)
+		}
+	} else {
+		// 回退尝试缓存
+		comp, err := wr.GetOrCompile(skillName, 1.0)
+		if err != nil || comp == nil {
+			return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("wasm module not found for skill: %s", skillName))
+		}
+		compiled = comp.(wazero.CompiledModule)
+	}
+
+	var stdoutBuf bytes.Buffer
+	modConfig := wazero.NewModuleConfig().
+		WithName(fmt.Sprintf("%s_%d", skillName, time.Now().UnixNano())).
+		WithStdout(&stdoutBuf)
+
+	if len(input) > 0 {
+		modConfig = modConfig.WithArgs(skillName, string(input))
+		modConfig = modConfig.WithStdin(bytes.NewReader(input))
+	} else {
+		modConfig = modConfig.WithArgs(skillName)
+	}
+
+	mod, err := wr.runtime.InstantiateModule(ctx, compiled, modConfig)
+	if err != nil {
+		return &protocol.ToolResult{
+			Success:    false,
+			Error:      fmt.Sprintf("wazero execution error: %v", err),
+			Output:     stdoutBuf.Bytes(),
+			TaintLevel: taintLevel,
+		}, nil
+	}
+	defer mod.Close(ctx)
+
+	return &protocol.ToolResult{
+		Success:    true,
+		Output:     stdoutBuf.Bytes(),
+		TaintLevel: taintLevel,
+	}, nil
+}

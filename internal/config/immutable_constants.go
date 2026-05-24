@@ -30,9 +30,8 @@ var AutoApproveAllowedActions = []string{
 // 其他包全部禁止 L4 修改。
 var ImmutableKernelPackages = []string{
 	"pkg/substrate/policy/",
-	"pkg/substrate/policy/audit/",
 	"pkg/substrate/observability/",
 	"pkg/cognition/kernel/",
-	"pkg/action/sandbox/",
+	"pkg/action/",
 	"internal/config/",
 }

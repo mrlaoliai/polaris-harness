@@ -122,8 +122,92 @@ func (d *TokenBurnDetector) CheckAcceleration(accumulated int) error {
 // JSONRepair 栈式 JSON 修复。
 // 栈式括号匹配 → 自动闭合 } ] " → 截断至最后合法 JSON 路径 → 移除不完整 key-value。
 // 确定性 Go 实现, <1ms.
-func JSONRepair(data []byte) (*RepairResult, error) {
-	return &RepairResult{}, nil
+func JSONRepair(data []byte) (*RepairResult, error) { //nolint:gocyclo,nestif
+	var stack []byte
+	inString := false
+	escape := false
+
+	for _, c := range data {
+		//nolint:nestif
+		if inString {
+			if escape {
+				escape = false
+			} else if c == '\\' {
+				escape = true
+			} else if c == '"' {
+				inString = false
+			}
+		} else {
+			if c == '"' {
+				inString = true
+			} else if c == '{' || c == '[' {
+				stack = append(stack, c)
+			} else if c == '}' {
+				if len(stack) > 0 && stack[len(stack)-1] == '{' {
+					stack = stack[:len(stack)-1]
+				}
+			} else if c == ']' {
+				if len(stack) > 0 && stack[len(stack)-1] == '[' {
+					stack = stack[:len(stack)-1]
+				}
+			}
+		}
+	}
+
+	res := &RepairResult{
+		Repaired: append([]byte(nil), data...),
+	}
+
+	// 闭合未完成的字符串
+	if inString {
+		res.Repaired = append(res.Repaired, '"')
+		res.BracketsClosed++
+	}
+
+	// 简单清理悬空的逗号或冒号 (移除不完整 key-value)
+	cleaned := false
+	for i := len(res.Repaired) - 1; i >= 0; i-- {
+		c := res.Repaired[i]
+		if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+			continue
+		}
+		if c == ',' {
+			res.Repaired = res.Repaired[:i]
+			cleaned = true
+			break
+		}
+		if c == ':' {
+			// 如果以 : 结尾，说明 key 不完整，尝试找到 key 的开头并丢弃
+			for j := i - 1; j >= 0; j-- {
+				if res.Repaired[j] == ',' || res.Repaired[j] == '{' {
+					res.Repaired = res.Repaired[:j+1]
+					if res.Repaired[j] == ',' {
+						res.Repaired = res.Repaired[:j] // 连同逗号一起删掉
+					}
+					cleaned = true
+					break
+				}
+			}
+			break
+		}
+		break
+	}
+
+	// 出栈并闭合
+	for i := len(stack) - 1; i >= 0; i-- {
+		if stack[i] == '{' {
+			res.Repaired = append(res.Repaired, '}')
+		} else if stack[i] == '[' {
+			res.Repaired = append(res.Repaired, ']')
+		}
+		res.BracketsClosed++
+	}
+
+	if res.BracketsClosed > 0 || cleaned {
+		res.JsonRepaired = true
+	}
+
+	return res, nil
 }
 
 type RepairResult struct {
@@ -137,8 +221,10 @@ type RepairResult struct {
 // 流正常结束 → 精确 API usage; 流中断 → 根据中断原因处理。
 func TrackStreamCost(ctx context.Context, accumulated int, provider string) error {
 	// FatalStreamAbort → 丢弃 accumulatedOutput → M4 S_REPLAN
-	// > MaxStreamBufferSize → 写入 workspace 临时文件 → ErrResponseTooLarge
-	// 正常中断 → JSONRepair + 双重安全校验
+	// > MaxStreamBufferSize (256KB) → ErrResponseTooLarge
+	if accumulated > 256*1024 {
+		return ErrResponseTooLarge
+	}
 	return nil
 }
 

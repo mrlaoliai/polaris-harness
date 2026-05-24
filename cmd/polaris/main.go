@@ -91,6 +91,11 @@ func run() error { //nolint:gocyclo
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// ─── 0.5 内核完整性校验 (L4) ────────────────────────────────────────────
+	if err := config.VerifyKernelIntegrity(); err != nil {
+		return errors.Wrap(errors.CodeInternal, "CRITICAL: kernel integrity compromised", err)
+	}
+
 	// ─── 1. 配置加载 ────────────────────────────────────────────────────────
 	cfgPath := os.Getenv("POLARIS_CONFIG")
 	if cfgPath == "" {
@@ -231,6 +236,14 @@ func run() error { //nolint:gocyclo
 	_ = eventLog    // 待 M4 Agent Kernel 注入（事件持久化）
 	_ = decisionLog // 待 M3 观测层注入（决策审计）
 	slog.Info("polaris: mutation bus (database writer) started")
+
+	// ─── 2.9 AuditTrail 初始化 ─────────────────────────────────────────────────
+	auditTrail := substrate.NewAuditTrail(store.DB(), filepath.Join(dataDir, "audit", "archive"))
+	if err := auditTrail.RecoverOnStartup(); err != nil {
+		slog.Error("polaris: AuditTrail recovery failed", "err", err)
+		return err
+	}
+	slog.Info("polaris: audit trail recovered and initialized")
 
 	// ─── 月度成本报告 (M13 §1.1) ──────────────────────────────────────────────────
 	scheduler.StartMonthlyCostReport(ctx, filepath.Join(dataDir, "reports"))

@@ -172,7 +172,7 @@ func (s *WasmSandbox) Run(ctx context.Context, spec SandboxSpec) (*protocol.Tool
 		WasmBytes:      spec.WasmBytes,
 	}
 
-	return s.runtime.ExecuteTool(ctx, spec.ToolName, spec.Input, config, protocol.TaintNone)
+	return s.runtime.RunWasm(ctx, spec.ToolName, spec.Input, config, protocol.TaintNone)
 }
 
 // ─── Tier 3: ContainerSandbox ────────────────────────────────────────────────

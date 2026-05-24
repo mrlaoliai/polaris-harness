@@ -1,3 +1,5 @@
+//go:build ignore
+
 // sync_doc_toc 自动刷新 docs/arch/*.md 文件头的 §跳读 行号。
 //
 // 设计：

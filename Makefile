@@ -1,18 +1,18 @@
-.PHONY: build run test lint clean rust-build rust-test build-skills build-ui dev-ui docs-sync docs-check docs-lint gen-threshold-examples
+.PHONY: build run test lint clean rust-build rust-test build-skills build-ui dev-ui docs-sync docs-check docs-lint gen-threshold-examples generate-manifest
 
 GO := go
 CARGO := cargo
 BINARY := polaris
 WEBUI_DIR := web
 
-build: rust-build build-ui
+build: generate-manifest rust-build build-ui
 	@mkdir -p bin/lib
 	@cp rust/substrate/target/release/libsubstrate.dylib bin/lib/ 2>/dev/null || true
 	@cp rust/substrate/target/release/libsubstrate.so bin/lib/ 2>/dev/null || true
 	@cp rust/substrate/target/release/substrate.dll bin/lib/ 2>/dev/null || true
 	$(GO) build -o bin/$(BINARY) ./cmd/polaris
 
-build-tier1: rust-build-tier1 build-ui
+build-tier1: generate-manifest rust-build-tier1 build-ui
 	@mkdir -p bin/lib
 	@cp rust/substrate/target/release/libsubstrate.dylib bin/lib/ 2>/dev/null || true
 	@cp rust/substrate/target/release/libsubstrate.so bin/lib/ 2>/dev/null || true
@@ -81,5 +81,8 @@ build-skills:
 
 gen-threshold-examples:
 	$(GO) run scripts/gen_threshold_examples.go config/
+
+generate-manifest:
+	$(GO) run scripts/generate_manifest.go
 
 all: tidy fmt lint test build build-skills gen-threshold-examples
