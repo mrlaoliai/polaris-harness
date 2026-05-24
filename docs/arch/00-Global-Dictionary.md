@@ -256,13 +256,14 @@ L3 治理接口: M12(Eval-Harness) M13(Interface-Scheduler)
 pkg/substrate/  → M1, M2, M3, M11
 pkg/cognition/  → M4, M5, M6
 pkg/action/     → M7
+pkg/extensions/ → M13-bis, M06, M07
 pkg/swarm/      → M8, M9, M10
 pkg/governance/ → M12
 pkg/edge/       → M13
 internal/       → protocol, config, errors
 rust/substrate/ → Rust FFI 性能路径
 ```
-M7 物理归属 `pkg/action/`（执行层：工具注册、沙箱、MCP 双向）。M7 的核心接口（Tool 类型、CapabilityLevel、ToolRegistry 接口）由 `pkg/cognition/` 中的 M4 通过 Go interface 消费——此为单向依赖 `cognition → action`，不构成循环引用。
+M7 物理归属 `pkg/action/`（执行层：工具注册、沙箱）和 `pkg/extensions/`（技能、市场、MCP双向、原生扩展）。M7 的核心接口（Tool 类型、CapabilityLevel、ToolRegistry 接口）由 `pkg/cognition/` 中的 M4 通过 Go interface 消费——此为单向依赖 `cognition → action/extensions`，不构成循环引用。
 
 ---
 
