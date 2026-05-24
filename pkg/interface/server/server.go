@@ -2,9 +2,7 @@ package server
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -398,7 +396,7 @@ func (s *Server) setupWebUI(mux *http.ServeMux) {
 			f.Close()
 		}
 
-		// 缓存策略：
+		// 缓存策略与字符编码：
 		// - index.html 及所有 HTML：no-cache（每次重新验证，防止浏览器用旧 HTML）
 		// - /assets/*.js /assets/*.css（Vite 内容 hash 命名）：immutable 永久缓存
 		// - 其他静态资源：1h 缓存
@@ -406,10 +404,19 @@ func (s *Server) setupWebUI(mux *http.ServeMux) {
 		case strings.HasSuffix(r.URL.Path, ".html") || r.URL.Path == "/" || r.URL.Path == "":
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		case strings.HasPrefix(r.URL.Path, "/assets/"):
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			if strings.HasSuffix(r.URL.Path, ".js") {
+				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			} else if strings.HasSuffix(r.URL.Path, ".css") {
+				w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			}
 		default:
 			w.Header().Set("Cache-Control", "public, max-age=3600")
+			if strings.HasSuffix(r.URL.Path, ".js") {
+				w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+			}
 		}
 
 		http.FileServer(http.FS(subFS)).ServeHTTP(w, r)
@@ -711,60 +718,4 @@ func (s *Server) bootMarketplaceInit(ctx context.Context) {
 	}
 	slog.Info("polaris-server: auto-sync marketplaces finished")
 
-	// 自动静默安装内置市场的所有插件
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.type, c.name, c.publisher, c.trust_tier, c.payload
-		FROM extension_catalog c
-		JOIN plugin_marketplaces m ON c.marketplace_id = m.id
-		WHERE m.is_builtin = 1
-	`)
-	if err != nil {
-		slog.Warn("polaris-server: extension_catalog query failed", "err", err)
-		return
-	}
-
-	type extCatalogEntry struct {
-		catalogID string
-		extType   string
-		name      string
-		publisher string
-		trustTier int
-		payload   string
-	}
-	var entriesToInstall []extCatalogEntry
-
-	for rows.Next() {
-		var e extCatalogEntry
-		if err := rows.Scan(&e.catalogID, &e.extType, &e.name, &e.publisher, &e.trustTier, &e.payload); err == nil {
-			entriesToInstall = append(entriesToInstall, e)
-		}
-	}
-	rows.Close()
-
-	for _, e := range entriesToInstall {
-		var existCount int
-		_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM extension_instances WHERE catalog_id=?`, e.catalogID).Scan(&existCount)
-		if existCount == 0 {
-			var entry protocol.RegistryEntry
-			if json.Unmarshal([]byte(e.payload), &entry) == nil {
-				b := make([]byte, 8)
-				_, _ = rand.Read(b)
-				extID := "ext_" + hex.EncodeToString(b)
-				now := time.Now().UTC().Format(time.RFC3339)
-				req := protocol.PluginInstallRequest{CatalogID: e.catalogID, Name: e.name}
-
-				if e.extType == "mcp" || e.extType == "" {
-					_, errMCP := s.internalInstallMCP(ctx, extID, &entry, req, now)
-					if errMCP != nil {
-						slog.Warn("polaris-server: auto-install mcp failed", "catalog_id", e.catalogID, "err", errMCP)
-					}
-				} else {
-					_, errGen := s.internalInstallGeneric(ctx, extID, &entry, req, now)
-					if errGen != nil {
-						slog.Warn("polaris-server: auto-install generic failed", "catalog_id", e.catalogID, "err", errGen)
-					}
-				}
-			}
-		}
-	}
 }
