@@ -19,16 +19,16 @@ import (
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol/schema"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
+	"github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/hitl"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/scheduler"
-	"github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/native"
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/skill"
 	"github.com/mrlaoliai/polaris-harness/pkg/governance/eval"
 	"github.com/mrlaoliai/polaris-harness/pkg/interface/server"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
@@ -328,8 +328,6 @@ func run() error { //nolint:gocyclo
 	allowedPaths := []string{dataDir}
 	toolReg := polartool.NewInMemoryToolRegistry(nil)
 	mcpMgr := mcp.NewMCPManager(inProcSandbox, safeHTTPClient)
-
-
 
 	mktClient := marketplace.NewMCPMarketplaceClient("", filepath.Join(cfg.System.DataDir, "plugins"))
 	if err := tool.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer); err != nil {

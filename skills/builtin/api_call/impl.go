@@ -1,9 +1,11 @@
+//go:build wasip1
+
 package main
 
 import (
 	"encoding/json"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/skill/sdk"
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill/sdk"
 )
 
 func init() {

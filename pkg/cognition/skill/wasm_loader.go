@@ -10,6 +10,7 @@ import (
 
 // FilesystemWasmLoader 从本地文件系统加载 Wasm 字节码。
 // 约定路径: {baseDir}/{skillID}.wasm（skillID 去掉 "skill:" 前缀）。
+// 适用场景: 开发调试、已安装到本地路径的技能（extensions/skill/marketplace/{ext_id}/impl.wasm）。
 type FilesystemWasmLoader struct {
 	baseDir string
 }
@@ -39,6 +40,7 @@ func (l *FilesystemWasmLoader) LoadWasm(skillID string) ([]byte, error) {
 }
 
 // EmbedWasmLoader 从 embed.FS 加载 Wasm 字节码。
+// 适用场景: 官方内置技能随二进制 embed 发布，零外部依赖。
 type EmbedWasmLoader struct {
 	fs embed.FS
 }

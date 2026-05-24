@@ -1,10 +1,12 @@
+//go:build wasip1
+
 package main
 
 import (
 	"encoding/json"
 	"regexp"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/skill/sdk"
+	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill/sdk"
 )
 
 type Input struct {

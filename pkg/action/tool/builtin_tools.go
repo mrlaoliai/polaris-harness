@@ -297,7 +297,7 @@ func makeFetchURLFn(dialer protocol.SafeDialer) action.InProcessFn {
 		if dialer == nil {
 			return nil, perrors.New(perrors.CodeInternal, "fetch_url: SafeDialer is required (XR-06 violation prevented)")
 		}
-		
+
 		client := &http.Client{
 			Transport: &http.Transport{
 				DialContext: dialer.DialContext,

@@ -16,8 +16,6 @@ import (
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
 
-
-
 // MCPServerInfo MCP Server 运行时状态快照。
 type MCPServerInfo struct {
 	ID        string
