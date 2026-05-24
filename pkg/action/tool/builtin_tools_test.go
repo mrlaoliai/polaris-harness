@@ -1,23 +1,29 @@
-package native
+package tool
 
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
-	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 )
+
+type dummyDialer struct {
+	net.Dialer
+}
+
+var dummyDialerPtr = &dummyDialer{}
 
 // TestBuiltinTools_ReadFile_AllowedPath 验证 read_file 在白名单路径下能读取真实文件。
 func TestBuiltinTools_ReadFile_AllowedPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil) // 无 PolicyGate，只测工具逻辑
-	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil) // 无 PolicyGate，只测工具逻辑
+	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 
@@ -44,8 +50,8 @@ func TestBuiltinTools_ReadFile_AllowedPath(t *testing.T) {
 func TestBuiltinTools_ReadFile_BlockedPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil)
+	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 
@@ -64,8 +70,8 @@ func TestBuiltinTools_ReadFile_BlockedPath(t *testing.T) {
 func TestBuiltinTools_ListDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil)
+	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 
@@ -99,8 +105,8 @@ func TestBuiltinTools_ListDir(t *testing.T) {
 func TestBuiltinTools_WriteFile_AllowedPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil)
+	if err := RegisterBuiltinTools(sandbox, toolReg, []string{tmpDir}, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 
@@ -130,8 +136,8 @@ func TestBuiltinTools_WriteFile_AllowedPath(t *testing.T) {
 // TestBuiltinTools_FetchURL_SSRFGuard 验证 fetch_url 阻断私有地址。
 func TestBuiltinTools_FetchURL_SSRFGuard(t *testing.T) {
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	if err := RegisterBuiltinTools(sandbox, toolReg, nil, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil)
+	if err := RegisterBuiltinTools(sandbox, toolReg, nil, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 
@@ -156,8 +162,8 @@ func TestBuiltinTools_FetchURL_SSRFGuard(t *testing.T) {
 // TestBuiltinTools_FetchURL_PublicURL 验证 fetch_url 放行公共 URL（MVP stub 模式）。
 func TestBuiltinTools_FetchURL_PublicURL(t *testing.T) {
 	sandbox := action.NewInProcessSandbox()
-	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	if err := RegisterBuiltinTools(sandbox, toolReg, nil, nil, nil, nil); err != nil {
+	toolReg := NewInMemoryToolRegistry(nil)
+	if err := RegisterBuiltinTools(sandbox, toolReg, nil, dummyDialerPtr); err != nil {
 		t.Fatalf("RegisterBuiltinTools: %v", err)
 	}
 

@@ -1,4 +1,4 @@
-package native
+package tool
 
 import (
 	"context"
@@ -19,9 +19,6 @@ import (
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/action"
-	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 )
 
 // RegisterBuiltinTools 注册所有内置工具到 sandbox 与 registry，并绑定 InProcessSandbox 为执行器。
@@ -30,11 +27,9 @@ import (
 // 调用方式: 系统启动时调用一次（非线程安全）。
 func RegisterBuiltinTools(
 	sandbox *action.InProcessSandbox,
-	toolReg *polartool.InMemoryToolRegistry,
+	toolReg *InMemoryToolRegistry,
 	allowedPaths []string, // 文件系统路径白名单（read_file/list_dir/write_file 均受限）
 	dialer protocol.SafeDialer,
-	mcpManager *mcp.MCPManager,
-	marketplaceClient *marketplace.MCPMarketplaceClient,
 ) error {
 	tools := []struct {
 		meta protocol.Tool
@@ -161,103 +156,12 @@ func RegisterBuiltinTools(
 			fn: diffTextFn,
 		},
 		{
-			meta: protocol.Tool{
-				Name:        "computer_use",
-				Description: "提供 GUI 自动化能力（截图/点击/鼠标/键盘）。",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteLocal,
-				SideEffects: []protocol.SideEffect{protocol.SideProcessSpawn},
-				RiskLevel:   protocol.RiskHigh,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type": "string",
-							"enum": []string{"screenshot", "left_click", "mouse_move", "type", "key"},
-						},
-						"coordinate": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}},
-						"text":       map[string]any{"type": "string"},
-					},
-					"required": []string{"action"},
-				},
-			},
-			fn: NewComputerUseTool(mcpManager).Execute,
+			meta: NewEdgeTTS(),
+			fn:   ExecuteEdgeTTS,
 		},
 		{
-			meta: protocol.Tool{
-				Name:        "browser_use",
-				Description: "提供无头浏览器 (Chrome) 控制能力（导航/点击/输入/截图）。",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteNetwork,
-				SideEffects: []protocol.SideEffect{protocol.SideNetworkCall},
-				RiskLevel:   protocol.RiskHigh,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type": "string",
-							"enum": []string{"navigate", "click", "type", "screenshot"},
-						},
-						"url":      map[string]any{"type": "string"},
-						"selector": map[string]any{"type": "string"},
-						"text":     map[string]any{"type": "string"},
-					},
-					"required": []string{"action"},
-				},
-			},
-			fn: NewBrowserUseTool().Execute,
-		},
-		{
-			meta: polartool.NewEdgeTTS(),
-			fn:   polartool.ExecuteEdgeTTS,
-		},
-		{
-			meta: polartool.NewVideoAnalysis(),
-			fn:   polartool.ExecuteVideoAnalysis,
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "search_extension",
-				Description: "从官方扩展云端市场搜索插件、技能或 MCP 服务器",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteNetwork,
-				SideEffects: []protocol.SideEffect{protocol.SideNetworkCall},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"query": map[string]any{"type": "string", "description": "搜索关键词（如 git, browser, notion）"},
-					},
-					"required": []string{"query"},
-				},
-			},
-			fn: MakeExtensionSearchFn(marketplaceClient),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "install_extension",
-				Description: "从官方扩展市场下载并安装指定的插件/扩展包（ID 需从 search_extension 结果中获取）",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteLocal,
-				SideEffects: []protocol.SideEffect{protocol.SideNetworkCall, protocol.SideFileWrite},
-				RiskLevel:   protocol.RiskHigh,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"id": map[string]any{"type": "string", "description": "插件包的唯一 ID"},
-					},
-					"required": []string{"id"},
-				},
-			},
-			fn: MakeExtensionInstallFn(marketplaceClient),
+			meta: NewVideoAnalysis(),
+			fn:   ExecuteVideoAnalysis,
 		},
 	}
 
@@ -389,16 +293,18 @@ type fetchURLArgs struct {
 
 // makeFetchURLFn 返回 fetch_url 工具函数。
 func makeFetchURLFn(dialer protocol.SafeDialer) action.InProcessFn {
-	// 创建基于 SafeDialer 的 HTTP 客户端
-	client := &http.Client{}
-	if dialer != nil {
-		client.Transport = &http.Transport{
-			DialContext: dialer.DialContext,
-		}
-		client.Timeout = 30 * time.Second
-	}
-
 	return func(ctx context.Context, input []byte) ([]byte, error) {
+		if dialer == nil {
+			return nil, perrors.New(perrors.CodeInternal, "fetch_url: SafeDialer is required (XR-06 violation prevented)")
+		}
+		
+		client := &http.Client{
+			Transport: &http.Transport{
+				DialContext: dialer.DialContext,
+			},
+			Timeout: 30 * time.Second,
+		}
+
 		var args fetchURLArgs
 		if err := json.Unmarshal(input, &args); err != nil {
 			return nil, perrors.Wrap(perrors.CodeInternal, "fetch_url: invalid args", err)

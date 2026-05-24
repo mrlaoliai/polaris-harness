@@ -24,6 +24,7 @@ import (
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/hitl"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/scheduler"
+	"github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/native"
@@ -334,8 +335,11 @@ func run() error { //nolint:gocyclo
 	}
 
 	mktClient := marketplace.NewMCPMarketplaceClient("", filepath.Join(cfg.System.DataDir, "plugins"))
-	if err := native.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer, mcpMgr, mktClient); err != nil {
-		slog.Warn("polaris: builtin tool registration partial failure", "err", err)
+	if err := tool.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer); err != nil {
+		slog.Warn("polaris: builtin OS tool registration partial failure", "err", err)
+	}
+	if err := native.RegisterExtensionTools(inProcSandbox, toolReg, mcpMgr, mktClient); err != nil {
+		slog.Warn("polaris: native extension tool registration partial failure", "err", err)
 	}
 	slog.Info("polaris: builtin tools registered, MCP manager initialized")
 
