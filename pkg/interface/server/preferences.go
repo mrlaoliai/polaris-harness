@@ -6,8 +6,34 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
 )
+
+type SQLPreferencesRepo struct {
+	db *sql.DB
+}
+
+func NewSQLPreferencesRepo(db *sql.DB) *SQLPreferencesRepo {
+	return &SQLPreferencesRepo{db: db}
+}
+
+func (r *SQLPreferencesRepo) GetPermissionMode(ctx context.Context) (protocol.PermissionMode, error) {
+	var val string
+	err := r.db.QueryRowContext(ctx, "SELECT value FROM preferences WHERE key = 'permission_mode'").Scan(&val)
+	if err != nil {
+		return protocol.ModeAutoReview, err // default
+	}
+	return protocol.PermissionMode(val), nil
+}
+
+func (r *SQLPreferencesRepo) SetPermissionMode(ctx context.Context, mode protocol.PermissionMode) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO preferences(key, value) VALUES('permission_mode', ?)
+		 ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		string(mode))
+	return err
+}
 
 func LoadAllPreferences(ctx context.Context, db *sql.DB) (map[string]string, error) {
 	rows, err := db.QueryContext(ctx, `SELECT key, value FROM preferences`)

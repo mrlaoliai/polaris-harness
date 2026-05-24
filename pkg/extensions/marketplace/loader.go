@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 
@@ -84,20 +83,9 @@ func parseFrontmatter(data []byte) (name, description string, err error) {
 	return name, description, nil
 }
 
-// defaultSigningKey 从环境变量读取签名密钥，fallback 为进程启动时间哈希。
-// 生产环境应通过配置文件注入稳定密钥以保证重启后签名一致。
-func defaultSigningKey() []byte {
-	if key := os.Getenv("POLARIS_SKILL_SIGNING_KEY"); key != "" {
-		return []byte(key)
-	}
-	// fallback：不稳定（重启失效），适合开发阶段
-	h := sha256.Sum256([]byte(fmt.Sprintf("polaris-local-%d", time.Now().Unix()/86400)))
-	return h[:]
-}
-
-// ParseSKILLmd 使用默认签名密钥解析 SKILL.md。
-func ParseSKILLmd(path string) (*protocol.SkillMeta, error) {
-	return SkillMetaFromSKILLmd(path, defaultSigningKey())
+// ParseSKILLmd 解析 SKILL.md，需要提供 signingKey 保证跨重启验证一致性。
+func ParseSKILLmd(path string, signingKey []byte) (*protocol.SkillMeta, error) {
+	return SkillMetaFromSKILLmd(path, signingKey)
 }
 
 // LoadPlugin 从指定目录加载完整的 Codex 插件树。

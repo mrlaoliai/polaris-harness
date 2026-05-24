@@ -2,17 +2,14 @@ package marketplace
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"strings"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
 )
-
-type DB interface {
-	ExecContext(ctx context.Context, query string, args ...any) (any, error)
-	QueryContext(ctx context.Context, query string, args ...any) (any, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) any
-}
 
 type InstallRequest struct {
 	Principal   string
@@ -23,21 +20,28 @@ type InstallRequest struct {
 	HasHooks    bool
 }
 
+var ErrRequiresApproval = errors.New("installation requires user approval")
+
 type Manager struct {
-	db          DB
-	mcpMgr      any
-	policyGate  protocol.PolicyGate
-	prefsRepo   protocol.PreferencesRepo
-	eventLogger protocol.EventLogger // typically AuditTrail
+	db                *sql.DB
+	mcpMgr            any
+	policyGate        protocol.PolicyGate
+	prefsRepo         protocol.PreferencesRepo
+	auditTrail        *substrate.AuditTrail
+	publisherTrustMap map[string]int
 }
 
-func NewManager(db DB, mcpMgr any, pg protocol.PolicyGate, pr protocol.PreferencesRepo, el protocol.EventLogger) *Manager {
+func NewManager(db *sql.DB, mcpMgr any, pg protocol.PolicyGate, pr protocol.PreferencesRepo, at *substrate.AuditTrail, publisherTrustMap map[string]int) *Manager {
+	if publisherTrustMap == nil {
+		publisherTrustMap = make(map[string]int)
+	}
 	return &Manager{
-		db:          db,
-		mcpMgr:      mcpMgr,
-		policyGate:  pg,
-		prefsRepo:   pr,
-		eventLogger: el,
+		db:                db,
+		mcpMgr:            mcpMgr,
+		policyGate:        pg,
+		prefsRepo:         pr,
+		auditTrail:        at,
+		publisherTrustMap: publisherTrustMap,
 	}
 }
 
@@ -46,6 +50,13 @@ func (m *Manager) InstallExtension(ctx context.Context, req InstallRequest) erro
 	mode, err := m.prefsRepo.GetPermissionMode(ctx)
 	if err != nil {
 		mode = protocol.ModeAutoReview
+	}
+
+	// 1. TrustTier Override based on whitelist
+	if knownTier, ok := m.publisherTrustMap[req.Publisher]; ok {
+		req.TrustTier = knownTier
+	} else if req.TrustTier >= int(protocol.TrustOfficial) {
+		req.TrustTier = int(protocol.TrustCommunity) // Downgrade self-claimed official
 	}
 
 	evalCtx := map[string]any{
@@ -79,15 +90,12 @@ func (m *Manager) InstallExtension(ctx context.Context, req InstallRequest) erro
 	}
 
 	if strings.HasPrefix(result.Reason, "forbidden:") {
-		// Hard Reject
-		return perrors.New(perrors.CodeInternal, "installation forbidden: "+result.Reason)
+		return perrors.New(perrors.CodeForbidden, "installation forbidden: "+result.Reason)
 	}
 
 	if result.Reason == "denied by default" {
-		// Soft Deny -> Require HITL
-		_, _ = m.db.ExecContext(ctx, "INSERT INTO extension_instances (id, status) VALUES (?, ?)", req.ExtensionID, "pending_approval")
-		return perrors.New(perrors.CodeInternal, "installation requires user approval")
+		return ErrRequiresApproval
 	}
 
-	return perrors.New(perrors.CodeInternal, "installation denied")
+	return perrors.New(perrors.CodeForbidden, "installation denied")
 }

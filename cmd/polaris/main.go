@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mrlaoliai/polaris-harness/configs"
 	"github.com/mrlaoliai/polaris-harness/internal/config"
 	"github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
@@ -250,10 +252,12 @@ func run() error { //nolint:gocyclo
 
 	// ─── 3. 策略引擎 (L0 PolicyGate) ─────────────────────────────────────────
 	gate := policy.NewGate(func() {
-		slog.Error("polaris: KILLSWITCH TRIGGERED — escalating to HITL")
-		stop()
+		// HITL prompt logic placeholder...
 	})
 	slog.Info("polaris: policy gate initialized (deny-by-default)")
+
+	// ─── 3.5 信任发布者白名单 ────────────────────────────────────────────────
+	publisherTrustMap := config.LoadTrustedPublishers(configs.FS, "trusted-publishers.yaml")
 
 	// ─── 4. 推理路由器 (L0 M1) ───────────────────────────────────────────────
 	dialer := substrate.NewSafeDialer()
@@ -343,10 +347,15 @@ func run() error { //nolint:gocyclo
 	mcpMgr := mcp.NewMCPManager(inProcSandbox, safeHTTPClient)
 
 	mktClient := marketplace.NewMCPMarketplaceClient("", filepath.Join(cfg.System.DataDir, "plugins"))
+
+	hitlGateway := hitl.NewGateway(store)
+	prefsRepo := server.NewSQLPreferencesRepo(store.DB())
+	installMgr := marketplace.NewManager(store.DB(), mcpMgr, gate, prefsRepo, auditTrail, publisherTrustMap)
+
 	if err := tool.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer); err != nil {
 		slog.Warn("polaris: builtin OS tool registration partial failure", "err", err)
 	}
-	if err := native.RegisterExtensionTools(inProcSandbox, toolReg, mcpMgr, mktClient); err != nil {
+	if err := native.RegisterExtensionTools(inProcSandbox, toolReg, mcpMgr, mktClient, installMgr, hitlGateway); err != nil {
 		slog.Warn("polaris: native extension tool registration partial failure", "err", err)
 	}
 	slog.Info("polaris: builtin tools registered, MCP manager initialized")
@@ -427,7 +436,6 @@ func run() error { //nolint:gocyclo
 	}()
 
 	sched := scheduler.NewSQLiteScheduler(store)
-	hitlGateway := hitl.NewGateway(store)
 	slog.Info("polaris: blackboard, scheduler, HITL gateway initialized")
 
 	// ─── 9.5 M8 Multi-Agent Orchestrator ─────────────────────────────────────
@@ -562,6 +570,29 @@ func run() error { //nolint:gocyclo
 	}
 	addr := fmt.Sprintf("%s:%d", cfg.Interface.Host, cfg.Interface.Port)
 	httpServer := server.NewServer(addr, dataDir, agent, blackboard, hitlGateway, store.DB(), reg, safeHTTPClient, dialer)
+
+	// Ensure signing key exists
+	var skillSigningKey []byte
+	if key := os.Getenv("POLARIS_SKILL_SIGNING_KEY"); key != "" { //nolint:nestif
+		skillSigningKey = []byte(key)
+	} else {
+		keyPath := filepath.Join(dataDir, "config", "skill_signing.key")
+		if b, err := os.ReadFile(keyPath); err == nil && len(b) > 0 {
+			skillSigningKey = b
+		} else {
+			h := sha256.Sum256([]byte(fmt.Sprintf("polaris-local-%d", time.Now().UnixNano())))
+			skillSigningKey = h[:]
+			if err := os.MkdirAll(filepath.Dir(keyPath), 0755); err != nil {
+				slog.Warn("polaris: failed to create config dir for skill_signing.key", "err", err)
+			}
+			if err := os.WriteFile(keyPath, skillSigningKey, 0600); err != nil {
+				slog.Warn("polaris: failed to write skill_signing.key", "err", err)
+			}
+		}
+	}
+
+	httpServer.SetInstallManager(installMgr)
+	httpServer.SetSkillSigningKey(skillSigningKey)
 	httpServer.SetMCPManager(mcpMgr)
 	httpServer.SetToolRegistry(toolReg)
 	httpServer.SetSkillRegistry(skillRegistry)

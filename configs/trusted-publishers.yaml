@@ -73,3 +73,10 @@ publishers:
   #   display_name: Community Example
   #   trust_tier: 2
   #   approval_mode: prompt
+  
+  - id: mrlaoliai
+    display_name: Polaris Official
+    homepage: https://github.com/mrlaoliai
+    trust_tier: 3
+    approval_mode: auto
+    description: Official publisher for Polaris Harness builtin extensions

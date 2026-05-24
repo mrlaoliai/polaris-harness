@@ -4,13 +4,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
+
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
 )
 
 // handleCreateSkill 用户手动创建 Skill 扩展。
 // POST /v1/skills/create
-func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) { //nolint:nestif
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -23,6 +27,43 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
+
+	if s.installMgr != nil { //nolint:nestif
+		authCtx := FromContext(r.Context())
+		principal := authCtx.UserID
+		if principal == "" {
+			principal = "user"
+		}
+		installReq := marketplace.InstallRequest{
+			Principal:   principal,
+			ExtensionID: extID,
+			ExtType:     "skill",
+			TrustTier:   1, // TrustLocal
+			Publisher:   "user",
+			HasHooks:    false,
+		}
+		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+			if errors.Is(err, marketplace.ErrRequiresApproval) {
+				if s.hitlGateway != nil {
+					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+						ID:             extID,
+						CheckpointType: "security_review",
+						PromptText:     "Approve creation for custom skill: " + req.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusAccepted)
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+					return
+				}
+			}
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	configJSON, _ := json.Marshal(map[string]any{
 		"repo_url":   req.RepoURL,
@@ -50,7 +91,7 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 
 // handleCreatePlugin 用户手动创建 Plugin 扩展（manifest_url 模式）。
 // POST /v1/plugins/create
-func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) { //nolint:nestif
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -62,6 +103,43 @@ func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
+
+	if s.installMgr != nil { //nolint:nestif
+		authCtx := FromContext(r.Context())
+		principal := authCtx.UserID
+		if principal == "" {
+			principal = "user"
+		}
+		installReq := marketplace.InstallRequest{
+			Principal:   principal,
+			ExtensionID: extID,
+			ExtType:     "plugin",
+			TrustTier:   1, // TrustLocal
+			Publisher:   "user",
+			HasHooks:    false,
+		}
+		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+			if errors.Is(err, marketplace.ErrRequiresApproval) {
+				if s.hitlGateway != nil {
+					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+						ID:             extID,
+						CheckpointType: "security_review",
+						PromptText:     "Approve creation for custom plugin: " + req.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusAccepted)
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+					return
+				}
+			}
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	configJSON, _ := json.Marshal(map[string]any{
 		"manifest_url": req.ManifestURL,
@@ -88,7 +166,7 @@ func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateApp 用户手动创建 App 扩展（URL 模式）。
 // POST /v1/apps/create
-func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) { //nolint:nestif
 	var req struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -100,6 +178,43 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
+
+	if s.installMgr != nil { //nolint:nestif
+		authCtx := FromContext(r.Context())
+		principal := authCtx.UserID
+		if principal == "" {
+			principal = "user"
+		}
+		installReq := marketplace.InstallRequest{
+			Principal:   principal,
+			ExtensionID: extID,
+			ExtType:     "app",
+			TrustTier:   1, // TrustLocal
+			Publisher:   "user",
+			HasHooks:    false,
+		}
+		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+			if errors.Is(err, marketplace.ErrRequiresApproval) {
+				if s.hitlGateway != nil {
+					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+						ID:             extID,
+						CheckpointType: "security_review",
+						PromptText:     "Approve creation for custom app: " + req.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusAccepted)
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+					return
+				}
+			}
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	configJSON, _ := json.Marshal(map[string]any{"url": req.URL})
 
@@ -125,7 +240,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 // handleCreateMCP 用户手动配置 MCP Server。
 // POST /v1/mcp/create
 // MCP 需要实时连接，同时写 mcp_servers（运行时）和 extension_instances（安装 SSoT）。
-func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) { //nolint:nestif
 	var req struct {
 		Name      string            `json:"name"`
 		Transport string            `json:"transport"`
@@ -141,6 +256,43 @@ func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	mcpID := "mcp_" + newHex(8)
 	extID := "ext_" + newHex(8)
+
+	if s.installMgr != nil { //nolint:nestif
+		authCtx := FromContext(r.Context())
+		principal := authCtx.UserID
+		if principal == "" {
+			principal = "user"
+		}
+		installReq := marketplace.InstallRequest{
+			Principal:   principal,
+			ExtensionID: extID,
+			ExtType:     "mcp",
+			TrustTier:   1, // TrustLocal
+			Publisher:   "user",
+			HasHooks:    false,
+		}
+		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+			if errors.Is(err, marketplace.ErrRequiresApproval) {
+				if s.hitlGateway != nil {
+					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+						ID:             extID,
+						CheckpointType: "security_review",
+						PromptText:     "Approve creation for custom mcp: " + req.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusAccepted)
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+					return
+				}
+			}
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	argsBytes, _ := json.Marshal(req.Args)
 	envBytes, _ := json.Marshal(req.Env)

@@ -39,14 +39,13 @@ func NewMCPMarketplaceClient(registryURL, baseInstallDir string) *MCPMarketplace
 
 // Search queries the marketplace for MCP servers or plugins.
 func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]protocol.RegistryEntry, error) {
-	// 拦截官方查询，实现标准插件“开箱即现”
 	if query == "knowledge_base" || query == "polaris_official" {
 		return []protocol.RegistryEntry{
 			{
 				ID:          "github.com/mrlaoliai/polaris-plugins-official/knowledge_base",
 				Publisher:   "mrlaoliai",
 				Type:        "mcp",
-				TrustTier:   0,
+				TrustTier:   int(protocol.TrustOfficial),
 				Name:        "Knowledge Base",
 				Description: "Official Polaris Knowledge Base Extension (Go Binary)",
 				Command:     "knowledge_base",
@@ -57,7 +56,7 @@ func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]prot
 				ID:          "github.com/mrlaoliai/polaris-plugins-official/browser_use",
 				Publisher:   "mrlaoliai",
 				Type:        "mcp",
-				TrustTier:   0,
+				TrustTier:   int(protocol.TrustOfficial),
 				Name:        "Browser Use",
 				Description: "Official Polaris Browser Use Extension (Python uvx)",
 				Command:     "uvx",
@@ -68,7 +67,7 @@ func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]prot
 				ID:          "github.com/mrlaoliai/polaris-plugins-official/computer_use",
 				Publisher:   "mrlaoliai",
 				Type:        "mcp",
-				TrustTier:   0,
+				TrustTier:   int(protocol.TrustOfficial),
 				Name:        "Computer Use",
 				Description: "Official Polaris Computer Use Extension (Rust Binary)",
 				Command:     "computer_use",

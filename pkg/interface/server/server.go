@@ -23,6 +23,7 @@ import (
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
 	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 	"github.com/mrlaoliai/polaris-harness/pkg/interface/channels"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference"
@@ -54,7 +55,12 @@ type Server struct {
 	logStore      *LogStore                                                                         // 日志环形缓冲 + SSE 广播
 	evalRunner    protocol.EvalRunner                                                               // M12 评测套件
 	dataDir       string                                                                            // 项目统一的数据根目录
+	installMgr    *marketplace.Manager
+	skillSignKey  []byte
 }
+
+func (s *Server) SetInstallManager(m *marketplace.Manager) { s.installMgr = m }
+func (s *Server) SetSkillSigningKey(k []byte)              { s.skillSignKey = k }
 
 // SetMCPManager 注入 MCPManager（NewServer 之后、Start 之前调用）。
 func (s *Server) SetMCPManager(m *mcp.MCPManager) { s.mcpMgr = m }

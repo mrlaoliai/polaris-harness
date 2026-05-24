@@ -5,13 +5,15 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"maps"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
@@ -110,7 +112,7 @@ func (s *Server) handleListPluginCatalog(w http.ResponseWriter, r *http.Request)
 // handleInstallPlugin 一键安装目录条目。
 // MCP → mcp_servers + extension_instances；Skill/Plugin → extension_instances（异步下载）。
 // POST /v1/plugins/install
-func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) { //nolint:nestif
 	var req protocol.PluginInstallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -156,6 +158,45 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	extID := "ext_" + hex.EncodeToString(b)
+
+	// Call Manager.InstallExtension to evaluate security gate
+	if s.installMgr != nil { //nolint:nestif
+		authCtx := FromContext(r.Context())
+		principal := authCtx.UserID
+		if principal == "" {
+			principal = "user"
+		}
+		installReq := marketplace.InstallRequest{
+			Principal:   principal,
+			ExtensionID: extID,
+			ExtType:     entry.Type,
+			TrustTier:   entry.TrustTier,
+			Publisher:   entry.Publisher,
+			HasHooks:    false, // Assuming catalog entries need explicit hook checking, or false for now
+		}
+		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+			if errors.Is(err, marketplace.ErrRequiresApproval) {
+				// Trigger HITL via hitlGateway
+				if s.hitlGateway != nil {
+					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+						ID:             extID,
+						CheckpointType: "security_review",
+						PromptText:     "Approve installation for extension: " + entry.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusAccepted) // 202 Accepted
+					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+					return
+				}
+			}
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+	}
 
 	switch entry.Type {
 	case "mcp", "":
@@ -461,8 +502,7 @@ func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalog
 		s.updateExtensionInstanceError(ctx, extID, err.Error())
 		return
 	}
-	cmd := exec.Command("cp", "-R", srcDir, destDir)
-	if err := cmd.Run(); err != nil {
+	if err := copyDir(srcDir, destDir); err != nil {
 		// 回退尝试 git sparse checkout 或者直接报错。当前假定 sync 已经拉取好了全量。
 		s.updateExtensionInstanceError(ctx, extID, "failed to copy from tmp: "+err.Error())
 		return
@@ -519,4 +559,44 @@ func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalog
 func (s *Server) updateExtensionInstanceError(ctx context.Context, extID, errMsg string) {
 	_, _ = s.db.ExecContext(ctx, `UPDATE extension_instances SET status='error', error_msg=?, updated_at=? WHERE id=?`,
 		errMsg, time.Now().UTC().Format(time.RFC3339), extID)
+}
+
+func copyDir(src string, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, info.Mode())
 }

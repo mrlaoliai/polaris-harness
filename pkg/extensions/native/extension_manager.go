@@ -3,6 +3,7 @@ package native
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -46,7 +47,7 @@ func MakeExtensionSearchFn(client *marketplace.MCPMarketplaceClient) action.InPr
 }
 
 // MakeExtensionInstallFn creates an InProcessFn for installing official extensions.
-func MakeExtensionInstallFn(client *marketplace.MCPMarketplaceClient) action.InProcessFn {
+func MakeExtensionInstallFn(client *marketplace.MCPMarketplaceClient, installMgr *marketplace.Manager, hitlGateway protocol.HITL) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		if client == nil {
 			return nil, perrors.New(perrors.CodeInternal, "install_extension: marketplace client is not initialized")
@@ -75,6 +76,36 @@ func MakeExtensionInstallFn(client *marketplace.MCPMarketplaceClient) action.InP
 
 		if target == nil {
 			return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("install_extension: exact package %q not found", args.ID))
+		}
+
+		// Security Gate check before installing
+		if installMgr != nil {
+			installReq := marketplace.InstallRequest{
+				Principal:   "agent",
+				ExtensionID: "ext_" + target.ID, // arbitrary temporary ID
+				ExtType:     target.Type,
+				TrustTier:   target.TrustTier,
+				Publisher:   target.Publisher,
+				HasHooks:    false,
+			}
+			if err := installMgr.InstallExtension(ctx, installReq); err != nil {
+				if errors.Is(err, marketplace.ErrRequiresApproval) && hitlGateway != nil {
+					_, _ = hitlGateway.Prompt(ctx, protocol.HITLPrompt{
+						ID:             installReq.ExtensionID,
+						CheckpointType: "security_review",
+						PromptText:     "Agent requests to install extension: " + target.Name,
+						Options: []protocol.HITLOption{
+							{Key: "approve", Label: "Approve"},
+							{Key: "deny", Label: "Deny"},
+						},
+					})
+					return json.Marshal(map[string]string{
+						"status":  "pending_approval",
+						"message": "Installation suspended pending user approval. Please wait for user response.",
+					})
+				}
+				return nil, perrors.Wrap(perrors.CodeForbidden, "install_extension: blocked by policy", err)
+			}
 		}
 
 		installDir, err := client.Install(ctx, *target)

@@ -17,6 +17,8 @@ func RegisterExtensionTools(
 	toolReg *tool.InMemoryToolRegistry,
 	mcpManager *mcp.MCPManager,
 	marketplaceClient *marketplace.MCPMarketplaceClient,
+	installMgr *marketplace.Manager,
+	hitlGateway protocol.HITL,
 ) error {
 	tools := []struct {
 		meta protocol.Tool
@@ -86,7 +88,7 @@ func RegisterExtensionTools(
 					"required": []string{"id"},
 				},
 			},
-			fn: MakeExtensionInstallFn(marketplaceClient),
+			fn: MakeExtensionInstallFn(marketplaceClient, installMgr, hitlGateway),
 		},
 	}
 
