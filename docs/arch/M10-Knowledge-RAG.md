@@ -8,7 +8,7 @@
 
 | M10 **是** | M10 **不是** |
 |-----------|-------------|
-| 外部文档摄入流水线（Connector → Ingester → 层级文档树） | 记忆的读写管理（那是 M5） |
+| 外部文档摄入流水线（Plugin → Ingester → 层级文档树） | 记忆的读写管理（那是 M5） |
 | 层级知识检索（结构化导航 + Hybrid 内容检索 + 上下文展开） | HybridRetriever 底层引擎实现（`pkg/substrate/hybrid_retrieve.go` 为 M5/M10 共享） |
 | GraphRAG 知识图谱构建与双模式检索（Local/Global Search） | 图存储引擎（那是 M2 SQLite/邻接表或 SurrealDB-Core） |
 | 多级预计算摘要生成（段落→章节→文档） | LLM 调用路由（那是 M1 Provider Router） |
@@ -26,7 +26,7 @@
 | inv_M10_03 | 每 chunk 携带 lineage metadata——source_uri + doc_version + chunk_seq + content_hash | DDL NOT NULL 约束 |
 | inv_M10_04 | Embedding 维度变更时禁止跨模型投影——通过 SurrealDB-Core 双索引隔离表实现无缝切换 | M10 §1.5 |
 | inv_M10_05 | GraphRAG LLM 调用受日预算硬上限（Tier 0 上限见 `spec/state.yaml §m10_kb.graphrag_llm_call_daily_budget_ht0`）——超限跳过 graph_build_task | M10 §2.7 预算上限 |
-| inv_M10_06 | 所有出站 Connector 网络请求经 M11 SafeDialer——禁止裸 HTTP client | CI `safe_dialer_lint` |
+| inv_M10_06 | 主引擎 M10 彻底剥离出站网络权限——任何第三方 API 调用必须在沙箱化的 Plugin 进程中执行 | 代码审计（M10 内无 HTTP Client） |
 
 ---
 
@@ -34,7 +34,7 @@
 
 ### 1.1 层级索引管道 (6 阶段)
 
-1. Connector 拉取 → 统一 `Document` 格式
+1. Knowledge Plugin (MCP) 拉取 → 统一 `Document` 格式
 2. 结构解析 → Document Tree（标题层级 → 节点树）
 3. 层级分块 + 父子双存
 4. 多级摘要生成（后台 LLM，不阻塞摄入）
