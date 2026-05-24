@@ -87,6 +87,7 @@ type providerEntry struct {
 	provider    protocol.Provider
 	name        string
 	role        string // general | default | reasoning
+	displayName string // 用于 WebUI 展示的友好名称
 	cb          *circuitBreaker
 	mu          sync.RWMutex
 	p95ms       float64 // P95 延迟（指数移动平均）
@@ -94,9 +95,10 @@ type providerEntry struct {
 	// costScore: 由 ProviderCapabilities.CostPer1KInput 驱动（值越小越好）
 }
 
-func newProviderEntry(name string, p protocol.Provider) *providerEntry {
+func newProviderEntry(name, displayName string, p protocol.Provider) *providerEntry {
 	return &providerEntry{
 		name:        name,
+		displayName: displayName,
 		provider:    p,
 		cb:          newCircuitBreaker(),
 		p95ms:       200, // 初始 P95 假设 200ms
@@ -146,10 +148,10 @@ func NewProviderRegistry() *ProviderRegistry {
 	return &ProviderRegistry{entries: make(map[string]*providerEntry)}
 }
 
-func (r *ProviderRegistry) Register(name string, p protocol.Provider) {
+func (r *ProviderRegistry) Register(name, displayName string, p protocol.Provider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.entries[name] = newProviderEntry(name, p)
+	r.entries[name] = newProviderEntry(name, displayName, p)
 }
 
 func (r *ProviderRegistry) Unregister(name string) {
@@ -166,10 +168,10 @@ func (r *ProviderRegistry) UnregisterAll() {
 }
 
 // RegisterWithRole 注册带角色标记的 Provider（general | default | reasoning）。
-func (r *ProviderRegistry) RegisterWithRole(name, role string, p protocol.Provider) {
+func (r *ProviderRegistry) RegisterWithRole(name, displayName, role string, p protocol.Provider) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	e := newProviderEntry(name, p)
+	e := newProviderEntry(name, displayName, p)
 	e.role = role
 	r.entries[name] = e
 }
@@ -224,6 +226,9 @@ func (r *ProviderRegistry) PickProviderName(role string) string {
 	e := r.BestForRole(role, nil)
 	if e == nil {
 		return ""
+	}
+	if e.displayName != "" {
+		return e.displayName
 	}
 	return e.name
 }

@@ -76,8 +76,8 @@ func TestInferenceRouter_Failover(t *testing.T) {
 	// secondary: 始终成功
 	secondary := &mockProvider{caps: protocol.ProviderCapabilities{CostPer1KInput: 2.0}}
 
-	reg.Register("primary", primary)
-	reg.Register("secondary", secondary)
+	reg.Register("primary", "Primary", primary)
+	reg.Register("secondary", "Secondary", secondary)
 
 	router := NewInferenceRouter(reg, nil)
 	resp, err := router.Infer(context.Background(), &protocol.InferRequest{
@@ -95,7 +95,7 @@ func TestInferenceRouter_Failover(t *testing.T) {
 func TestInferenceRouter_AllProvidersCircuitOpen(t *testing.T) {
 	reg := NewProviderRegistry()
 	p := &mockProvider{failCount: 100}
-	reg.Register("only", p)
+	reg.Register("only", "Only", p)
 	// 手动打开熔断器
 	reg.entries["only"].cb.state.Store(int32(circuitOpen))
 	reg.entries["only"].cb.openUntil.Store(^int64(0)) // 永不恢复
@@ -114,8 +114,8 @@ func TestInferenceRouter_HealthScorePreference(t *testing.T) {
 	// expensive: 高成本
 	expensive := &mockProvider{caps: protocol.ProviderCapabilities{CostPer1KInput: 9.0, SupportsStreaming: true}}
 
-	reg.Register("cheap", cheap)
-	reg.Register("expensive", expensive)
+	reg.Register("cheap", "Cheap", cheap)
+	reg.Register("expensive", "Expensive", expensive)
 
 	// cheap 的 healthScore 应更高（低成本 → 高 costScore）
 	cheapEntry := reg.entries["cheap"]

@@ -280,7 +280,7 @@ func run() error { //nolint:gocyclo
 			if localModel == "" {
 				localModel = "llama3.2"
 			}
-			reg.Register("ollama-local", inference.NewOllamaAdapter(localModel, safeHTTPClient))
+			reg.Register("ollama-local", "Local LLM", inference.NewOllamaAdapter(localModel, safeHTTPClient))
 			slog.Info("polaris: Ollama local inference registered", "model", localModel)
 		}
 		// ─── 4.6 本地嵌入（Ollama，FeatureLocalEmbedding 门控）──────────────────
@@ -309,7 +309,7 @@ func run() error { //nolint:gocyclo
 		// ─── 4.9 大型本地模型（FeatureLargeLocalLLM 门控，Tier2+，7B+ 量化模型）──
 		if autoConf.Gate.State(observability.FeatureLargeLocalLLM) != observability.FeatureDisabled {
 			if largeModel, ok := observability.TierLocalModel(autoConf.Config.Tier); ok {
-				reg.Register("ollama-large", inference.NewOllamaAdapter(largeModel, safeHTTPClient))
+				reg.Register("ollama-large", "Large Local LLM", inference.NewOllamaAdapter(largeModel, safeHTTPClient))
 				slog.Info("polaris: large local LLM registered", "model", largeModel)
 			}
 		}

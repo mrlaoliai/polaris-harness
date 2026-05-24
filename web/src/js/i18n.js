@@ -75,7 +75,7 @@ export const zh = {
   sessions_title:    '会话历史',
   sessions_continue: '继续',
   sessions_delete:   '删除',
-  sessions_empty_title: '暂无会话��录',
+  sessions_empty_title: '暂无会话记录',
   sessions_empty_hint:  '开始一次对话后将自动创建会话',
 
   // 审批页
