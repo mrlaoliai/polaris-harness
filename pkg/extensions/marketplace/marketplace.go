@@ -64,6 +64,17 @@ func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]prot
 				Args:        []string{"--from", "git+https://github.com/mrlaoliai/polaris-plugins-official.git#subdirectory=plugins/browser_use", "run", "server.py"},
 				URL:         "uvx-mode", // 标识无需下载二进制
 			},
+			{
+				ID:          "github.com/mrlaoliai/polaris-plugins-official/computer_use",
+				Publisher:   "mrlaoliai",
+				Type:        "mcp",
+				TrustTier:   0,
+				Name:        "Computer Use",
+				Description: "Official Polaris Computer Use Extension (Rust Binary)",
+				Command:     "computer_use",
+				Args:        []string{},
+				URL:         "https://github.com/mrlaoliai/polaris-plugins-official/releases/latest/download/computer_use_" + runtime.GOOS + "_" + runtime.GOARCH,
+			},
 		}, nil
 	}
 
