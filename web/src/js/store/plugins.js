@@ -42,7 +42,7 @@ Alpine.store('plugins', {
         (e.tags || []).some(t => t.toLowerCase().includes(q))
       )
     }
-    return list
+    return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   },
 
   get filteredMarketplaces() {
@@ -55,7 +55,7 @@ Alpine.store('plugins', {
         (e.publisher || '').toLowerCase().includes(q)
       )
     }
-    return list
+    return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   },
 
   async load() {
@@ -87,14 +87,14 @@ Alpine.store('plugins', {
       })
       if (r.ok) {
         const d = await r.json()
-        Alpine.store('toast').add('ok', `同步完成，成功拉取 ${d.synced_count} 个项目`)
+        Alpine.store('toast').show('ok', `同步完成，成功拉取 ${d.synced_count} 个项目`)
         await this.load()
       } else {
         const t = await r.text()
-        Alpine.store('toast').add('error', `同步失败：${t}`)
+        Alpine.store('toast').show('error', `同步失败：${t}`)
       }
     } catch (e) {
-      Alpine.store('toast').add('error', `同步失败：${e.message}`)
+      Alpine.store('toast').show('error', `同步失败：${e.message}`)
     } finally {
       this.syncing = false
     }
@@ -136,14 +136,14 @@ Alpine.store('plugins', {
         body: JSON.stringify(body),
       })
       if (r.ok) {
-        Alpine.store('toast').add('ok', `已安装：${entry.name}`)
+        Alpine.store('toast').show('ok', `已安装：${entry.name}`)
         await this.load()
       } else {
         const t = await r.text()
-        Alpine.store('toast').add('error', `安装失败：${t}`)
+        Alpine.store('toast').show('error', `安装失败：${t}`)
       }
     } catch (e) {
-      Alpine.store('toast').add('error', `安装失败：${e.message}`)
+      Alpine.store('toast').show('error', `安装失败：${e.message}`)
     } finally {
       delete this.installing[entry.id]
     }
@@ -158,14 +158,14 @@ Alpine.store('plugins', {
         headers: authHeaders(),
       })
       if (r.ok) {
-        Alpine.store('toast').add('ok', `已卸载：${entry.name}`)
+        Alpine.store('toast').show('ok', `已卸载：${entry.name}`)
         await this.load()
       } else {
         const t = await r.text()
-        Alpine.store('toast').add('error', `卸载失败：${t}`)
+        Alpine.store('toast').show('error', `卸载失败：${t}`)
       }
     } catch (e) {
-      Alpine.store('toast').add('error', `卸载失败：${e.message}`)
+      Alpine.store('toast').show('error', `卸载失败：${e.message}`)
     } finally {
       delete this.uninstalling[entry.id]
     }
@@ -239,15 +239,15 @@ Alpine.store('plugins', {
       })
 
       if (r.ok) {
-        Alpine.store('toast').add('ok', `已创建：${this.createForm.name}`)
+        Alpine.store('toast').show('ok', `已创建：${this.createForm.name}`)
         this.showCreateModal = false
         await this.load()
       } else {
         const t = await r.text()
-        Alpine.store('toast').add('error', `创建失败：${t}`)
+        Alpine.store('toast').show('error', `创建失败：${t}`)
       }
     } catch (e) {
-      Alpine.store('toast').add('error', `创建失败：${e.message}`)
+      Alpine.store('toast').show('error', `创建失败：${e.message}`)
     }
   },
 

@@ -265,7 +265,80 @@ func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protoc
 	return entries, err
 }
 
-// handleSyncMarketplaces 刷新/同步市场
+// pullOrClone 尝试执行 git pull 或 clone，返回是否有实质更新。
+func pullOrClone(repoURL, mpDir, gitDir string) bool {
+	if _, err := os.Stat(gitDir); err == nil {
+		cmd := exec.Command("git", "-C", mpDir, "pull")
+		output, err := cmd.CombinedOutput()
+		if err == nil {
+			return !strings.Contains(string(output), "Already up to date.")
+		}
+		os.RemoveAll(mpDir)
+	} else {
+		os.RemoveAll(mpDir)
+	}
+
+	if _, err := os.Stat(mpDir); os.IsNotExist(err) {
+		cmd := exec.Command("git", "clone", "--depth", "1", repoURL, mpDir)
+		if err := cmd.Run(); err != nil {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+// syncMarketplace 同步单个市场
+func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, tmpDir string) int {
+	if mp.RepoURL == "" {
+		return 0
+	}
+
+	safeID := strings.ReplaceAll(mp.ID, "/", "_")
+	mpDir := filepath.Join(tmpDir, safeID)
+	gitDir := filepath.Join(mpDir, ".git")
+
+	if !pullOrClone(mp.RepoURL, mpDir, gitDir) {
+		return 0 // 如果没有更新或拉取失败，直接跳过解析和写库，节省大量时间
+	}
+
+	b, err := os.ReadFile(filepath.Join(mpDir, "catalog.json"))
+	if err != nil {
+		entries, scanErr := discoverMarketplaceEntries(mpDir, mp)
+		if scanErr == nil && len(entries) > 0 {
+			b, _ = json.Marshal(entries)
+		} else {
+			return 0
+		}
+	}
+
+	var entries []protocol.RegistryEntry
+	if err := json.Unmarshal(b, &entries); err != nil {
+		return 0
+	}
+
+	syncedCount := 0
+	// 对当前有更新的市场单独开启事务
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err == nil {
+		_, _ = tx.ExecContext(ctx, "DELETE FROM extension_catalog WHERE marketplace_id = ?", mp.ID)
+		for _, e := range entries {
+			e.Publisher = mp.Publisher
+			e.TrustTier = mp.TrustTier
+			payload, _ := json.Marshal(e)
+
+			_, _ = tx.ExecContext(ctx,
+				`INSERT INTO extension_catalog(id, marketplace_id, type, name, description, publisher, trust_tier, url, payload) 
+				VALUES(?,?,?,?,?,?,?,?,?)`,
+				e.ID, mp.ID, e.Type, e.Name, e.Description, mp.Publisher, mp.TrustTier, e.URL, string(payload))
+			syncedCount++
+		}
+		_ = tx.Commit()
+	}
+
+	return syncedCount
+}
+
 // SyncAllMarketplaces 后台静默同步所有可用市场并更新缓存
 func (s *Server) SyncAllMarketplaces(ctx context.Context) (int, error) {
 	var mps []protocol.Marketplace
@@ -285,57 +358,26 @@ func (s *Server) SyncAllMarketplaces(ctx context.Context) (int, error) {
 	tmpDir := filepath.Join(home, ".polaris-harness", "tmp", "marketplaces")
 	_ = os.MkdirAll(tmpDir, 0755)
 
-	// Clean cache, keeping the seeded built-in ones
-	_, _ = s.db.ExecContext(ctx, "DELETE FROM extension_catalog WHERE marketplace_id != 'builtin'")
+	// 首先清理已经从活跃列表中移除的孤儿市场缓存
+	activeIDs := make([]any, 0, len(mps))
+	queryMarks := ""
+	for i, mp := range mps {
+		activeIDs = append(activeIDs, mp.ID)
+		if i > 0 {
+			queryMarks += ","
+		}
+		queryMarks += "?"
+	}
+	if len(activeIDs) > 0 {
+		delOrphanQuery := "DELETE FROM extension_catalog WHERE marketplace_id != 'builtin' AND marketplace_id NOT IN (" + queryMarks + ")"
+		_, _ = s.db.ExecContext(ctx, delOrphanQuery, activeIDs...)
+	} else {
+		_, _ = s.db.ExecContext(ctx, "DELETE FROM extension_catalog WHERE marketplace_id != 'builtin'")
+	}
 
 	syncedCount := 0
 	for _, mp := range mps {
-		if mp.RepoURL == "" {
-			continue
-		}
-
-		// If the ID contains slashes, replace them to make a valid directory name
-		safeID := strings.ReplaceAll(mp.ID, "/", "_")
-		mpDir := filepath.Join(tmpDir, safeID)
-
-		// Clean old dir
-		os.RemoveAll(mpDir)
-
-		// Git clone
-		cmd := exec.Command("git", "clone", "--depth", "1", mp.RepoURL, mpDir)
-		if err := cmd.Run(); err != nil {
-			continue
-		}
-
-		b, err := os.ReadFile(filepath.Join(mpDir, "catalog.json"))
-		if err != nil {
-			// 若不存在 catalog.json，则通过扫描目录动态提取各个插件/技能/mcp
-			entries, scanErr := discoverMarketplaceEntries(mpDir, mp)
-			if scanErr == nil && len(entries) > 0 {
-				b, _ = json.Marshal(entries)
-			} else {
-				continue // 没有发现条目则跳过
-			}
-		}
-
-		var entries []protocol.RegistryEntry
-		if err := json.Unmarshal(b, &entries); err != nil {
-			continue
-		}
-
-		for _, e := range entries {
-			// Override with marketplace publisher and trust_tier
-			e.Publisher = mp.Publisher
-			e.TrustTier = mp.TrustTier
-
-			payload, _ := json.Marshal(e)
-
-			_, _ = s.db.ExecContext(ctx,
-				`INSERT INTO extension_catalog(id, marketplace_id, type, name, description, publisher, trust_tier, url, payload) 
-				VALUES(?,?,?,?,?,?,?,?,?)`,
-				e.ID, mp.ID, e.Type, e.Name, e.Description, mp.Publisher, mp.TrustTier, e.URL, string(payload))
-			syncedCount++
-		}
+		syncedCount += s.syncMarketplace(ctx, mp, tmpDir)
 	}
 
 	return syncedCount, nil

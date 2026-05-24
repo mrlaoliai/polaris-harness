@@ -109,7 +109,7 @@
               <div class="card-actions mt-auto pt-4 border-t border-base-300 items-center justify-between">
                 <div class="flex-1 flex gap-2">
                   <template x-if="!entry.installed">
-                    <button class="btn btn-primary btn-sm flex-1 text-xs" :disabled="$store.plugins.installing[entry.id]" @click="$store.plugins.tryInstall(entry)">
+                    <button class="btn bg-primary text-primary-content border-primary hover:brightness-110 btn-sm flex-1 text-xs" :disabled="!!$store.plugins.installing[entry.id]" @click="$store.plugins.tryInstall(entry)">
                       <span x-show="$store.plugins.installing[entry.id]" class="loading loading-spinner loading-xs"></span>
                       <span x-text="$store.plugins.installing[entry.id] ? $store.i18n.t('plugins_installing') : $store.i18n.t('plugins_install')"></span>
                     </button>
@@ -117,7 +117,7 @@
                   <template x-if="entry.installed">
                     <div class="flex gap-2 flex-1 items-center">
                       <span class="text-success text-xs font-bold flex-1 flex items-center gap-1">✓ <span x-text="$store.i18n.t('plugins_installed')"></span></span>
-                      <button class="btn btn-ghost btn-sm text-error hover:bg-error/10" :disabled="$store.plugins.uninstalling[entry.id]" @click="$store.plugins.uninstall(entry)">
+                      <button class="btn btn-ghost btn-sm text-error hover:bg-error/10" :disabled="!!$store.plugins.uninstalling[entry.id]" @click="$store.plugins.uninstall(entry)">
                         <span x-show="$store.plugins.uninstalling[entry.id]" class="loading loading-spinner loading-xs"></span>
                         <span x-show="!$store.plugins.uninstalling[entry.id]" x-text="$store.i18n.t('plugins_uninstall')"></span>
                       </button>
@@ -164,7 +164,7 @@
     </div>
 
     <!-- Modals (Env Config, Create Plugin) Ported Over -->
-    <div class="modal" :class="$store.plugins.showEnvModal ? 'modal-open' : ''">
+    <dialog class="modal" id="env_modal" x-effect="$store.plugins.showEnvModal ? (!open && showModal()) : close()" @close="$store.plugins.showEnvModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.i18n.t('plugins_env_title') + (($store.plugins.envPending?.entry?.name) ? '：' + $store.plugins.envPending.entry.name : '')"></h3>
         <p class="text-sm text-base-content/70 mb-4" x-text="$store.i18n.t('plugins_env_hint')"></p>
@@ -182,9 +182,9 @@
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.plugins.showEnvModal=false"></div>
-    </div>
+    </dialog>
 
-    <div class="modal" :class="$store.plugins.showCreateModal ? 'modal-open' : ''">
+    <dialog class="modal" id="create_plugin_modal" x-effect="$store.plugins.showCreateModal ? (!open && showModal()) : close()" @close="$store.plugins.showCreateModal = false">
       <div class="modal-box bg-base-200 border border-base-300 w-11/12 max-w-lg">
         <h3 class="font-bold text-lg mb-4" x-text="`${$store.i18n.t('plugins_create_title')} ${$store.plugins.typeLabel($store.plugins.filter)}`"></h3>
         <div class="space-y-4">
@@ -253,7 +253,7 @@
                 <div class="form-control">
                   <label for="store-plugins-createform-url" class="label"><span class="label-text font-bold">SSE URL</span></label>
                   <input id="store-plugins-createform-url" name="store-plugins-createform-url" type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.url" placeholder="https://..." />
-                </div>
+                </dialog>
               </template>
 
               <div class="form-control">

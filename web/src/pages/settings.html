@@ -284,7 +284,7 @@
     </div>
 
     <!-- Modals (Provider Edit, Channel Edit, Model Edit) Ported Over -->
-    <div class="modal" :class="$store.providers.showModal ? 'modal-open' : ''">
+    <dialog class="modal" id="provider_modal" x-effect="$store.providers.showModal ? (!open && showModal()) : close()" @close="$store.providers.showModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.editMode === 'create' ? $store.i18n.t('providers_modal_create') : $store.i18n.t('providers_modal_edit')"></h3>
         <div class="space-y-4">
@@ -359,11 +359,11 @@
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.providers.showModal=false"></div>
-    </div>
+    </dialog>
 
     <!-- Provider Model Modal (Ported Over from custom modal logic, just styled with DaisyUI) -->
     <!-- You can find original functionality preserved below -->
-    <div class="modal" :class="$store.providers.showModelModal ? 'modal-open' : ''">
+    <dialog class="modal" id="model_modal" x-effect="$store.providers.showModelModal ? (!open && showModal()) : close()" @close="$store.providers.showModelModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.modelEditMode === 'create' ? $store.i18n.t('settings_add_model') : $store.i18n.t('settings_edit_model')"></h3>
         <div class="space-y-4">
@@ -401,10 +401,10 @@
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.providers.showModelModal=false"></div>
-    </div>
+    </dialog>
 
     <!-- Channel Edit Modal -->
-    <div class="modal" :class="$store.channels.showModal ? 'modal-open' : ''">
+    <dialog class="modal" id="channel_modal" x-effect="$store.channels.showModal ? (!open && showModal()) : close()" @close="$store.channels.showModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.channels.editMode === 'create' ? $store.i18n.t('channels_add') : $store.i18n.t('channels_edit')"></h3>
         <div class="space-y-4">
@@ -506,7 +506,7 @@
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.channels.showModal=false"></div>
-    </div>
+    </dialog>
 
   </div>
 </div>
