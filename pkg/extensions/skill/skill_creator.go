@@ -1,4 +1,4 @@
-package self_improve
+package skill
 
 import (
 	"context"

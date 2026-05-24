@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/action"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 )
 
 // MCPServerConfig MCP Server REST API 数据结构。
@@ -44,7 +44,7 @@ func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	runtimeMap := map[string]action.MCPServerInfo{}
+	runtimeMap := map[string]mcp.MCPServerInfo{}
 	if s.mcpMgr != nil {
 		for _, info := range s.mcpMgr.ListServers() {
 			runtimeMap[info.ID] = info
@@ -216,8 +216,8 @@ func (s *Server) startMCPServer(c MCPServerConfig) {
 }
 
 func (s *Server) startMCPServerCtx(ctx context.Context, c MCPServerConfig) error {
-	cfg := action.MCPClientConfig{
-		Transport: action.MCPTransport(c.Transport),
+	cfg := mcp.MCPClientConfig{
+		Transport: mcp.MCPTransport(c.Transport),
 		Command:   c.Command,
 		Args:      c.Args,
 		Env:       c.Env,

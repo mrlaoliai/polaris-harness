@@ -1,22 +1,23 @@
-package action
+package native
 
 import (
 	"context"
 	"encoding/json"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 )
 
 // ComputerUseTool 提供基于底层 Rust MCP Sidecar 的 GUI 自动化能力。
 // 架构文档: docs/arch/07-Tool-Action-Layer-深度选型.md §7.1
 type ComputerUseTool struct {
-	mcpManager *MCPManager
+	mcpManager *mcp.MCPManager
 	serverID   string
 	toolName   string
 }
 
 // NewComputerUseTool 创建基于 MCP 的 ComputerUseTool 代理实例。
-func NewComputerUseTool(mcpManager *MCPManager) *ComputerUseTool {
+func NewComputerUseTool(mcpManager *mcp.MCPManager) *ComputerUseTool {
 	return &ComputerUseTool{
 		mcpManager: mcpManager,
 		serverID:   "polaris-computer",

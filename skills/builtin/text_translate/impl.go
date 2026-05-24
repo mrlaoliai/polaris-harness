@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill/sdk"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/skill/sdk"
 )
 
 func init() {

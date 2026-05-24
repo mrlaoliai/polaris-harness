@@ -1,4 +1,4 @@
-package plugin
+package marketplace
 
 import (
 	"errors"
@@ -8,7 +8,16 @@ import (
 	"sync"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
+
+// Plugin is the runtime representation of a loaded plugin.
+type Plugin struct {
+	Manifest protocol.PluginJSON
+	Dir      string
+	Enabled  bool
+	MCPs     map[string]protocol.MCPServerDef
+}
 
 // Registry 持有并管理已加载的 Plugin 实例。
 // 线程安全；支持动态 enable/disable。
@@ -76,7 +85,7 @@ func (r *Registry) ListEnabled() []*Plugin {
 	return out
 }
 
-// ScanDir 扫描目录（每个子目录作为一个 Plugin），加载所有找到的 Plugin。
+// ScanDir 扫描目录（每个子目录作为一个 protocol.protocol.PluginJSONJSON），加载所有找到的 protocol.protocol.PluginJSONJSON。
 // 忽略无 .codex-plugin/plugin.json 的子目录。
 func (r *Registry) ScanDir(dir string) (int, error) {
 	entries, err := os.ReadDir(dir)

@@ -8,30 +8,9 @@ import (
 	"maps"
 	"net/http"
 	"time"
+
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
-
-// RegistryEntry 插件目录条目（ADR-0016：Publisher/TrustTier/Type 字段）。
-type RegistryEntry struct {
-	// ID 全局唯一 slug，格式："{publisher}/{name}" 或 "mcp/{name}"
-	ID        string `json:"id" yaml:"id"`
-	Publisher string `json:"publisher" yaml:"publisher"`
-	// Type "mcp" | "skill" | "plugin" | "app"
-	Type      string `json:"type" yaml:"type"`
-	TrustTier int    `json:"trust_tier" yaml:"trust_tier"`
-
-	Name        string            `json:"name" yaml:"name"`
-	Description string            `json:"description" yaml:"description"`
-	Transport   string            `json:"transport,omitempty" yaml:"transport,omitempty"`
-	Command     string            `json:"command,omitempty" yaml:"command,omitempty"`
-	Args        []string          `json:"args,omitempty" yaml:"args,omitempty"`
-	Env         map[string]string `json:"env,omitempty" yaml:"env,omitempty"`
-	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
-	Tags        []string          `json:"tags" yaml:"tags"`
-	Homepage    string            `json:"homepage,omitempty" yaml:"homepage,omitempty"`
-	Timeout     int               `json:"timeout" yaml:"timeout"`
-	// 运行时叠加：是否已安装（extension_instances 表中存在同 catalog_id）
-	Installed bool `json:"installed" yaml:"installed"`
-}
 
 // getInstalledCatalogIDs 返回所有已安装的 catalog_id 集合。
 // SSoT：仅查 extension_instances，不再 UNION 多表。
@@ -54,7 +33,7 @@ func (s *Server) getInstalledCatalogIDs(ctx context.Context) map[string]bool {
 
 // appendCustomCatalogs 追加用户自建扩展（origin=user）到目录列表。
 // 全走 extension_instances，不再散查 skills/plugins/apps 三表。
-func (s *Server) appendCustomCatalogs(ctx context.Context, result []RegistryEntry, _ map[string]bool) []RegistryEntry {
+func (s *Server) appendCustomCatalogs(ctx context.Context, result []protocol.RegistryEntry, _ map[string]bool) []protocol.RegistryEntry {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, ext_type, name, publisher, trust_tier, config
 		 FROM extension_instances
@@ -65,7 +44,7 @@ func (s *Server) appendCustomCatalogs(ctx context.Context, result []RegistryEntr
 	defer rows.Close()
 
 	for rows.Next() {
-		var e RegistryEntry
+		var e protocol.RegistryEntry
 		var configJSON string
 		if err := rows.Scan(&e.ID, &e.Type, &e.Name, &e.Publisher, &e.TrustTier, &configJSON); err != nil {
 			continue
@@ -87,7 +66,7 @@ func (s *Server) appendCustomCatalogs(ctx context.Context, result []RegistryEntr
 }
 
 // appendCachedCatalogs 追加市场同步缓存条目，叠加安装状态。
-func (s *Server) appendCachedCatalogs(ctx context.Context, result []RegistryEntry, installed map[string]bool) []RegistryEntry {
+func (s *Server) appendCachedCatalogs(ctx context.Context, result []protocol.RegistryEntry, installed map[string]bool) []protocol.RegistryEntry {
 	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM registry_cache`)
 	if err != nil {
 		return result
@@ -99,7 +78,7 @@ func (s *Server) appendCachedCatalogs(ctx context.Context, result []RegistryEntr
 		if err := rows.Scan(&payload); err != nil {
 			continue
 		}
-		var entry RegistryEntry
+		var entry protocol.RegistryEntry
 		if err := json.Unmarshal([]byte(payload), &entry); err != nil {
 			continue
 		}
@@ -113,7 +92,7 @@ func (s *Server) appendCachedCatalogs(ctx context.Context, result []RegistryEntr
 // GET /v1/plugins/catalog
 func (s *Server) handleListPluginCatalog(w http.ResponseWriter, r *http.Request) {
 	installed := s.getInstalledCatalogIDs(r.Context())
-	result := make([]RegistryEntry, 0)
+	result := make([]protocol.RegistryEntry, 0)
 	result = s.appendCustomCatalogs(r.Context(), result, installed)
 	result = s.appendCachedCatalogs(r.Context(), result, installed)
 
@@ -124,22 +103,11 @@ func (s *Server) handleListPluginCatalog(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// pluginInstallRequest 一键安装请求体。
-type pluginInstallRequest struct {
-	CatalogID string `json:"catalog_id"`
-	// 可选覆盖：不传则使用 catalog 默认值
-	Name    string            `json:"name,omitempty"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	URL     string            `json:"url,omitempty"`
-	Timeout int               `json:"timeout,omitempty"`
-}
-
 // handleInstallPlugin 一键安装目录条目。
 // MCP → mcp_servers + extension_instances；Skill/Plugin → extension_instances（异步下载）。
 // POST /v1/plugins/install
 func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
-	var req pluginInstallRequest
+	var req protocol.PluginInstallRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -164,7 +132,7 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var entry RegistryEntry
+	var entry protocol.RegistryEntry
 	if err := json.Unmarshal([]byte(payload), &entry); err != nil {
 		http.Error(w, "malformed catalog entry", http.StatusInternalServerError)
 		return
@@ -195,7 +163,7 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 // installMCPExtension 安装 MCP 类型：写 extension_instances + mcp_servers + 异步启动。
 func (s *Server) installMCPExtension(w http.ResponseWriter, r *http.Request,
-	extID string, entry *RegistryEntry, req pluginInstallRequest, now string) {
+	extID string, entry *protocol.RegistryEntry, req protocol.PluginInstallRequest, now string) {
 
 	// 合并请求覆盖（trust_tier 不允许客户端覆盖）
 	cfg := MCPServerConfig{
@@ -277,7 +245,7 @@ func (s *Server) installMCPExtension(w http.ResponseWriter, r *http.Request,
 // installGenericExtension 安装 skill / plugin / app：写 extension_instances。
 // skill/plugin 需异步下载文件并写运行时表（TODO: downloadAndInstall goroutine）。
 func (s *Server) installGenericExtension(w http.ResponseWriter, r *http.Request,
-	extID string, entry *RegistryEntry, req pluginInstallRequest, now string) {
+	extID string, entry *protocol.RegistryEntry, req protocol.PluginInstallRequest, now string) {
 
 	name := cond(req.Name != "", req.Name, entry.Name)
 	url := cond(req.URL != "", req.URL, entry.URL)
@@ -378,29 +346,15 @@ func (s *Server) handleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
 
 // Marketplace CRUD ---------------------------------------------------------
 
-// Marketplace 市场配置。
-type Marketplace struct {
-	ID          string `json:"id" yaml:"id"`
-	Name        string `json:"name" yaml:"name"`
-	Type        string `json:"type" yaml:"type"`
-	Publisher   string `json:"publisher" yaml:"publisher"`
-	RepoURL     string `json:"repo_url" yaml:"repo_url"`
-	Description string `json:"description" yaml:"description"`
-	IsBuiltin   int    `json:"is_builtin" yaml:"is_builtin"`
-	TrustTier   int    `json:"trust_tier" yaml:"trust_tier"`
-	Enabled     int    `json:"enabled" yaml:"enabled"`
-	CreatedAt   string `json:"created_at" yaml:"created_at"`
-}
-
 // handleListMarketplaces GET /v1/plugins/marketplaces
 func (s *Server) handleListMarketplaces(w http.ResponseWriter, r *http.Request) {
-	var mps []Marketplace
+	var mps []protocol.Marketplace
 	rows, err := s.db.QueryContext(r.Context(),
 		`SELECT id, name, type, publisher, repo_url, description, is_builtin, trust_tier, enabled, created_at
 		 FROM plugin_marketplaces`)
 	if err == nil {
 		for rows.Next() {
-			var m Marketplace
+			var m protocol.Marketplace
 			if rows.Scan(&m.ID, &m.Name, &m.Type, &m.Publisher, &m.RepoURL,
 				&m.Description, &m.IsBuiltin, &m.TrustTier, &m.Enabled, &m.CreatedAt) == nil {
 				mps = append(mps, m)
@@ -414,7 +368,7 @@ func (s *Server) handleListMarketplaces(w http.ResponseWriter, r *http.Request) 
 
 // handleAddMarketplace POST /v1/plugins/marketplaces
 func (s *Server) handleAddMarketplace(w http.ResponseWriter, r *http.Request) {
-	var req Marketplace
+	var req protocol.Marketplace
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

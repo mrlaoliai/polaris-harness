@@ -22,9 +22,11 @@ import (
 	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
-	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/hitl"
 	"github.com/mrlaoliai/polaris-harness/pkg/edge/scheduler"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/native"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/skill"
 	"github.com/mrlaoliai/polaris-harness/pkg/governance/eval"
 	"github.com/mrlaoliai/polaris-harness/pkg/interface/server"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
@@ -323,7 +325,7 @@ func run() error { //nolint:gocyclo
 	// ─── 6.3 内置工具注册 & MCP Manager ─────────────────────────────────────
 	allowedPaths := []string{dataDir}
 	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	mcpMgr := action.NewMCPManager(inProcSandbox, safeHTTPClient)
+	mcpMgr := mcp.NewMCPManager(inProcSandbox, safeHTTPClient)
 
 	// 自动启动内置 MCP Sidecar
 	sidecarPath := "/Users/mrlaoliai/Polaris/polaris-computer-mcp/target/debug/polaris-computer-mcp"
@@ -331,7 +333,7 @@ func run() error { //nolint:gocyclo
 		slog.Warn("polaris: failed to start builtin computer mcp sidecar", "err", err)
 	}
 
-	if err := action.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer, mcpMgr); err != nil {
+	if err := native.RegisterBuiltinTools(inProcSandbox, toolReg, allowedPaths, dialer, mcpMgr); err != nil {
 		slog.Warn("polaris: builtin tool registration partial failure", "err", err)
 	}
 	slog.Info("polaris: builtin tools registered, MCP manager initialized")

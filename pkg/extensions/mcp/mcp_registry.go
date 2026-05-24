@@ -1,4 +1,4 @@
-package action
+package mcp
 
 // MCP 工具注册与发现。
 // 架构文档: docs/arch/07-Tool-Action-Layer-深度选型.md §1

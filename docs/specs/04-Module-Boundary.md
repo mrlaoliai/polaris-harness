@@ -9,6 +9,7 @@ pkg/edge/ (L3)          →  L3 可引用 L2, L1, L0
 pkg/governance/ (L3)   →  L3 可引用 L2, L1, L0
     ↑
 pkg/swarm/ (L2)        →  L2 可引用 L1, L0，不可引用 L3
+pkg/extensions/ (L2)   →  L2 可引用 L1, L0，不可引用 L3（依赖 pkg/action）
     ↑
 pkg/cognition/ (L1)    →  L1 可引用 L0，不可引用 L2/L3
 pkg/action/ (L1)       →  L1 可引用 L0，不可引用 L2/L3

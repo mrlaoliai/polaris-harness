@@ -1,4 +1,4 @@
-package plugin
+package marketplace
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
 
 // MCPMarketplaceClient handles interactions with external MCP registries.
@@ -32,18 +33,8 @@ func NewMCPMarketplaceClient(registryURL, baseInstallDir string) *MCPMarketplace
 	}
 }
 
-// SearchResult represents a package found in the marketplace.
-type SearchResult struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Publisher   string   `json:"publisher"`
-	InstallCmd  string   `json:"install_cmd"`
-	Args        []string `json:"args"`
-}
-
 // Search queries the marketplace for MCP servers or plugins.
-func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]SearchResult, error) {
+func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]protocol.RegistryEntry, error) {
 	searchURL := fmt.Sprintf("%s/search?q=%s", c.registryURL, url.QueryEscape(query))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
 	if err != nil {
@@ -65,7 +56,7 @@ func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]Sear
 		return nil, perrors.Wrap(perrors.CodeInternal, "marketplace: failed to read response", err)
 	}
 
-	var results []SearchResult
+	var results []protocol.RegistryEntry
 	if err := json.Unmarshal(data, &results); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, "marketplace: failed to parse response", err)
 	}
@@ -74,8 +65,8 @@ func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]Sear
 }
 
 // Install auto-configures the downloaded MCP server into a local plugin layout.
-func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg SearchResult) (string, error) {
-	if pkg.InstallCmd == "" {
+func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg protocol.RegistryEntry) (string, error) {
+	if pkg.Command == "" {
 		return "", perrors.New(perrors.CodeInternal, "marketplace: package missing install command")
 	}
 
@@ -85,10 +76,10 @@ func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg SearchResult) (s
 	}
 
 	// Generate .mcp.json
-	mcpConfig := MCPConfig{
-		MCPServers: map[string]MCPServerDef{
+	mcpConfig := protocol.MCPConfig{
+		MCPServers: map[string]protocol.MCPServerDef{
 			pkg.ID: {
-				Command: pkg.InstallCmd,
+				Command: pkg.Command,
 				Args:    pkg.Args,
 			},
 		},
@@ -110,7 +101,7 @@ func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg SearchResult) (s
 		return "", perrors.Wrap(perrors.CodeInternal, "marketplace: failed to create .codex-plugin directory", err)
 	}
 
-	manifest := PluginJSON{
+	manifest := protocol.PluginJSON{
 		Name:        pkg.Name,
 		Version:     "1.0.0", // from market
 		Description: pkg.Description,

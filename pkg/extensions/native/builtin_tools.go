@@ -1,4 +1,4 @@
-package action
+package native
 
 import (
 	"context"
@@ -17,7 +17,9 @@ import (
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/mrlaoliai/polaris-harness/pkg/action"
 	polartool "github.com/mrlaoliai/polaris-harness/pkg/action/tool"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 )
 
 // RegisterBuiltinTools 注册所有内置工具到 sandbox 与 registry，并绑定 InProcessSandbox 为执行器。
@@ -25,15 +27,15 @@ import (
 // 安全约束由 PolicyGate 前置校验 + 路径白名单双重保证。
 // 调用方式: 系统启动时调用一次（非线程安全）。
 func RegisterBuiltinTools(
-	sandbox *InProcessSandbox,
+	sandbox *action.InProcessSandbox,
 	toolReg *polartool.InMemoryToolRegistry,
 	allowedPaths []string, // 文件系统路径白名单（read_file/list_dir/write_file 均受限）
 	dialer protocol.SafeDialer,
-	mcpManager *MCPManager,
+	mcpManager *mcp.MCPManager,
 ) error {
 	tools := []struct {
 		meta protocol.Tool
-		fn   InProcessFn
+		fn   action.InProcessFn
 	}{
 		{
 			meta: protocol.Tool{
@@ -234,7 +236,7 @@ type readFileArgs struct {
 	Path string `json:"path"`
 }
 
-func makeReadFileFn(allowedPaths []string) InProcessFn {
+func makeReadFileFn(allowedPaths []string) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		var args readFileArgs
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -268,7 +270,7 @@ type dirEntry struct {
 	Size  int64  `json:"size_bytes"`
 }
 
-func makeListDirFn(allowedPaths []string) InProcessFn {
+func makeListDirFn(allowedPaths []string) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		var args listDirArgs
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -308,7 +310,7 @@ type writeFileArgs struct {
 	Append  bool   `json:"append"`
 }
 
-func makeWriteFileFn(allowedPaths []string) InProcessFn {
+func makeWriteFileFn(allowedPaths []string) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		var args writeFileArgs
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -343,7 +345,7 @@ type fetchURLArgs struct {
 }
 
 // makeFetchURLFn 返回 fetch_url 工具函数。
-func makeFetchURLFn(dialer protocol.SafeDialer) InProcessFn {
+func makeFetchURLFn(dialer protocol.SafeDialer) action.InProcessFn {
 	// 创建基于 SafeDialer 的 HTTP 客户端
 	client := &http.Client{}
 	if dialer != nil {
@@ -420,7 +422,7 @@ type bashArgs struct {
 	Command string `json:"command"`
 }
 
-func makeBashFn(allowedPaths []string) InProcessFn {
+func makeBashFn(allowedPaths []string) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		var args bashArgs
 		if err := json.Unmarshal(input, &args); err != nil {
@@ -471,7 +473,7 @@ func makeBashFn(allowedPaths []string) InProcessFn {
 
 // ─── get_datetime ────────────────────────────────────────────────────────────
 
-var getDatetimeFn InProcessFn = func(_ context.Context, _ []byte) ([]byte, error) {
+var getDatetimeFn action.InProcessFn = func(_ context.Context, _ []byte) ([]byte, error) {
 	now := time.Now()
 	result := map[string]any{
 		"utc":      now.UTC().Format(time.RFC3339),
@@ -488,7 +490,7 @@ type csvParseArgs struct {
 	CSV string `json:"csv"`
 }
 
-var csvParseFn InProcessFn = func(_ context.Context, input []byte) ([]byte, error) {
+var csvParseFn action.InProcessFn = func(_ context.Context, input []byte) ([]byte, error) {
 	var args csvParseArgs
 	if err := json.Unmarshal(input, &args); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, "csv_parse: invalid args", err)
@@ -563,7 +565,7 @@ type diffTextArgs struct {
 	New string `json:"new"`
 }
 
-var diffTextFn InProcessFn = func(_ context.Context, input []byte) ([]byte, error) {
+var diffTextFn action.InProcessFn = func(_ context.Context, input []byte) ([]byte, error) {
 	var args diffTextArgs
 	if err := json.Unmarshal(input, &args); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, "diff_text: invalid args", err)

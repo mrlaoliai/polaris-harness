@@ -1,4 +1,4 @@
-package action
+package mcp
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/pkg/action"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
@@ -50,11 +51,11 @@ type mcpEntry struct {
 type MCPManager struct {
 	mu         sync.RWMutex
 	entries    map[string]*mcpEntry
-	sandbox    *InProcessSandbox
+	sandbox    *action.InProcessSandbox
 	httpClient *http.Client
 }
 
-func NewMCPManager(sandbox *InProcessSandbox, httpClient *http.Client) *MCPManager {
+func NewMCPManager(sandbox *action.InProcessSandbox, httpClient *http.Client) *MCPManager {
 	return &MCPManager{
 		entries:    make(map[string]*mcpEntry),
 		sandbox:    sandbox,
@@ -214,7 +215,7 @@ func (m *MCPManager) registerTools(serverID string, client *MCPClient, tools []M
 
 // makeMCPToolFn 创建调用 MCP 工具的执行函数。
 // 使用 CallToolTainted 进行污点保护反序列化（M07 §1 安全要求）。
-func makeMCPToolFn(client *MCPClient, mcpName string) InProcessFn {
+func makeMCPToolFn(client *MCPClient, mcpName string) action.InProcessFn {
 	return func(ctx context.Context, input []byte) ([]byte, error) {
 		var args map[string]any
 		if len(input) > 0 {

@@ -1,4 +1,4 @@
-package action
+package mcp
 
 import (
 	"bufio"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	"github.com/mrlaoliai/polaris-harness/pkg/action"
 
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
@@ -442,7 +443,7 @@ func (c *MCPClient) CallToolTainted(ctx context.Context, name string, arguments 
 	}
 
 	// 污点保护反序列化：遍历 JSON 树，对所有 string 叶子打标
-	dec := NewTaintPreservingDecoder(c.cfg.ServerName, c.cfg.Trusted)
+	dec := action.NewTaintPreservingDecoder(c.cfg.ServerName, c.cfg.Trusted)
 	node := dec.Decode(result, "")
 	maxTaint := node.MaxTaint()
 	if maxTaint < dec.Taint() {

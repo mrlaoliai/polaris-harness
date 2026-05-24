@@ -1,4 +1,4 @@
-package plugin
+package marketplace
 
 import (
 	"crypto/hmac"
@@ -103,7 +103,7 @@ func ParseSKILLmd(path string) (*protocol.SkillMeta, error) {
 // LoadPlugin 从指定目录加载完整的 Codex 插件树。
 func LoadPlugin(dir string) (*Plugin, error) {
 	manifestPath := filepath.Join(dir, ".codex-plugin", "plugin.json")
-	manifest, err := ParseManifest(manifestPath)
+	manifest, err := parseManifest(manifestPath)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func LoadPlugin(dir string) (*Plugin, error) {
 		Manifest: *manifest,
 		Dir:      dir,
 		Enabled:  true,
-		MCPs:     make(map[string]MCPServerDef),
+		MCPs:     make(map[string]protocol.MCPServerDef),
 	}
 
 	// 尝试加载 .mcp.json
@@ -132,14 +132,27 @@ func LoadPlugin(dir string) (*Plugin, error) {
 	return plugin, nil
 }
 
-func loadMCPConfig(path string) (*MCPConfig, error) {
+func loadMCPConfig(path string) (*protocol.MCPConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var c MCPConfig
+	var c protocol.MCPConfig
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// parseManifest reads and parses a plugin.json file.
+func parseManifest(path string) (*protocol.PluginJSON, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var manifest protocol.PluginJSON
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, err
+	}
+	return &manifest, nil
 }

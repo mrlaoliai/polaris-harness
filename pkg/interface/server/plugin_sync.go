@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/mrlaoliai/polaris-harness/internal/protocol"
 )
 
 // parseSkillMD 从 SKILL.md 中解析 Frontmatter 元数据。
@@ -55,8 +57,8 @@ func formatName(s string) string {
 	return strings.Join(parts, " ")
 }
 
-// parseSkillEntry 解析技能市场的 SKILL.md 文件并返回 RegistryEntry。
-func parseSkillEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
+// parseSkillEntry 解析技能市场的 SKILL.md 文件并返回 protocol.RegistryEntry。
+func parseSkillEntry(path string, mpDir string, mp protocol.Marketplace) (*protocol.RegistryEntry, error) {
 	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -82,7 +84,7 @@ func parseSkillEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry,
 		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
 	}
 
-	return &RegistryEntry{
+	return &protocol.RegistryEntry{
 		ID:          mp.ID + "/" + relPath,
 		Publisher:   mp.Publisher,
 		Type:        "skill",
@@ -95,8 +97,8 @@ func parseSkillEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry,
 	}, nil
 }
 
-// parsePluginEntry 解析插件市场的 plugin.json 文件并返回 RegistryEntry。
-func parsePluginEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
+// parsePluginEntry 解析插件市场的 plugin.json 文件并返回 protocol.RegistryEntry。
+func parsePluginEntry(path string, mpDir string, mp protocol.Marketplace) (*protocol.RegistryEntry, error) {
 	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -140,7 +142,7 @@ func parsePluginEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry
 		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
 	}
 
-	return &RegistryEntry{
+	return &protocol.RegistryEntry{
 		ID:          mp.ID + "/" + relPath,
 		Publisher:   mp.Publisher,
 		Type:        "plugin",
@@ -153,8 +155,8 @@ func parsePluginEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry
 	}, nil
 }
 
-// parseMCPEntry 解析市场的 mcp.json 文件并返回 RegistryEntry。
-func parseMCPEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, error) {
+// parseMCPEntry 解析市场的 mcp.json 文件并返回 protocol.RegistryEntry。
+func parseMCPEntry(path string, mpDir string, mp protocol.Marketplace) (*protocol.RegistryEntry, error) {
 	relDir, err := filepath.Rel(mpDir, filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -190,7 +192,7 @@ func parseMCPEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, e
 		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
 	}
 
-	return &RegistryEntry{
+	return &protocol.RegistryEntry{
 		ID:          mp.ID + "/" + relPath,
 		Publisher:   mp.Publisher,
 		Type:        "mcp",
@@ -209,8 +211,8 @@ func parseMCPEntry(path string, mpDir string, mp Marketplace) (*RegistryEntry, e
 
 // discoverMarketplaceEntries 递归遍历市场目录，自动发现所有的插件和技能。
 // 这解决了插件/技能页面只列出整个市场仓库的系统漏洞。
-func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]RegistryEntry, error) {
-	var entries []RegistryEntry
+func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protocol.RegistryEntry, error) {
+	var entries []protocol.RegistryEntry
 
 	err := filepath.Walk(mpDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -264,11 +266,11 @@ func discoverMarketplaceEntries(mpDir string, mp Marketplace) ([]RegistryEntry, 
 
 // handleSyncMarketplaces 刷新/同步市场
 func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) {
-	var mps []Marketplace
+	var mps []protocol.Marketplace
 	rows, err := s.db.QueryContext(r.Context(), "SELECT id, name, type, publisher, repo_url, description, is_builtin, trust_tier, enabled, created_at FROM plugin_marketplaces WHERE enabled=1")
 	if err == nil {
 		for rows.Next() {
-			var m Marketplace
+			var m protocol.Marketplace
 			if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.Publisher, &m.RepoURL, &m.Description, &m.IsBuiltin, &m.TrustTier, &m.Enabled, &m.CreatedAt); err == nil {
 				mps = append(mps, m)
 			}
@@ -313,7 +315,7 @@ func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		var entries []RegistryEntry
+		var entries []protocol.RegistryEntry
 		if err := json.Unmarshal(b, &entries); err != nil {
 			continue
 		}

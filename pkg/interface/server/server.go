@@ -19,9 +19,9 @@ import (
 	"github.com/mrlaoliai/polaris-harness/configs"
 	"github.com/mrlaoliai/polaris-harness/internal/config"
 	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/pkg/action"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/kernel"
 	"github.com/mrlaoliai/polaris-harness/pkg/cognition/memory"
+	"github.com/mrlaoliai/polaris-harness/pkg/extensions/mcp"
 	"github.com/mrlaoliai/polaris-harness/pkg/interface/channels"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference"
 	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference/stt"
@@ -45,7 +45,7 @@ type Server struct {
 	hooks         *HookRunner                                                                       // Shell Script Hooks（End-User 扩展点）
 	compressor    *Compressor                                                                       // 上下文超长自动压缩
 	channelMgr    *channels.Manager                                                                 // 所有聊天平台 poller 管理
-	mcpMgr        *action.MCPManager                                                                // MCP Server 连接管理
+	mcpMgr        *mcp.MCPManager                                                                   // MCP Server 连接管理
 	toolReg       protocol.ToolRegistry                                                             // builtin tool 元数据
 	skillReg      protocol.SkillRegistry                                                            // skill 元数据
 	toolExec      func(ctx context.Context, name string, args []byte) (*protocol.ToolResult, error) // tool_use 执行器
@@ -55,7 +55,7 @@ type Server struct {
 }
 
 // SetMCPManager 注入 MCPManager（NewServer 之后、Start 之前调用）。
-func (s *Server) SetMCPManager(m *action.MCPManager) { s.mcpMgr = m }
+func (s *Server) SetMCPManager(m *mcp.MCPManager) { s.mcpMgr = m }
 
 // SetToolRegistry 注入 ToolRegistry（NewServer 之后、Start 之前调用）。
 func (s *Server) SetToolRegistry(r protocol.ToolRegistry) { s.toolReg = r }
@@ -113,7 +113,7 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 
 	// 注入内置的 yaml 配置作为种子数据到数据库（SSoT 架构）
 	if b, err := configs.FS.ReadFile("marketplaces.yaml"); err == nil {
-		var mps []Marketplace
+		var mps []protocol.Marketplace
 		if err := yaml.Unmarshal(b, &mps); err == nil {
 			now := time.Now().UTC().Format(time.RFC3339)
 			for _, mp := range mps {
@@ -127,7 +127,7 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 	}
 
 	if b, err := configs.FS.ReadFile("registry.yaml"); err == nil {
-		var entries []RegistryEntry
+		var entries []protocol.RegistryEntry
 		if err := yaml.Unmarshal(b, &entries); err == nil {
 			for _, e := range entries {
 				payload, _ := json.Marshal(e)
