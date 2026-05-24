@@ -253,7 +253,7 @@
                 <div class="form-control">
                   <label for="store-plugins-createform-url" class="label"><span class="label-text font-bold">SSE URL</span></label>
                   <input id="store-plugins-createform-url" name="store-plugins-createform-url" type="text" class="input input-bordered w-full font-mono text-sm" x-model="$store.plugins.createForm.url" placeholder="https://..." />
-                </dialog>
+                </div>
               </template>
 
               <div class="form-control">
@@ -269,7 +269,7 @@
         </div>
       </div>
       <div class="modal-backdrop" @click="$store.plugins.showCreateModal=false"></div>
-    </div>
+    </dialog>
 
   </div>
 </div>
