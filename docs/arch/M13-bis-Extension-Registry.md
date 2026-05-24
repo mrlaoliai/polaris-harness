@@ -112,18 +112,19 @@ POST /v1/plugins/install {catalog_id, type=plugin}
      d. UPDATE parent extension_instances SET status=installed
 ```
 
-### 3.4 静默自启与预装
+### 3.4 同步但不自动安装
 
-系统启动时（`bootMarketplaceInit`），后台自动拉取所有 `is_builtin=1` 官方市场源至 `extension_catalog`，并遍历无缝触发上述安装流写入至对应运行时及 `extension_instances`，实现开箱即用。
+系统启动时（`bootMarketplaceInit`），后台自动拉取所有 `is_builtin=1` 官方市场源至 `extension_catalog` 作为前端展示的缓存目录。**默认情况下不会静默强制安装**任何外部扩展（保持 Agent 基础生存极简）。用户需在前端主动点击安装，才触发对应运行时表的绑定及 `extension_instances` 的写入。
 
-### 3.5 卸载
+### 3.5 彻底卸载
 
 ```
 DELETE /v1/plugins/{catalog_id}
   1. 查 extension_instances WHERE catalog_id=?
-  2. 按 ext_type 清理运行时绑定（MCPManager.Remove / skills 表 deprecate）
-  3. 删除 install_path 目录（若有）
+  2. 按 ext_type 清理运行时绑定（MCPManager.Remove / skills 表 deprecate / plugins 表记录）
+  3. 通过底层管理接口安全删除 install_path 物理目录（严格禁止 HTTP Handler 裸写 os.RemoveAll）
   4. DELETE extension_instances（含子记录）
+  5. [对于非 is_builtin 或 origin='user' 的第三方扩展] 级联 DELETE extension_catalog，确保彻底从前端列表消失
 ```
 
 ---

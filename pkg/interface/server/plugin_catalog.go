@@ -351,50 +351,19 @@ func (s *Server) installGenericExtension(w http.ResponseWriter, r *http.Request,
 func (s *Server) handleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
 	catalogID := r.PathValue("catalogID")
 
-	// 查 extension_instances（SSoT）
-	rows, err := s.db.QueryContext(r.Context(),
-		`SELECT id, ext_type, runtime_id, install_path FROM extension_instances WHERE catalog_id=?`,
-		catalogID)
+	if s.installMgr == nil {
+		http.Error(w, "marketplace manager not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	err := s.installMgr.UninstallExtension(r.Context(), catalogID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	type instRow struct {
-		id, extType, runtimeID, installPath string
-	}
-	var insts []instRow
-	for rows.Next() {
-		var inst instRow
-		if rows.Scan(&inst.id, &inst.extType, &inst.runtimeID, &inst.installPath) == nil {
-			insts = append(insts, inst)
+		if strings.Contains(err.Error(), "not installed") {
+			http.Error(w, err.Error(), http.StatusNotFound)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	}
-	rows.Close()
-
-	if len(insts) == 0 {
-		http.Error(w, "extension not installed", http.StatusNotFound)
 		return
-	}
-
-	for _, inst := range insts {
-		switch inst.extType {
-		case "mcp":
-			if s.mcpMgr != nil && inst.runtimeID != "" {
-				s.mcpMgr.Remove(inst.runtimeID)
-			}
-			s.db.ExecContext(r.Context(), `DELETE FROM mcp_servers WHERE id=?`, inst.runtimeID) //nolint:errcheck
-		case "skill":
-			if inst.runtimeID != "" {
-				// Skill 废弃而非删除（历史记录保留）
-				s.db.ExecContext(r.Context(), //nolint:errcheck
-					`UPDATE skills SET deprecated=1, updated_at=CURRENT_TIMESTAMP WHERE name=?`,
-					inst.runtimeID)
-			}
-		}
-		// 删除 extension_instances 记录（子记录级联）
-		s.db.ExecContext(r.Context(), //nolint:errcheck
-			`DELETE FROM extension_instances WHERE id=? OR parent_id=?`, inst.id, inst.id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

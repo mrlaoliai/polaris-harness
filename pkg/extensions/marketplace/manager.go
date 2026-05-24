@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"strings"
 
 	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
@@ -98,4 +99,70 @@ func (m *Manager) InstallExtension(ctx context.Context, req InstallRequest) erro
 	}
 
 	return perrors.New(perrors.CodeForbidden, "installation denied")
+}
+
+// UninstallExtension completely removes an extension and its physical files.
+func (m *Manager) UninstallExtension(ctx context.Context, catalogID string) error {
+	rows, err := m.db.QueryContext(ctx, "SELECT id, ext_type, runtime_id, install_path, origin FROM extension_instances WHERE catalog_id=?", catalogID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type instRow struct {
+		id, extType, runtimeID, installPath, origin string
+	}
+	var insts []instRow
+	for rows.Next() {
+		var inst instRow
+		if err := rows.Scan(&inst.id, &inst.extType, &inst.runtimeID, &inst.installPath, &inst.origin); err == nil {
+			insts = append(insts, inst)
+		}
+	}
+
+	if len(insts) == 0 {
+		return perrors.New(perrors.CodeNotFound, "extension not installed")
+	}
+
+	for _, inst := range insts {
+		m.removeRuntime(ctx, inst.extType, inst.runtimeID, catalogID)
+
+		if inst.installPath != "" {
+			_ = os.RemoveAll(inst.installPath)
+		}
+
+		_, _ = m.db.ExecContext(ctx, "DELETE FROM extension_instances WHERE id=? OR parent_id=?", inst.id, inst.id)
+
+		m.cleanCatalog(ctx, inst.origin, catalogID)
+	}
+	return nil
+}
+
+func (m *Manager) removeRuntime(ctx context.Context, extType, runtimeID, catalogID string) {
+	type mcpRemover interface{ Remove(id string) }
+	switch extType {
+	case "mcp":
+		if remover, ok := m.mcpMgr.(mcpRemover); ok && runtimeID != "" {
+			remover.Remove(runtimeID)
+		}
+		_, _ = m.db.ExecContext(ctx, "DELETE FROM mcp_servers WHERE id=?", runtimeID)
+	case "skill":
+		if runtimeID != "" {
+			_, _ = m.db.ExecContext(ctx, "UPDATE skills SET deprecated=1, updated_at=CURRENT_TIMESTAMP WHERE name=?", runtimeID)
+		}
+	case "plugin":
+		_, _ = m.db.ExecContext(ctx, "DELETE FROM plugins WHERE catalog_id=?", catalogID)
+	}
+}
+
+func (m *Manager) cleanCatalog(ctx context.Context, origin, catalogID string) {
+	if origin == "user" {
+		_, _ = m.db.ExecContext(ctx, "DELETE FROM extension_catalog WHERE id=?", catalogID)
+	} else if origin == "marketplace" {
+		var isBuiltin int
+		err := m.db.QueryRowContext(ctx, "SELECT is_builtin FROM plugin_marketplaces WHERE id = (SELECT marketplace_id FROM extension_catalog WHERE id=?)", catalogID).Scan(&isBuiltin)
+		if err == nil && isBuiltin == 0 {
+			_, _ = m.db.ExecContext(ctx, "DELETE FROM extension_catalog WHERE id=?", catalogID)
+		}
+	}
 }
