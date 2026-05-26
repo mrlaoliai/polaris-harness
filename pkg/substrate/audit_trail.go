@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // Standard Audit Actions for Extension Installation

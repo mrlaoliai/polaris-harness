@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // SQLiteRegistryImpl 实现了持久化的技能注册表，基于 SQLite。

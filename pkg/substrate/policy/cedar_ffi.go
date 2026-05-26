@@ -11,8 +11,8 @@ import (
 
 	"github.com/ebitengine/purego"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	sffi "github.com/mrlaoliai/polaris-harness/pkg/substrate/ffi"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	sffi "github.com/polarisagi/polaris-harness/pkg/substrate/ffi"
 )
 
 // Cedar dylib 函数指针——`bindCedar` 通过 sync.Once 懒绑定。

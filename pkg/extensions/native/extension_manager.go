@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/pkg/action"
-	"github.com/mrlaoliai/polaris-harness/pkg/extensions/marketplace"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/action"
+	"github.com/polarisagi/polaris-harness/pkg/extensions/marketplace"
 )
 
 type searchExtensionArgs struct {

@@ -3,7 +3,7 @@ package substrate
 import (
 	"testing"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 func TestTaintedString(t *testing.T) {

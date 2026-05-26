@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ── 请求/响应结构（OpenAI 协议格式）────────────────────────────────────────

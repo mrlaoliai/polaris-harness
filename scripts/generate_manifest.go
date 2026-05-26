@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mrlaoliai/polaris-harness/internal/config"
+	"github.com/polarisagi/polaris-harness/internal/config"
 )
 
 func main() {

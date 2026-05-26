@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // Taint Tracking — 污点追踪类型系统。

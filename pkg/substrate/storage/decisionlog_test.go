@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol/schema"
-	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol/schema"
+	"github.com/polarisagi/polaris-harness/pkg/substrate"
 )
 
 func TestDecisionLogger(t *testing.T) {

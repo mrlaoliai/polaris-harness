@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // AgentRegistry 负责 Agent 的注册与能力发现。

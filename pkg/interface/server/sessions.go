@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ─── 会话 CRUD HTTP 处理器 ──────────────────────────────────────────────────

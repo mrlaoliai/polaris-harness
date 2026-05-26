@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // Fallback Chain — 三级降级链 + CircuitBreaker + HealthScorer。

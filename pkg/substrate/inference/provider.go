@@ -3,8 +3,8 @@ package inference
 import (
 	"context"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ProviderAdapter 适配器基类，实现通用功能 (API Key JIT, 错误包装等)。

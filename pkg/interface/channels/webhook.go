@@ -11,7 +11,7 @@ import (
 	"io"
 	"net/http"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // LINE

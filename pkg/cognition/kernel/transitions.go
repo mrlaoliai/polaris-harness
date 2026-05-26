@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // registerTransitions 注册全部 10 条转移（spec/state.yaml §m4_par_state_machine）。

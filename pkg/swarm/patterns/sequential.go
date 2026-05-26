@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/pkg/swarm"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/swarm"
 )
 
 // SequentialExecutor 实现了串行编排模式。

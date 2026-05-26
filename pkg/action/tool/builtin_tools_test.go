@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/pkg/action"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/action"
 )
 
 type dummyDialer struct {

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // SQLiteScheduler 实现了 protocol.Scheduler，作为系统的任务调度器核心。

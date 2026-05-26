@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ─── 测试用 mockToolExec ─────────────────────────────────────────────────────

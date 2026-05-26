@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 func TestGate_DenyByDefault(t *testing.T) {

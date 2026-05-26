@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 
 	"gopkg.in/yaml.v3"
 )

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // mockMemory 用于测试记忆上下文组装

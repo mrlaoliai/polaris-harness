@@ -7,7 +7,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // BrowserUseTool 提供无头浏览器控制能力。

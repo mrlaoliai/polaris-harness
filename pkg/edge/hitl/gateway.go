@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // GatewayImpl 实现了 protocol.HITL，管理人机交互网关 [ESCALATE]。

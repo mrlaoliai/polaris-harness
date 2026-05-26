@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/substrate/inference"
+	"github.com/polarisagi/polaris-harness/pkg/substrate/inference"
 )
 
 // LoadProvidersFromDB 从 providers + provider_models 两表 JOIN，

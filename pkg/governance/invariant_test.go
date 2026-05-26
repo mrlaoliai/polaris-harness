@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
-	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
-	"github.com/mrlaoliai/polaris-harness/pkg/substrate/policy"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/substrate"
+	"github.com/polarisagi/polaris-harness/pkg/substrate/policy"
 )
 
 // TestInvariant1_ObservabilityFirst [HE-Rule-1]

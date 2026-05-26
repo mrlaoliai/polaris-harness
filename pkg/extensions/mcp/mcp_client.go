@@ -15,10 +15,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/pkg/action"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/pkg/action"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ─── JSON-RPC 2.0 ─────────────────────────────────────────────────────────────

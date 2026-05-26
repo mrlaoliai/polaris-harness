@@ -8,7 +8,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 
-	"github.com/mrlaoliai/polaris-harness/configs"
+	"github.com/polarisagi/polaris-harness/configs"
 )
 
 type Config struct {

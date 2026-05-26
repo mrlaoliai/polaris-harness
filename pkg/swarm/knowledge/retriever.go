@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // HybridRetrieverImpl 实现 HybridRetriever。

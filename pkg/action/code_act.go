@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // CodeAct ad-hoc 代码执行引擎。

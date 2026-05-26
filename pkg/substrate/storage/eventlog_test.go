@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol/pb"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol/schema"
-	"github.com/mrlaoliai/polaris-harness/pkg/substrate"
+	"github.com/polarisagi/polaris-harness/internal/protocol/pb"
+	"github.com/polarisagi/polaris-harness/internal/protocol/schema"
+	"github.com/polarisagi/polaris-harness/pkg/substrate"
 )
 
 func TestEventLogger(t *testing.T) {

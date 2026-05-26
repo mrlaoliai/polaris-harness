@@ -112,3 +112,9 @@ make all
 ## 架构设计文档
 
 详见 `docs/arch/` 目录下的 15 份架构设计文档（1 份全局公共字典 + 1 份总览 + 13 份模块深度选型），覆盖全部 13 个模块的前期研究与技术选型。
+
+## 联系与社区
+
+- **官方网站**: [https://polarisagi.online/](https://polarisagi.online/)
+- **作者 / 关注我**: mrlaoliai (全网同名：小红书、抖音、TikTok、X 平台等)
+- **联系邮箱**: [polarisagi.online@gmail.com](mailto:polarisagi.online@gmail.com)

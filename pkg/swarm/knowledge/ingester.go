@@ -7,7 +7,7 @@ import (
 	"hash/fnv"
 	"strings"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 func simpleHash(s string) uint64 {

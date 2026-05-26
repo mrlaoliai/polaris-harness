@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/sys/cpu"
 
-	"github.com/mrlaoliai/polaris-harness/internal/config"
+	"github.com/polarisagi/polaris-harness/internal/config"
 )
 
 // Tier is the hardware capability level determined at startup.

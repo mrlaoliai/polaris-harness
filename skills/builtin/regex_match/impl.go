@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"regexp"
 
-	"github.com/mrlaoliai/polaris-harness/pkg/cognition/skill/sdk"
+	"github.com/polarisagi/polaris-harness/pkg/cognition/skill/sdk"
 )
 
 type Input struct {

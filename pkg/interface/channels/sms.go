@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // SMS 通过 Twilio REST API 发送短信，通过 webhook 接收。

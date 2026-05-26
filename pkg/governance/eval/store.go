@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // SQLiteEvalStore 实现了 protocol.EvalAPI，用于管理 EvalCase。

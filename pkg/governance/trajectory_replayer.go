@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"os"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // ErrReplayExhausted 表示轨迹回放耗尽。

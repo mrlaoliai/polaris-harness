@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // 本文件实现 protocol.SkillRegistry / SkillSelector / SkillExecutor 的内存版本。

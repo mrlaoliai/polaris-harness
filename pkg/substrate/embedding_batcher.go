@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // EmbeddingBatcher — Embedding API 批量调用优化器。

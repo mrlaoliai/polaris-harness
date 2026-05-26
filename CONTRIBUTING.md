@@ -5,7 +5,7 @@
 ## 1. 环境
 
 ```bash
-git clone https://github.com/mrlaoliai/polaris-harness.git
+git clone https://github.com/polarisagi/polaris-harness.git
 cd polaris-harness
 make build            # Rust FFI → Web UI → Go binary（≈ 2 min 首次）
 make test             # go test ./pkg/... ./internal/...
@@ -60,9 +60,12 @@ make docs-lint        # 文档级 Go 代码块禁令 (#9)
 
 ## 6. 沟通
 
+- 官网：[https://polarisagi.online/](https://polarisagi.online/)
+- 作者全网同名 ID：mrlaoliai（小红书、抖音、TikTok、X 等）
+- 商务与联系邮箱：polarisagi.online@gmail.com
 - 设计讨论：GitHub Discussions
 - Bug：GitHub Issues
-- 安全漏洞：见 [SECURITY.md](./SECURITY.md)，**不要**走公开 Issue
+- 安全漏洞：见 [SECURITY.md](./SECURITY.md) 或发邮件至 polarisagi.online@gmail.com，**不要**走公开 Issue
 
 ## 7. 许可
 

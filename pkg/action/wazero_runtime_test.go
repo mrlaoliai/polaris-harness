@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrlaoliai/polaris-harness/internal/config"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/config"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 func TestWazeroRuntime_TOCTOU_DeadlineInjection(t *testing.T) {

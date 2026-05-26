@@ -19,7 +19,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // ─── 配置常量 ─────────────────────────────────────────────────────────────────────────

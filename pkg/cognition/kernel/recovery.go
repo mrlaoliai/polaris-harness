@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // ProviderRecoveryHandler 处理 M1 CircuitBreaker 恢复后的唤醒逻辑。

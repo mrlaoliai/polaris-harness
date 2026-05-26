@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 )
 
 // mockRunner 实现 NodeRunner，用于 DAGExecutor 单元测试。

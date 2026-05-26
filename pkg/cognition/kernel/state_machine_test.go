@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 func TestStateMachine_FullForwardPath(t *testing.T) {

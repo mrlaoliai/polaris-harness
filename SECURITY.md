@@ -3,10 +3,10 @@
 ## 上报渠道
 
 **首选**：GitHub Private Vulnerability Reporting
-- 访问 https://github.com/mrlaoliai/polaris-harness/security/advisories/new
+- 访问 https://github.com/polarisagi/polaris-harness/security/advisories/new
 - 仅维护者可见，公开披露前可协调修复
 
-**备用**：邮件 — 见仓库根 `README.md` 联系方式（或通过 GitHub 个人主页）
+**备用**：邮件 — polarisagi.online@gmail.com（或通过 GitHub 个人主页）
 
 **不要**：在公开 Issue / Discussion / PR 中提交未公开的安全漏洞。
 

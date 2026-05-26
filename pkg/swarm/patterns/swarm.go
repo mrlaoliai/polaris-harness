@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	perrors "github.com/mrlaoliai/polaris-harness/internal/errors"
-	"github.com/mrlaoliai/polaris-harness/pkg/swarm"
+	perrors "github.com/polarisagi/polaris-harness/internal/errors"
+	"github.com/polarisagi/polaris-harness/pkg/swarm"
 )
 
 // SwarmCoordinator 去中心化 handoff 协调器。

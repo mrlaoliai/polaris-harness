@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mrlaoliai/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
 // ============================================================================
