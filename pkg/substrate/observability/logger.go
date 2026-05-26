@@ -107,7 +107,7 @@ func SetupLogger(dataDir string) io.Closer {
 	}
 	closers = append(closers, mainWriter)
 
-	mainMw := io.MultiWriter(os.Stdout, mainWriter)
+	mainMw := io.Writer(mainWriter)
 
 	mainOpts := &slog.HandlerOptions{
 		Level:     logLevel(),
