@@ -8,7 +8,7 @@
 - M6 **是**: Logic Collapse 蒸馏（System 2 轨迹 → Wasm 编译） | M6 **不是**: LLM 推理调用（那是 M1）
 - M6 **是**: SkillSelector 启发式匹配（不调 LLM） | M6 **不是**: Agent 状态机控制（那是 M4）
 - M6 **是**: cosign 签名验证（加载前置） | M6 **不是**: 签名策略制定（那是 M11 Cedar-Gate）
-- M6 **是**: SKILL.md + schema.json + impl.wasm 三件套管理 | M6 **不是**: 工具注册与发现（那是 M7 ToolRegistry）
+- M6 **是**: SKILL.md（script runtime）或 SKILL.md + impl.wasm（wasm runtime）技能管理 | M6 **不是**: 工具注册与发现（那是 M7 ToolRegistry）
 
 ---
 
@@ -27,20 +27,25 @@
 
 ### 1.1 目录结构
 
+**script runtime**（SKILL.md 指令，LLM 执行）：
 ```
 skill-name/
-├── SKILL.md            # NL 描述 + 使用指令
+├── SKILL.md            # NL 描述 + 使用指令（全文存入 skills.instructions）
+└── agents/polaris.yaml # 可选：display_name/policy/dependencies
+```
+
+**wasm runtime**（Logic Collapse 编译产物，wazero 执行）：
+```
+skill-name/
+├── SKILL.md            # NL 描述
 ├── schema.json         # 入参/出参 JSON Schema
-├── precondition.json   # 前置条件 (环境/工具/权限)
-├── postcondition.json  # 后置条件 (输出 schema/副作用声明)
 ├── impl.wasm           # Wasm 编译产物 (wazero 执行)
 ├── impl.go             # Go 源码 (审计用)
 ├── test/               # 测试用例 (Eval Harness 输入)
-│   ├── case_01.json
-│   └── case_02.json
-├── metadata.yaml       # 版本/risk_level/沙箱要求/成功率
 └── SIGNATURE           # cosign 签名
 ```
+
+script runtime 技能由市场安装（SKILL.md 即最终产物）；wasm runtime 技能由 Logic Collapse 从 script 轨迹蒸馏编译生成。
 
 ### 1.2 Go 数据结构
 
@@ -406,10 +411,17 @@ dependencies:
 - `trust:local` 技能限制在 Sbx-L1，Cedar 策略不允许升 Sbx-L2
 - **安全管控**: AI 自动生成或手动创建的 Skill 必须通过 `Manager.InstallExtension` 注册，并分配 `TrustLocal(1)` 级别接受中央安全网关拦截审查。
 
-**Progressive Disclosure**:
-- 初始：仅解析 frontmatter → SkillMeta（name + description），不加载全文
-- 按需：SkillSelector 选中后，才读完整 SKILL.md 传入 LLM 上下文（与 Wasm 懒加载一致）
-- 上下文预算：SkillSelector 的初始技能列表不超过 8000 字符（~2% 上下文窗口）
+**两条执行路径**：
+
+| 路径 | runtime | 触发方式 | 执行方式 |
+|------|---------|---------|---------|
+| LLM tool_use（当前实现） | `script` | buildToolSchemas() 暴露为 `skill:{name}` 工具，LLM 主动调用 | toolExec 读 skills.instructions + 用户 input → 返回给 LLM，LLM 按指令输出结果 |
+| M6 SkillSelector（M4 自主选择） | `wasm` | M4 System 1 命中，SkillSelector.Select() | SkillExecutor.ExecuteSkill() → wazero Wasm 沙箱执行 |
+
+**Progressive Disclosure（script runtime）**:
+- 安装时：SKILL.md 全文存入 `skills.instructions` 列
+- 推理时：buildToolSchemas() 仅取 name/capabilities，不加载全文
+- 调用时：toolExec 读 instructions 全文 + input，一次返回给 LLM
 
 **代码位置**: `pkg/extensions/marketplace/loader.go` (SkillMetaFromSKILLmd + parseFrontmatter)
 

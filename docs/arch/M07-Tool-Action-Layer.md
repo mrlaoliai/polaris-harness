@@ -553,39 +553,43 @@ GetContextHint(ToolName):
 
 ## 14. Plugin Registry（ADR-0015 §2.1）
 
-> End-User 可通过 Plugin 打包分发技能+MCP 组合（plugin.yaml manifest），无需修改源码。
-> 参见 [ADR-0015](./decisions/ADR-0015-codex-feature-integration.md)。
+> End-User 可通过 Plugin Bundle（tar.gz）打包分发技能+MCP 组合，无需修改源码。
+> 参见 [ADR-0015](./decisions/ADR-0015-codex-feature-integration.md) 与 M13-bis §3.3。
 
-**Plugin manifest 格式** (`plugin.yaml`):
-```yaml
-name: github
-version: 1.0.0
-description: "GitHub MCP integration"
-skills:        # SKILL.md 路径列表，相对 plugin.yaml 目录解析
-  - skills/pr-review/SKILL.md
-mcp_servers:   # MCP Server 配置列表
-  - name: github-mcp
-    transport: stdio
-    command: npx
-    args: ["-y", "@github/mcp-server"]
-    trusted: false
+**Plugin manifest 格式** (`plugin.json`，即 `PluginBundleManifest`）:
+```json
+{
+  "name": "github",
+  "version": "1.0.0",
+  "description": "GitHub MCP integration",
+  "mcp_inline": {
+    "github-mcp": { "command": "npx", "args": ["-y", "@github/mcp-server"] }
+  },
+  "mcp_servers": ".mcp.json",
+  "skills": [{ "path": "skills/pr-review/SKILL.md", "name": "pr-review" }]
+}
 ```
 
-**扫描路径**（优先级低→高合并，同名后者覆盖前者）:
-1. `~/.polaris-harness/plugins/` — 用户级
-2. `.polaris/plugins/` — 项目级
+同一 bundle 目录下还可同时包含外部厂商格式（`ai-plugin.json` / `plugin.toml` / `skills.yaml`），由 `adapter.ParseManifestDir()` 解析后各自安装对应的运行时组件。
+
+**安装路径**：`~/.polaris-harness/extensions/plugin/{ext_id}/`（HTTP tar.gz 下载解压）
 
 **加载流程**:
 ```
-ScanDir → ParseManifest → Plugin.AbsSkillPaths → plugin.ParseSKILLmd → M6 SkillRegistry.Register
-                                                → MCPServerDef → M7 MCPManager.Add
+POST /v1/plugins/install → plugin_catalog.go.downloadAndInstallPlugin()
+  → 解析 plugin.json（PluginBundleManifest）
+  → mcp_inline / .mcp.json  → installBundleMCP() → mcp_servers + MCPManager.Add()
+  → skills[]                → installBundleSkill() → skills（runtime=script）
+  → adapter.ParseManifestDir() 处理外部厂商格式
+  → INSERT plugins（021）写 bundle 元数据
 ```
 
 **安全约束**:
-- Plugin Skills 经 `trust:local` 标签注入，Sbx-L1 限制（不得升 Sbx-L2，除非 cosign 签名已验证）
-- Plugin MCP 默认 `trusted=false` → Taint=High（M7 inv_M7_02）
+- 所有子路径通过 `safeJoin()` 校验，防止 bundle 内路径穿越到安装目录外
+- Plugin Bundle MCP 默认 Taint=High（M7 inv_M7_02）
+- Script Skills trust_tier 继承 extension_catalog
 
-**代码位置**: `pkg/extensions/marketplace/` (marketplace.go / registry.go / loader.go)
+**代码位置**: `pkg/interface/server/plugin_catalog.go`（安装）、`pkg/extensions/marketplace/adapter.go`（多厂商解析）、`pkg/extensions/marketplace/loader.go`（Polaris 原生格式）
 
 ---
 
