@@ -95,6 +95,40 @@ func (s *Server) buildToolSchemas() []protocol.ToolSchema {
 	if s.mcpMgr != nil {
 		schemas = append(schemas, s.mcpMgr.ListToolSchemas()...)
 	}
+	// script runtime 技能：以 "skill:{name}" 工具形式暴露给 LLM
+	if s.db != nil {
+		rows, err := s.db.QueryContext(context.Background(),
+			`SELECT name, capabilities FROM skills WHERE runtime='script' AND deprecated=0`)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var name, capsRaw string
+				if rows.Scan(&name, &capsRaw) != nil {
+					continue
+				}
+				var caps []string
+				_ = json.Unmarshal([]byte(capsRaw), &caps)
+				desc := ""
+				for _, c := range caps {
+					if d, ok := strings.CutPrefix(c, "description:"); ok {
+						desc = d
+						break
+					}
+				}
+				schemas = append(schemas, protocol.ToolSchema{
+					Name:        "skill:" + name,
+					Description: desc,
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"input": map[string]any{"type": "string", "description": "任务描述或输入内容"},
+						},
+						"required": []string{"input"},
+					},
+				})
+			}
+		}
+	}
 	return schemas
 }
 

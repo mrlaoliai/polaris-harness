@@ -466,13 +466,14 @@ type SkillRegistry interface {
 type SkillMeta struct {
 	Name         string
 	Version      string // semver
-	Runtime      string // wasm (default) / python / go-native
+	Runtime      string // wasm (default) / script / builtin
 	RiskLevel    string // low / medium / high
 	Sandbox      int    // Sbx-L1=1 / Sbx-L2=2 / Sbx-L3=3
 	Capabilities []string
 	Trust        TrustTier // 替代 SignatureValid bool（ADR-0016 §2.1）
 	Idempotent   bool
 	Benchmarks   SkillBenchmarks
+	Instructions string // script runtime: SKILL.md 全文，供 LLM tool_use 返回
 	Deprecated   bool
 }
 

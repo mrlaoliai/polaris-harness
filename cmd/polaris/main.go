@@ -6,12 +6,14 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -597,6 +599,21 @@ func run() error { //nolint:gocyclo
 	httpServer.SetToolRegistry(toolReg)
 	httpServer.SetSkillRegistry(skillRegistry)
 	httpServer.SetToolExecutor(func(ctx context.Context, name string, args []byte) (*protocol.ToolResult, error) {
+		// script runtime 技能：读取 instructions 返回给 LLM，由 LLM 按指令处理输入
+		if skillName, ok := strings.CutPrefix(name, "skill:"); ok {
+			var instructions string
+			_ = store.DB().QueryRowContext(ctx,
+				`SELECT instructions FROM skills WHERE name=? AND deprecated=0`, skillName).Scan(&instructions)
+			var req struct {
+				Input string `json:"input"`
+			}
+			_ = json.Unmarshal(args, &req)
+			output := instructions
+			if req.Input != "" {
+				output += "\n\n---\n\n输入：" + req.Input
+			}
+			return &protocol.ToolResult{Output: []byte(output)}, nil
+		}
 		return sandboxRouter.Execute(ctx, protocol.Tool{Name: name}, args)
 	})
 	httpServer.SetLogStore(logStore)

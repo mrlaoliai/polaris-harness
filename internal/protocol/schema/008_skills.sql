@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS skills (
     trust_tier  INTEGER NOT NULL DEFAULT 0,      -- 0-4，见上方说明
     idempotent  INTEGER NOT NULL DEFAULT 0,      -- 1=幂等，允许缓存结果
     benchmarks  TEXT    NOT NULL DEFAULT '{}',   -- JSON: PassRate/AvgLatency 等
+    instructions TEXT   NOT NULL DEFAULT '',
     deprecated  INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     updated_at  TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))

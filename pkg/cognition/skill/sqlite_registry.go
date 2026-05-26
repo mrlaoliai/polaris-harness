@@ -39,8 +39,8 @@ func (r *SQLiteRegistryImpl) Register(ctx context.Context, meta protocol.SkillMe
 	query := `
 		INSERT INTO skills (
 			name, version, runtime, risk_level, sandbox, capabilities,
-			trust_tier, idempotent, benchmarks, deprecated, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+			trust_tier, idempotent, benchmarks, instructions, deprecated, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		ON CONFLICT(name) DO UPDATE SET
 			version=excluded.version,
 			runtime=excluded.runtime,
@@ -50,12 +50,13 @@ func (r *SQLiteRegistryImpl) Register(ctx context.Context, meta protocol.SkillMe
 			trust_tier=excluded.trust_tier,
 			idempotent=excluded.idempotent,
 			benchmarks=excluded.benchmarks,
+			instructions=excluded.instructions,
 			deprecated=excluded.deprecated,
 			updated_at=CURRENT_TIMESTAMP
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		meta.Name, meta.Version, meta.Runtime, meta.RiskLevel, meta.Sandbox,
-		string(capsBytes), int(meta.Trust), meta.Idempotent, string(benchBytes), meta.Deprecated,
+		string(capsBytes), int(meta.Trust), meta.Idempotent, string(benchBytes), meta.Instructions, meta.Deprecated,
 	)
 	if err != nil {
 		return perrors.Wrap(perrors.CodeInternal, "sqlite_registry: insert failed", err)
@@ -67,7 +68,7 @@ func (r *SQLiteRegistryImpl) Register(ctx context.Context, meta protocol.SkillMe
 func (r *SQLiteRegistryImpl) Get(ctx context.Context, name, version string) (*protocol.SkillMeta, error) {
 	query := `
 		SELECT name, version, runtime, risk_level, sandbox, capabilities,
-		       trust_tier, idempotent, benchmarks, deprecated
+		       trust_tier, idempotent, benchmarks, instructions, deprecated
 		FROM skills WHERE name = ?
 	`
 	args := []any{name}
@@ -83,7 +84,7 @@ func (r *SQLiteRegistryImpl) Get(ctx context.Context, name, version string) (*pr
 	var trustInt int
 	err := row.Scan(
 		&meta.Name, &meta.Version, &meta.Runtime, &meta.RiskLevel, &meta.Sandbox,
-		&capsRaw, &trustInt, &meta.Idempotent, &benchRaw, &meta.Deprecated,
+		&capsRaw, &trustInt, &meta.Idempotent, &benchRaw, &meta.Instructions, &meta.Deprecated,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -102,7 +103,7 @@ func (r *SQLiteRegistryImpl) Get(ctx context.Context, name, version string) (*pr
 func (r *SQLiteRegistryImpl) List(ctx context.Context, filter protocol.SkillFilter) ([]protocol.SkillMeta, error) {
 	query := `
 		SELECT name, version, runtime, risk_level, sandbox, capabilities,
-		       trust_tier, idempotent, benchmarks, deprecated
+		       trust_tier, idempotent, benchmarks, instructions, deprecated
 		FROM skills WHERE 1=1
 	`
 	var args []any
@@ -124,7 +125,7 @@ func (r *SQLiteRegistryImpl) List(ctx context.Context, filter protocol.SkillFilt
 		var trustInt int
 		if err := rows.Scan(
 			&meta.Name, &meta.Version, &meta.Runtime, &meta.RiskLevel, &meta.Sandbox,
-			&capsRaw, &trustInt, &meta.Idempotent, &benchRaw, &meta.Deprecated,
+			&capsRaw, &trustInt, &meta.Idempotent, &benchRaw, &meta.Instructions, &meta.Deprecated,
 		); err != nil {
 			return nil, err
 		}

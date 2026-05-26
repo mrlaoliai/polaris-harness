@@ -481,38 +481,73 @@ func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalog
 	// 3. 路由到对应的运行时表
 	if entry.Type == "skill" {
 		runtimeID = "sk_" + extID[4:]
-		// 读 SKILL.md
 		skillMD, err := os.ReadFile(filepath.Join(destDir, "SKILL.md"))
 		if err != nil {
 			s.updateExtensionInstanceError(ctx, extID, "SKILL.md not found")
 			return
 		}
-		_, desc, _ := parseSkillMD(string(skillMD)) // Note: might need to be exposed from plugin_sync or just use entry.Description
+		_, desc, _ := parseSkillMD(string(skillMD))
 		if desc == "" {
 			desc = entry.Description
 		}
+		capJSON, _ := json.Marshal([]string{"description:" + desc})
 
 		_, err = s.db.ExecContext(ctx,
-			`INSERT INTO skills(name, description, instructions, trust_tier, enabled, catalog_id, created_at, updated_at) 
-			 VALUES(?,?,?,?,1,?,?,?)`,
-			runtimeID, desc, string(skillMD), entry.TrustTier, catalogID, now, now)
+			`INSERT INTO skills(name, version, runtime, risk_level, sandbox, capabilities, trust_tier, idempotent, benchmarks, instructions, created_at, updated_at)
+			 VALUES(?,?,?,?,?,?,?,0,'{}',?,?,?)`,
+			runtimeID, "1.0.0", "script", "low", 1, string(capJSON), entry.TrustTier, string(skillMD), now, now)
 		if err != nil {
 			s.updateExtensionInstanceError(ctx, extID, "insert skill err: "+err.Error())
 			return
 		}
 	} else if entry.Type == "plugin" {
 		runtimeID = "pl_" + extID[4:]
-		// 读 plugin.json 以获取 entrypoint
-		pluginJSON, _ := os.ReadFile(filepath.Join(destDir, "plugin.json"))
-		var pcfg struct {
-			Entrypoint string `json:"entrypoint"`
+
+		// 解析 Bundle 清单（兼容 PluginBundleManifest 与旧 PluginJSON）
+		var bundle protocol.PluginBundleManifest
+		if raw, err2 := os.ReadFile(filepath.Join(destDir, "plugin.json")); err2 == nil {
+			_ = json.Unmarshal(raw, &bundle)
 		}
-		_ = json.Unmarshal(pluginJSON, &pcfg)
+
+		// 安装 Bundle 内联 MCP 服务器
+		for mcpName, def := range bundle.MCPInline {
+			s.installBundleMCP(ctx, extID, mcpName, def, entry.TrustTier, now)
+		}
+
+		// 安装 .mcp.json 引用的 MCP 服务器（旧格式兼容）
+		// 安全：先将路径规范化并确认落在 destDir 内，防止 "../" 穿越
+		if bundle.MCPFile != "" {
+			if safePath, ok := safeJoin(destDir, bundle.MCPFile); ok {
+				if mcpCfg, err2 := marketplace.LoadMCPConfig(safePath); err2 == nil {
+					for mcpName, def := range mcpCfg.MCPServers {
+						s.installBundleMCP(ctx, extID, mcpName, def, entry.TrustTier, now)
+					}
+				}
+			}
+		}
+
+		// 安装 Bundle 内声明的 Skill
+		// 安全：同上，逐条校验 skillRef.Path 不得穿越出 destDir
+		for _, skillRef := range bundle.Skills {
+			s.installBundleSkill(ctx, extID, destDir, skillRef.Path, skillRef.Name, entry.TrustTier, now)
+		}
+
+		// 解析外部厂商格式（OpenAI ai-plugin.json / Anthropic plugin.toml 等）并安装 MCP 子组件
+		if subEntries, err2 := marketplace.ParseManifestDir(destDir, "", protocol.Marketplace{
+			ID: "bundle_" + extID, Publisher: entry.Publisher, TrustTier: entry.TrustTier,
+		}); err2 == nil {
+			for _, sub := range subEntries {
+				if sub.Type == "mcp" && sub.Command != "" {
+					def := protocol.MCPServerDef{Command: sub.Command, Args: sub.Args, Env: sub.Env}
+					s.installBundleMCP(ctx, extID, sub.Name, def, entry.TrustTier, now)
+				}
+			}
+		}
 
 		_, err := s.db.ExecContext(ctx,
-			`INSERT INTO plugins(id, name, description, entrypoint, args, env, trust_tier, enabled, catalog_id, created_at, updated_at) 
-			 VALUES(?,?,?,?, '[]', '{}', ?, 1, ?, ?, ?)`,
-			runtimeID, name, entry.Description, pcfg.Entrypoint, entry.TrustTier, catalogID, now, now)
+			`INSERT INTO plugins(id, name, description, entrypoint, args, env, trust_tier, enabled, catalog_id, created_at, updated_at)
+			 VALUES(?,?,?,?,'[]','{}',?,1,?,?,?)`,
+			runtimeID, name, entry.Description, bundle.Entrypoint, entry.TrustTier, catalogID, now, now)
 		if err != nil {
 			s.updateExtensionInstanceError(ctx, extID, "insert plugin err: "+err.Error())
 			return
@@ -568,4 +603,91 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, data, info.Mode())
+}
+
+// safeJoin 将 rel 拼接到 base 下，并通过 EvalSymlinks + Rel 验证结果仍在 base 内。
+// 防止 "../" 路径穿越；返回 (resolvedPath, true) 或 ("", false)。
+func safeJoin(base, rel string) (string, bool) {
+	resolvedBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return "", false
+	}
+	// filepath.Clean("/" + rel) 将 rel 规范化为绝对形式再去掉前导 "/"，
+	// 从而让 "../../etc/passwd" 变成 "/etc/passwd"，filepath.Join 后安全可比较。
+	candidate := filepath.Join(resolvedBase, filepath.Clean("/"+rel))
+	realCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		// 文件尚不存在时 EvalSymlinks 会报错；仅做静态检查
+		realCandidate = candidate
+	}
+	relPart, err := filepath.Rel(resolvedBase, realCandidate)
+	if err != nil || strings.HasPrefix(relPart, "..") || filepath.IsAbs(relPart) {
+		return "", false
+	}
+	return realCandidate, true
+}
+
+// installBundleMCP 在 Plugin Bundle 安装过程中写入子 MCP 的运行时记录和安装记录。
+func (s *Server) installBundleMCP(ctx context.Context, parentExtID, name string, def protocol.MCPServerDef, trustTier int, now string) {
+	childExtID := "ext_" + newHex(8)
+	mcpID := "mcp_" + childExtID[4:]
+
+	argsBytes, _ := json.Marshal(def.Args)
+	envBytes, _ := json.Marshal(def.Env)
+
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO mcp_servers(id, name, transport, command, args, env, url, enabled, timeout, trust_tier, catalog_id, created_at, updated_at)
+		 VALUES(?,?,'stdio',?,?,?,?,1,30,?,'',?,?)`,
+		mcpID, name, def.Command, string(argsBytes), string(envBytes), "", trustTier, now, now); err != nil {
+		return
+	}
+
+	_, _ = s.db.ExecContext(ctx,
+		`INSERT INTO extension_instances(id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled, runtime_id, install_path, status, parent_id, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,?,?,'installed',?,?,?)`,
+		childExtID, "mcp", "marketplace", "", name, "", trustTier, mcpID, "", parentExtID, now, now)
+
+	if s.mcpMgr != nil {
+		go s.startMCPServer(MCPServerConfig{
+			ID: mcpID, Name: name, Transport: "stdio", Command: def.Command,
+			Args: def.Args, Env: def.Env, Timeout: 30, TrustTier: trustTier, Enabled: true,
+		})
+	}
+}
+
+// installBundleSkill 在 Plugin Bundle 安装过程中写入子 Skill 的运行时记录和安装记录。
+func (s *Server) installBundleSkill(ctx context.Context, parentExtID, bundleDir, skillPath, skillName string, trustTier int, now string) {
+	// 安全：拒绝穿越 bundleDir 的路径，防止读取 bundle 外文件
+	fullPath, ok := safeJoin(bundleDir, skillPath)
+	if !ok {
+		return
+	}
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return
+	}
+
+	parsedName, desc, _ := parseSkillMD(string(data))
+	if skillName == "" {
+		skillName = parsedName
+	}
+	if skillName == "" {
+		skillName = filepath.Base(filepath.Dir(fullPath))
+	}
+
+	childExtID := "ext_" + newHex(8)
+	runtimeID := "sk_" + childExtID[4:]
+	capJSON, _ := json.Marshal([]string{"description:" + desc})
+
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO skills(name, version, runtime, risk_level, sandbox, capabilities, trust_tier, idempotent, benchmarks, instructions, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,0,'{}',?,?,?)`,
+		runtimeID, "1.0.0", "script", "low", 1, string(capJSON), trustTier, string(data), now, now); err != nil {
+		return
+	}
+
+	_, _ = s.db.ExecContext(ctx,
+		`INSERT INTO extension_instances(id, ext_type, origin, catalog_id, name, publisher, trust_tier, enabled, runtime_id, install_path, status, parent_id, created_at, updated_at)
+		 VALUES(?,?,?,?,?,?,?,1,?,?,'installed',?,?,?)`,
+		childExtID, "skill", "marketplace", "", skillName, "", trustTier, runtimeID, filepath.Dir(fullPath), parentExtID, now, now)
 }

@@ -61,6 +61,75 @@ type MCPConfig struct {
 	MCPServers map[string]MCPServerDef `json:"mcpServers"`
 }
 
+// PluginBundleManifest 是多组件 Bundle 的扩展 plugin.json（M13-bis §2.1）。
+// MCPFile 字段与 PluginJSON.MCPServers 同名，向下兼容已有单 MCP 插件格式。
+type PluginBundleManifest struct {
+	Name        string                  `json:"name"`
+	Version     string                  `json:"version"`
+	Description string                  `json:"description"`
+	Entrypoint  string                  `json:"entrypoint,omitempty"`
+	MCPFile     string                  `json:"mcp_servers,omitempty"` // 指向 .mcp.json 的相对路径
+	MCPInline   map[string]MCPServerDef `json:"mcp_inline,omitempty"`  // 内联 MCP 服务器映射
+	Skills      []BundleSkillRef        `json:"skills,omitempty"`
+	Hooks       map[string]string       `json:"hooks,omitempty"` // 事件 → 脚本路径
+}
+
+// BundleSkillRef 引用 Bundle 内的单个技能。
+type BundleSkillRef struct {
+	Path string `json:"path"` // 相对于 Bundle 根目录的 SKILL.md 路径
+	Name string `json:"name,omitempty"`
+}
+
+// AIPluginJSON 是 OpenAI ai-plugin.json 清单格式。
+// https://platform.openai.com/docs/plugins/getting-started/plugin-manifest
+type AIPluginJSON struct {
+	SchemaVersion       string `json:"schema_version"`
+	NameForModel        string `json:"name_for_model"`
+	NameForHuman        string `json:"name_for_human"`
+	DescriptionForModel string `json:"description_for_model"`
+	DescriptionForHuman string `json:"description_for_human"`
+	Auth                struct {
+		Type string `json:"type"` // "none" | "service_http" | "user_http" | "oauth"
+	} `json:"auth"`
+	API struct {
+		Type string `json:"type"` // "openapi" | "mcp"
+		URL  string `json:"url"`
+	} `json:"api"`
+	LogoURL      string `json:"logo_url"`
+	ContactEmail string `json:"contact_email"`
+	LegalInfoURL string `json:"legal_info_url"`
+}
+
+// AnthropicPluginTOML 是 Anthropic .claude-plugin/plugin.toml 格式。
+// struct tag `toml:` 由 go-toml/v2 反射读取，无需在 protocol 包导入 toml 库。
+type AnthropicPluginTOML struct {
+	Plugin struct {
+		Name        string `toml:"name"`
+		Description string `toml:"description"`
+		Version     string `toml:"version"`
+	} `toml:"plugin"`
+	MCP struct {
+		Command string            `toml:"command"`
+		Args    []string          `toml:"args"`
+		Env     map[string]string `toml:"env"`
+	} `toml:"mcp"`
+}
+
+// GoogleSkillsYAML 是 Google Agent Skills manifest 格式（skills.yaml / agent-manifest.yaml）。
+type GoogleSkillsYAML struct {
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	Version     string   `yaml:"version"`
+	Command     string   `yaml:"command,omitempty"`
+	Args        []string `yaml:"args,omitempty"`
+	Skills      []struct {
+		Name        string   `yaml:"name"`
+		Description string   `yaml:"description"`
+		Command     string   `yaml:"command,omitempty"`
+		Args        []string `yaml:"args,omitempty"`
+	} `yaml:"skills,omitempty"`
+}
+
 // PluginInstallRequest 一键安装请求体。
 type PluginInstallRequest struct {
 	CatalogID string `json:"catalog_id"`

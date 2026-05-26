@@ -3,12 +3,14 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 
 	"github.com/polarisagi/polaris-harness/internal/protocol"
@@ -259,6 +261,28 @@ func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protoc
 			}
 		}
 
+		// OpenAI ai-plugin.json
+		if info.Name() == "ai-plugin.json" {
+			if entry, err := parseAIPluginEntry(path, mpDir, mp); err == nil && entry != nil {
+				entries = append(entries, *entry)
+			}
+		}
+
+		// Anthropic plugin.toml（根目录或 .claude-plugin/ 子目录）
+		if info.Name() == "plugin.toml" {
+			if entry, err := parsePluginTOMLEntry(path, mpDir, mp); err == nil && entry != nil {
+				entries = append(entries, *entry)
+			}
+		}
+
+		// Google Agent Skills skills.yaml / agent-manifest.yaml
+		if info.Name() == "skills.yaml" || info.Name() == "agent-manifest.yaml" {
+			newEntries, err := parseGoogleSkillsEntry(path, mpDir, mp)
+			if err == nil {
+				entries = append(entries, newEntries...)
+			}
+		}
+
 		return nil
 	})
 
@@ -381,6 +405,171 @@ func (s *Server) SyncAllMarketplaces(ctx context.Context) (int, error) {
 	}
 
 	return syncedCount, nil
+}
+
+// parseAIPluginEntry 解析 OpenAI ai-plugin.json 格式。
+// api.type=="mcp" 时映射为 mcp 条目；其余映射为 app（URL 直连）。
+func parseAIPluginEntry(path, mpDir string, mp protocol.Marketplace) (*protocol.RegistryEntry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var p protocol.AIPluginJSON
+	if err := json.Unmarshal(data, &p); err != nil {
+		return nil, err
+	}
+	name := p.NameForHuman
+	if name == "" {
+		name = p.NameForModel
+	}
+	if name == "" {
+		return nil, nil
+	}
+	desc := p.DescriptionForHuman
+	if desc == "" {
+		desc = p.DescriptionForModel
+	}
+
+	relDir, _ := filepath.Rel(mpDir, filepath.Dir(path))
+	relPath := filepath.ToSlash(relDir)
+
+	extType := "app"
+	command := ""
+	if strings.EqualFold(p.API.Type, "mcp") {
+		extType = "mcp"
+		command = p.API.URL
+	}
+
+	url := p.API.URL
+	if strings.Contains(mp.RepoURL, "github.com") && url == "" {
+		url = strings.TrimSuffix(mp.RepoURL, "/") + "/tree/main/" + relPath
+	}
+
+	return &protocol.RegistryEntry{
+		ID:          mp.ID + "/" + relPath,
+		Publisher:   mp.Publisher,
+		Type:        extType,
+		TrustTier:   mp.TrustTier,
+		Name:        name,
+		Description: desc,
+		URL:         url,
+		Homepage:    p.LegalInfoURL,
+		Command:     command,
+		Timeout:     60,
+	}, nil
+}
+
+// parsePluginTOMLEntry 解析 Anthropic plugin.toml（根目录或 .claude-plugin/ 下）。
+func parsePluginTOMLEntry(path, mpDir string, mp protocol.Marketplace) (*protocol.RegistryEntry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var p protocol.AnthropicPluginTOML
+	if err := toml.Unmarshal(data, &p); err != nil {
+		return nil, err
+	}
+	if p.Plugin.Name == "" && p.MCP.Command == "" {
+		return nil, nil
+	}
+
+	relDir, _ := filepath.Rel(mpDir, filepath.Dir(path))
+	// plugin.toml 在 .claude-plugin/ 子目录时，ID 取其上级目录
+	if filepath.Base(relDir) == ".claude-plugin" {
+		relDir = filepath.Dir(relDir)
+	}
+	relPath := filepath.ToSlash(relDir)
+
+	extType := "mcp"
+	if p.MCP.Command == "" {
+		extType = "plugin"
+	}
+
+	url := mp.RepoURL
+	if strings.Contains(url, "github.com") {
+		url = strings.TrimSuffix(url, "/") + "/tree/main/" + relPath
+	}
+
+	return &protocol.RegistryEntry{
+		ID:          mp.ID + "/" + relPath,
+		Publisher:   mp.Publisher,
+		Type:        extType,
+		TrustTier:   mp.TrustTier,
+		Name:        p.Plugin.Name,
+		Description: p.Plugin.Description,
+		URL:         url,
+		Command:     p.MCP.Command,
+		Args:        p.MCP.Args,
+		Env:         p.MCP.Env,
+		Timeout:     60,
+	}, nil
+}
+
+// parseGoogleSkillsEntry 解析 Google skills.yaml / agent-manifest.yaml 格式。
+// 顶层有 command 时映射为 mcp；否则映射为 skill。多 skills 列表逐条展开。
+func parseGoogleSkillsEntry(path, mpDir string, mp protocol.Marketplace) ([]protocol.RegistryEntry, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var g protocol.GoogleSkillsYAML
+	if err := yaml.Unmarshal(data, &g); err != nil {
+		return nil, err
+	}
+
+	relDir, _ := filepath.Rel(mpDir, filepath.Dir(path))
+	relPath := filepath.ToSlash(relDir)
+	baseID := mp.ID + "/" + relPath
+
+	baseURL := mp.RepoURL
+	if strings.Contains(baseURL, "github.com") {
+		baseURL = strings.TrimSuffix(baseURL, "/") + "/tree/main/" + relPath
+	}
+
+	// 单条目
+	if g.Name != "" && len(g.Skills) == 0 {
+		extType := "skill"
+		if g.Command != "" {
+			extType = "mcp"
+		}
+		return []protocol.RegistryEntry{{
+			ID:          baseID,
+			Publisher:   mp.Publisher,
+			Type:        extType,
+			TrustTier:   mp.TrustTier,
+			Name:        g.Name,
+			Description: g.Description,
+			URL:         baseURL,
+			Command:     g.Command,
+			Args:        g.Args,
+			Timeout:     60,
+		}}, nil
+	}
+
+	// 多技能列表
+	entries := make([]protocol.RegistryEntry, 0, len(g.Skills))
+	for i, s := range g.Skills {
+		if s.Name == "" {
+			continue
+		}
+		extType := "skill"
+		if s.Command != "" {
+			extType = "mcp"
+		}
+		entries = append(entries, protocol.RegistryEntry{
+			ID:          fmt.Sprintf("%s/skill_%d", baseID, i),
+			Publisher:   mp.Publisher,
+			Type:        extType,
+			TrustTier:   mp.TrustTier,
+			Name:        s.Name,
+			Description: s.Description,
+			URL:         baseURL,
+			Command:     s.Command,
+			Args:        s.Args,
+			Timeout:     60,
+		})
+	}
+	return entries, nil
 }
 
 // handleSyncMarketplaces 刷新/同步市场
