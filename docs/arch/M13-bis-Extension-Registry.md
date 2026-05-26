@@ -1,7 +1,7 @@
 # 模块 13-bis: Extension Registry
 
-> 扩展系统的市场、安装、运行时三层模型。覆盖 MCP / Skill / Plugin / App 全类型。[HE-Rule-3] [HE-Rule-6]
-> **§跳读**: 0:职责边界 / 1:三层模型 / 2:类型定义 / 3:安装流 / 4:信任门控 / 5:文件系统 / 6:调用路由 / 7:学习技能归并 / 8:表引用速查
+> 扩展系统的市场、安装、路由三层模型。覆盖 MCP / Skill / Plugin / App / Automation / Agent 六类扩展。[HE-Rule-3] [HE-Rule-6]
+> **§跳读**: 0:职责边界 / 1:能力分层 / 2:扩展类型 / 3:技能执行模式 / 4:工具懒加载 / 5:安装流 / 6:信任门控 / 7:文件系统 / 8:调用路由 / 9:自动化 / 10:跨代理协作 / 11:学习技能归并 / 12:表引用
 
 ---
 
@@ -9,44 +9,49 @@
 
 - **是**: 市场同步、目录展示、安装/卸载 API、安装状态追踪
 - **是**: `extension_instances` 作为所有已安装扩展的单一事实来源（SSoT）
-- **是**: 安装后运行时绑定（写 `mcp_servers` 或 `skills`）
+- **是**: 安装后运行时绑定（写 `mcp_servers` / `skills` / `plugins` / `automations`）
+- **是**: 工具能力发现（ToolSearch 懒加载、Extension Card 元数据）
 - **不是**: MCP 进程生命周期管理（M7 MCPManager）
-- **不是**: Wasm 执行与沙箱（M7 WazmRuntime）
+- **不是**: Wasm 执行与沙箱（M7 WazeroRuntime）
 - **不是**: Skill 检索与 Logic Collapse（M6）
 - **不是**: 信任策略制定（M11 Cedar-Gate）
+- **不是**: 自动化任务调度（M13 Scheduler，但 automation 扩展类型的元数据在此注册）
 
 ---
 
-## 1. 三层模型
+## 1. 能力分层模型
 
 ```
 Layer 0  Market（目录层）
-  plugin_marketplaces   市场来源注册；builtin=4条，用户可追加
-  extension_catalog        市场同步快照；只读缓存，不驱动执行
+  plugin_marketplaces   市场来源注册；builtin 内置，用户可追加
+  extension_catalog     市场同步快照；只读缓存，不驱动执行
 
 Layer 1  Instances（安装层）← SSoT
-  extension_instances   所有已安装扩展的统一记录
-                        origin 区分来源，status 追踪异步安装进度
+  extension_instances   所有已安装扩展的统一记录（含子组件 parent_id）
 
 Layer 2  Runtime（运行时层）
-  mcp_servers           MCP 进程连接配置；MCPManager 唯一消费方
-  skills（008）         Wasm/Script 执行元数据；SkillExecutor 唯一消费方
+  mcp_servers（015）    MCP 进程连接配置；MCPManager 唯一消费方
+  skills（008）         script/wasm 执行元数据 + instructions 全文
+  plugins（021）        Bundle 入口元数据（entrypoint/env）
+  automations（022）    触发器 + 动作配置；Scheduler 消费方
 ```
 
-**数据流方向**：`plugin_marketplaces → 同步 → extension_catalog → 安装 → extension_instances → 绑定 → mcp_servers / skills`
+**数据流**：`plugin_marketplaces → 同步 → extension_catalog → 安装 → extension_instances → 绑定 → Runtime 表`
 
-`extension_instances` 是唯一跨层视图。前端安装状态查询、卸载、刷新全走此表，不直接查运行时表。
+`extension_instances` 是唯一跨层视图。前端查询、卸载全走此表。
 
 ---
 
 ## 2. 扩展类型
 
-| ext_type | 运行时绑定 | 文件下载 | 典型来源 |
-|----------|-----------|---------|---------|
-| `mcp`    | `mcp_servers` | 是（或自管理进程） | marketplace / user |
-| `skill`  | `skills`（008） | 是（script/wasm） | marketplace / learned |
-| `plugin` | `plugins`（021）元数据 + 子组件各走 mcp_servers/skills | 是（bundle 解压） | marketplace |
-| `app`    | 无（URL 直记，当前不支持运行时调用） | 否 | marketplace / user |
+| ext_type | 核心能力 | 运行时绑定 | 典型来源 |
+|----------|---------|-----------|---------|
+| `mcp` | 外部工具进程（JSON-RPC 2.0 over stdio/HTTP） | `mcp_servers` → MCPManager | marketplace / user |
+| `skill` | 行为指令集（SKILL.md）或 Wasm 执行单元 | `skills`（008） | marketplace / learned |
+| `plugin` | Skills + MCP + Hooks 的打包分发单元 | `plugins`（021）+ 子组件各自绑定 | marketplace |
+| `app` | URL 应用，通过 WebProxy HTTP 代理访问 | 无独立表（URL 存 extension_instances） | marketplace / user |
+| `automation` | 触发器 + 动作组合（cron/webhook/event/manual） | `automations`（022） | user / marketplace |
+| `agent` | 外部 AI Agent 端点（A2A 协议）暴露为工具 | `mcp_servers`（transport=a2a） | marketplace / user |
 
 ### 2.1 多厂商格式适配
 
@@ -54,184 +59,386 @@ Layer 2  Runtime（运行时层）
 
 | 清单文件 | 厂商 | 安装结果 |
 |---------|------|---------|
-| `ai-plugin.json`（api.type=mcp） | OpenAI | 写入 mcp_servers，启动 MCP 进程 |
-| `ai-plugin.json`（api.type=openapi） | OpenAI | RegistryEntry type=app，URL 存储，**当前不可被 LLM 调用** |
-| `.claude-plugin/plugin.toml` 或 `plugin.toml`（含 command） | Anthropic | 写入 mcp_servers |
-| `.claude-plugin/plugin.json` | Anthropic | RegistryEntry type=plugin |
-| `skills.yaml` / `agent-manifest.yaml`（含 command） | Google | 写入 mcp_servers |
-| `skills.yaml`（无 command，含 name） | Google | 写入 skills（script runtime） |
+| `ai-plugin.json`（api.type=mcp） | OpenAI | mcp_servers，启动 MCP 进程 |
+| `ai-plugin.json`（api.type=openapi） | OpenAI | app 类型，URL + OpenAPI schema 存储 |
+| `.claude-plugin/plugin.toml` / `plugin.toml`（含 command） | Anthropic | mcp_servers |
+| `.claude-plugin/plugin.json` | Anthropic | plugin 类型 |
+| `skills.yaml` / `agent-manifest.yaml`（含 command） | Google | mcp_servers |
+| `skills.yaml`（无 command，含 name） | Google | skills（script runtime） |
 
-Polaris 原生格式（`SKILL.md` / `plugin.json`）由 `pkg/extensions/marketplace/loader.go` 处理，不经此适配层。
+Polaris 原生格式（`SKILL.md` / `plugin.json`）由 `pkg/extensions/marketplace/loader.go` 处理。
 
-**origin 枚举**：
+### 2.2 origin 枚举
 
 | origin | 含义 | trust_tier 默认值 |
 |--------|------|-----------------|
-| `builtin`     | 仅限维持 Agent 基础生存的极简原生工具（如 `bash`, `search_extension`, `install_extension`） | 4 TrustSystem |
-| `official`    | 官方云端市场下载的推荐扩展包（解耦二进制） | 3 TrustOfficial |
-| `marketplace` | 第三方社区市场下载 | 继承 extension_catalog |
-| `user`        | 用户手动创建/配置 | 1 TrustLocal |
-| `learned`     | M9 自演化 promote | 1 TrustLocal |
+| `builtin` | 程序内嵌生存工具（bash, search_extension, install_extension） | 4 TrustSystem |
+| `official` | 官方市场推荐包 | 3 TrustOfficial |
+| `marketplace` | 第三方社区市场 | 继承 extension_catalog |
+| `user` | 用户手动创建/配置 | 1 TrustLocal |
+| `learned` | M9 自演化 promote | 1 TrustLocal |
 
 ---
 
-## 3. 安装流
+## 3. 技能执行模式
 
-### 3.1 MCP
+Skill 有两种执行模式，在 SKILL.md frontmatter 的 `mode` 字段声明：
+
+| mode | 机制 | 触发时机 | 适用场景 |
+|------|------|---------|---------|
+| `tool`（默认） | 暴露为 `skill:{name}` LLM 工具；LLM 主动 tool_use 调用 | 按需，LLM 决策 | 专项任务技能（代码审查、PR 规范） |
+| `ambient` | 将 instructions 注入每次请求的 system prompt | 会话开始时自动加载 | 全局行为规范（输出格式、安全检查） |
+| `both` | 同时暴露为工具 + 注入 system prompt | 双路径 | 同时影响行为且可显式调用 |
+
+**ambient 加载规则**：
+- 查询 `skills WHERE mode IN ('ambient','both') AND deprecated=0`，按 trust_tier 排序
+- 注入位置：system prompt ImmutableCore 区末尾，TaintedData 区之前
+- 总字符限制：ambient skills 合计 ≤ 4000 字符（不得占用超过 ~10% 上下文窗口）
+- 超限时优先保留 trust_tier 高的，其余截断并 WARN
+
+**代码约束**：
+- `server.go injectSystemPrompt()` 负责 ambient 注入
+- `buildToolSchemas()` 负责 tool 模式的 schema 构建
+- 两条路径互不干扰
+
+---
+
+## 4. 工具发现与懒加载
+
+当已安装工具总数超过阈值（默认 40 个），切换到懒加载模式，避免 context 爆炸：
+
+```
+正常模式（tools ≤ 40）：
+  buildToolSchemas() 全量返回所有 builtin + mcp + skill:tool 的 schema
+
+懒加载模式（tools > 40）：
+  buildToolSchemas() 仅返回：
+    1. 核心 builtin 工具（trust_tier=4）
+    2. search_tools 元工具（固定暴露）
+  LLM 使用 search_tools(query) 按需发现并加载具体工具
+```
+
+**search_tools 元工具**（builtin, trust_tier=4）：
+
+```json
+{
+  "name": "search_tools",
+  "description": "搜索并激活可用工具/技能。返回匹配的工具 schema，激活后本次对话可调用。",
+  "parameters": {
+    "query": "string",
+    "type": "string? // mcp|skill|builtin|any"
+  }
+}
+```
+
+执行：`SELECT name,description FROM (mcp_schemas UNION skills UNION builtins) WHERE ... LIKE '%query%' LIMIT 10`，将命中结果的完整 schema 注入后续 tool_use 可用列表。
+
+---
+
+## 5. 安装流
+
+### 5.1 MCP
 
 ```
 POST /v1/plugins/install {catalog_id, type=mcp}
-  1. 写 extension_instances (status=installing)
-  2. INSERT mcp_servers（继承 trust_tier）
-  3. go MCPManager.startMCPServer()
-  4. UPDATE extension_instances SET status=installed, runtime_id=mcp_servers.id
+  1. Manager.InstallExtension() → Cedar Gate 拦截（trust_tier / permission_mode）
+  2. 写 extension_instances (status=installing)
+  3. INSERT mcp_servers（继承 trust_tier）
+  4. MCPManager.startMCPServer() → goroutine 连接 + 工具注册到 InProcessSandbox
+  5. UPDATE extension_instances SET status=installed, runtime_id=mcp_servers.id
 ```
 
-### 3.2 Skill
+### 5.2 Skill
 
 ```
 POST /v1/plugins/install {catalog_id, type=skill}
-  1. 写 extension_instances (status=downloading)
-  2. go downloadAndInstallSkill():
-     a. HTTP 下载 tar.gz → 解压 → install_path
-     b. 读取 SKILL.md → 解析 name/description frontmatter
-     c. INSERT INTO skills(name, runtime='script', instructions=SKILL.md全文, ...)
-     d. UPDATE extension_instances SET status=installed, runtime_id=runtimeID
+  1. Manager.InstallExtension() → Cedar Gate
+  2. 写 extension_instances (status=downloading)
+  3. HTTP 下载 tar.gz → 解压 → install_path
+  4. 读 SKILL.md → 解析 frontmatter（name, description, mode）
+  5. INSERT INTO skills(runtime='script', mode=?, instructions=SKILL.md全文, ...)
+  6. UPDATE extension_instances SET status=installed
+
+  mode='tool': 下次 buildToolSchemas() 自动包含
+  mode='ambient': 下次请求的 injectSystemPrompt() 自动注入
 ```
 
-**说明**：script runtime 技能 instructions 字段存储 SKILL.md 全文，供 LLM tool_use 时返回给 LLM 执行。wasm runtime 技能通过 Logic Collapse 编译（M6 §2.2），instructions 为空。
-
-### 3.3 Plugin Bundle
+### 5.3 Plugin Bundle
 
 ```
 POST /v1/plugins/install {catalog_id, type=plugin}
-  1. 写 extension_instances (status=downloading, parent)
-  2. go downloadAndInstallPlugin():
-     a. HTTP 下载 tar.gz → 解压 → install_path
-     b. 解析 plugin.json (PluginBundleManifest)：
-        mcp_inline{}  → installBundleMCP() → mcp_servers + 子 extension_instances
-        mcp_servers（.mcp.json 引用）→ 同上（路径安全校验 safeJoin）
-        skills[]      → installBundleSkill() → skills + 子 extension_instances
-        外部厂商格式  → adapter.ParseManifestDir() → 按类型分发
-     c. INSERT plugins (021) 写入 bundle 元数据（entrypoint/env）
-     d. UPDATE parent extension_instances SET status=installed
+  1. Manager.InstallExtension() → Cedar Gate（含 hooks 安全检查）
+  2. 写 extension_instances (status=downloading, parent)
+  3. HTTP 下载 tar.gz → 解压 → install_path
+  4. 解析 plugin.json (PluginBundleManifest)：
+     mcp_inline{} → installBundleMCP() → mcp_servers + 子 extension_instances
+     mcp_servers（.mcp.json）→ 同上（safeJoin 路径校验）
+     skills[] → installBundleSkill() → skills + 子 extension_instances
+     hooks{} → 写入 ~/.polaris-harness/hooks/，注册到 M7 HookRunner
+     外部格式 → adapter.ParseManifestDir() → 按类型分发
+  5. INSERT plugins (021) 写 bundle 入口元数据
+  6. UPDATE parent extension_instances SET status=installed
 ```
 
-**注意**：`plugin.json` 中 `hooks` 字段当前仅解析，未执行写入 policies/ 目录（待 M11 Hook 框架接入）。子组件（MCP/Skill）通过 `parent_id` 关联到 extension_instances 父记录。
-
-### 3.4 同步但不自动安装
-
-系统启动时（`bootMarketplaceInit`），后台自动拉取所有 `is_builtin=1` 官方市场源至 `extension_catalog` 作为前端展示的缓存目录。**默认情况下不会静默强制安装**任何外部扩展（保持 Agent 基础生存极简）。用户需在前端主动点击安装，才触发对应运行时表的绑定及 `extension_instances` 的写入。
-
-### 3.5 彻底卸载
+### 5.4 Automation
 
 ```
-DELETE /v1/plugins/{catalog_id}
-  1. 查 extension_instances WHERE catalog_id=?
-  2. 按 ext_type 清理运行时绑定（MCPManager.Remove / skills 表 deprecate / plugins 表记录）
-  3. 通过底层管理接口安全删除 install_path 物理目录（严格禁止 HTTP Handler 裸写 os.RemoveAll）
+POST /v1/plugins/install {catalog_id, type=automation}
+  1. Manager.InstallExtension() → Cedar Gate
+  2. 写 extension_instances (ext_type=automation)
+  3. INSERT automations(022)：trigger_type, trigger_config, action_type, action_ref
+     action_type: 'skill' | 'mcp_tool' | 'agent'
+     action_ref:  对应 skill name / mcp tool name / agent id
+  4. Scheduler.Register(automation_id) → 按 trigger_type 注册调度
+
+  trigger_type='cron'    → 写 cron 表达式到 scheduler
+  trigger_type='webhook' → 生成 /v1/automations/{id}/trigger 端点
+  trigger_type='event'   → 订阅 outbox event type
+  trigger_type='manual'  → 仅 POST /v1/automations/{id}/run 触发
+```
+
+### 5.5 Agent（外部 AI Agent）
+
+```
+POST /v1/plugins/install {catalog_id, type=agent}
+  1. Manager.InstallExtension() → Cedar Gate（TrustTier 严格校验）
+  2. 写 extension_instances (ext_type=agent)
+  3. INSERT mcp_servers（transport='a2a', url=AgentCard URL）
+  4. MCPManager 通过 A2A Client Discover 获取 Agent Card → 转换为 MCP tool schema
+  5. Agent 以 "agent:{id}" 工具名注入 InProcessSandbox
+```
+
+### 5.6 市场同步（只同步不安装）
+
+启动时 `bootMarketplaceInit` 后台拉取 `is_builtin=1` 市场源至 `extension_catalog`，仅作前端展示缓存。**不静默安装任何外部扩展**。
+
+### 5.7 彻底卸载
+
+```
+DELETE /v1/plugins/{ext_id}
+  1. 查 extension_instances（含 parent_id=ext_id 的子记录）
+  2. 按 ext_type 清理运行时：
+     mcp    → MCPManager.Remove() + DELETE mcp_servers
+     skill  → SkillRegistry.Deprecate() 或 DELETE skills
+     plugin → DELETE plugins + 递归卸载子组件
+     automation → Scheduler.Deregister() + DELETE automations
+     agent  → MCPManager.Remove()
+  3. safeRemoveAll(install_path)（禁止 HTTP Handler 裸写 os.RemoveAll）
   4. DELETE extension_instances（含子记录）
-  5. [对于非 is_builtin 或 origin='user' 的第三方扩展] 级联 DELETE extension_catalog，确保彻底从前端列表消失
+  5. 非 builtin 第三方扩展 → 级联 DELETE extension_catalog
 ```
 
 ---
 
-## 4. 信任门控
+## 6. 信任门控
 
-> 策略制定见 M11 Cedar-Gate。本节只描述 Extension Registry 的触发点。
+> 策略制定见 M11 Cedar-Gate。本节仅描述触发点。
 
-**核心约束**：所有扩展安装路径（包括手动创建、Agent 自治安装、AI 生成技能）必须强制通过 `Manager.InstallExtension` 中央网关，确保策略拦截（自动/HITL审批/拒绝）不可绕过。
-安装时 `trust_tier` 从 `extension_catalog` 继承（自建内容定为 TrustLocal 1），写入 `extension_instances` 和运行时表（`mcp_servers.trust_tier` / `skills.trust_tier`）。
-同时结合系统全局的 `permission_mode`（`default` / `auto_review` / `full_access`）及扩展是否有钩子(hooks)，由 Cedar 引擎（`InstallSecurityGate`）统一拦截并决断（自动放行 / HITL 审批 / 强制拒绝），并记入 AuditTrail 日志。
-
-**禁止**：安装请求的 `trust_tier` 字段不允许客户端覆盖（server 端强制忽略）。
-
-TrustTier 及 PermissionMode 共同影响：
+**核心约束**：所有安装路径（手动、Agent 自治、AI 生成）必须通过 `Manager.InstallExtension` 中央网关，不可绕过。
 
 | trust_tier | 安装时 | 运行时 |
 |------------|-------|-------|
 | 4 System   | 不走此流（程序内嵌） | 直接执行 |
 | 3 Official | 自动确认 | Sbx-L2，TaintMedium |
 | 2 Community | 自动确认 | Sbx-L1，TaintHigh |
-| 1 Local    | 用户确认弹窗 | Sbx-L1，TaintHigh，每次提示 |
-| 0 Untrusted | 拒绝安装 | — |
+| 1 Local    | 用户确认 | Sbx-L1，TaintHigh |
+| 0 Untrusted | 拒绝 | — |
+
+安装时 trust_tier 强制从 extension_catalog 继承，禁止客户端覆盖。Plugin hooks 存在时 trust_tier < 3 触发 HITL 审批。
 
 ---
 
-## 5. 文件系统布局
+## 7. 文件系统布局
 
 ```
 ~/.polaris-harness/
 ├── extensions/
-│   ├── skill/
-│   │   ├── marketplace/{ext_id}/   # 市场安装的 Skill
-│   │   │   ├── SKILL.md
-│   │   │   ├── impl.wasm           # 或 main.py / main.sh
-│   │   │   └── SIGNATURE
-│   │   └── learned/{ext_id}/       # M9 自演化 promote 的 Skill
-│   └── plugin/{ext_id}/            # Plugin Bundle 解压
-│       ├── plugin.json
-│       ├── skills/
-│       └── hooks/
-├── cache/{marketplace_id}/         # 市场同步临时下载区（安装完成后清理）
+│   ├── skill/{ext_id}/         # script/wasm 技能安装目录
+│   │   ├── SKILL.md            # frontmatter: name, description, mode
+│   │   └── impl.wasm           # wasm runtime 时存在
+│   ├── plugin/{ext_id}/        # Plugin Bundle 解压
+│   │   ├── plugin.json         # PluginBundleManifest
+│   │   ├── skills/             # Bundle 内技能
+│   │   └── hooks/              # Bundle 内钩子脚本
+│   └── agent/{ext_id}/         # Agent Card 缓存
+│       └── agent-card.json
+├── hooks/                      # 全局钩子（来自 Plugin Bundle 安装 + 用户配置）
+├── cache/{marketplace_id}/     # 市场下载临时区（安装后清理）
 └── polaris.db
 ```
 
-`extension_instances.install_path` 记录绝对路径。MCP 和 App 的 `install_path` 为空字符串。
+`extension_instances.install_path`：skill/plugin 为绝对路径，mcp/automation/agent 为空字符串。
 
 ---
 
-## 6. 调用路由
+## 8. 调用路由
 
-```
-推理时 buildToolSchemas() 构建工具列表（每次请求调用）：
-  ├── toolReg.List()              → builtin 工具 schema（startup 注入）
-  ├── mcpMgr.ListToolSchemas()   → 已连接 MCP 工具 schema
-  └── SELECT skills WHERE runtime='script' AND deprecated=0
-                                 → "skill:{name}" 工具 schema
+### 8.1 工具列表构建（每次推理请求）
 
-LLM 发出 tool_use {name, input}
-  → SetToolExecutor → toolExec closure
-  ├── name 以 "skill:" 开头
-  │     → 读 skills.instructions + 拼接 input → 返回给 LLM
-  │       （LLM 按 SKILL.md 指令处理输入，产出结果）
-  └── 其他名称 → sandboxRouter.Execute → InProcessSandbox.Execute(name)
-         ├── builtin 工具（startup 由 RegisterBuiltinTools 注入） → 直接执行
-         └── MCP 工具（MCPManager.Add 时由 registerTools 注入）
-               → client.CallToolTainted() → 外部 MCP 进程
+```go
+func buildToolSchemas() []ToolSchema {
+  if totalTools() <= LazyLoadThreshold {
+    // 正常模式：全量
+    return builtin + mcpMgr.ListToolSchemas() + skillToolSchemas()
+  }
+  // 懒加载模式
+  return builtinCore + []ToolSchema{searchToolsMeta}
+}
 ```
 
-**内置工具**（`origin=builtin`）启动时注入 InProcessSandbox，不经市场流程。
+### 8.2 工具执行路由（toolExec closure）
 
-**MCP 工具**：`MCPManager.LoadFromDB()` 启动时异步恢复已安装 MCP，`Add()` 时发现工具并注册到 InProcessSandbox。工具名格式：`{serverID}_{toolName}`。
+```
+LLM tool_use {name, input}
+  → toolExec(ctx, name, args)
+  ├── "skill:{name}"   → DB 读 skills.instructions + input → 返回给 LLM 执行
+  ├── "agent:{id}"     → A2A Client → 外部 Agent 端点 → 返回结果
+  ├── "search_tools"   → 查询工具库 → 返回命中工具 schema（激活到当前会话）
+  └── 其他            → sandboxRouter.Execute → InProcessSandbox.Execute(name)
+                           ├── builtin 工具（startup 注入）→ 直接执行
+                           └── mcp 工具（MCPManager 注入）→ CallToolTainted()
+```
 
-**App 类型**：当前仅 URL 存储，无 AppRunner / WebView，LLM 不可调用（待后续实现）。
+### 8.3 Ambient Skill 注入（每次推理请求）
+
+```go
+func injectSystemPrompt(basePrompt string) string {
+  skills := db.Query(`SELECT instructions FROM skills
+                      WHERE mode IN ('ambient','both') AND deprecated=0
+                      ORDER BY trust_tier DESC`)
+  ambient := truncateToLimit(join(skills.instructions), 4000)
+  return basePrompt + "\n\n## Active Skills\n" + ambient
+}
+```
+
+### 8.4 MCP Async Tasks（MCP spec 2025-11-25）
+
+对耗时 MCP 工具（预估 > 5s），MCPManager 支持异步任务模式：
+
+```
+toolExec "mcp_tool_xxx" → MCPManager.CallToolAsync()
+  → 立即返回 {task_id, status=pending}
+LLM 收到 task_id → 调用 get_task_result(task_id) 轮询
+MCPManager 内部 goroutine 监控任务完成 → 写入 tasks 缓存
+```
+
+`tasks_cache` 为内存 map（task_id → result），超时 TTL = 300s。
 
 ---
 
-## 7. 学习技能归并（M9 → Extension Registry）
+## 9. 自动化（Automation Extension）
 
-M9 Self-Improvement Engine 在 `L2SkillGeneration` 阶段 promote 候选技能时：
+自动化是**有触发器的技能/工具组合**，是第一类扩展类型（ext_type='automation'）。
 
-1. 写 `extension_instances`（`ext_type=skill, origin=learned, trust_tier=1`）
-2. 调用 `SkillRegistry.Register()`，写 `skills`（008）表
-3. `install_path` 指向 `extensions/skill/learned/{ext_id}/`
+### 9.1 数据模型（022_automations.sql）
 
-**禁止**：M9 直接写 `skills` 表（inv_M6_02）。必须经 `extension_instances` → `SkillRegistry` 路径。
+```sql
+CREATE TABLE automations (
+  id              TEXT PRIMARY KEY,
+  ext_id          TEXT NOT NULL REFERENCES extension_instances(id),
+  name            TEXT NOT NULL,
+  trigger_type    TEXT NOT NULL,  -- 'cron' | 'webhook' | 'event' | 'manual'
+  trigger_config  TEXT NOT NULL,  -- JSON: cron expr / event type / webhook secret
+  action_type     TEXT NOT NULL,  -- 'skill' | 'mcp_tool' | 'agent' | 'workflow'
+  action_ref      TEXT NOT NULL,  -- skill name / mcp tool / agent id / workflow JSON
+  action_input    TEXT NOT NULL DEFAULT '{}',  -- 默认输入参数 JSON
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  last_run_at     TEXT,
+  last_run_status TEXT,           -- 'success' | 'error' | 'running'
+  trust_tier      INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+```
 
-前端"技能"Tab 通过 `origin=learned` 显示"AI 生成"标签，与"市场安装""内置"并列展示。
+### 9.2 触发路径
+
+```
+trigger_type='cron'    → Scheduler.RegisterCron(cron_expr) → 到点触发 executeAutomation()
+trigger_type='webhook' → POST /v1/automations/{id}/trigger → executeAutomation()
+trigger_type='event'   → Outbox Worker 监听 event_type → executeAutomation()
+trigger_type='manual'  → POST /v1/automations/{id}/run
+
+executeAutomation(id, input):
+  1. 查 automations WHERE id=?，校验 enabled=1
+  2. 合并 action_input + 请求 input
+  3. 按 action_type 路由：
+     'skill'    → 读 skills.instructions → LLM sub-inference（独立上下文）
+     'mcp_tool' → MCPManager.CallTool(action_ref, merged_input)
+     'agent'    → A2A Client → 外部 Agent
+     'workflow' → 按 action_ref 中的 DAG JSON 顺序执行多步 actions
+  4. 写 automations.last_run_at / last_run_status
+  5. 结果写 outbox（供 M8 Blackboard 异步消费）
+```
+
+**禁止**：automation 不得在触发时调用 LLM 主对话上下文，必须使用独立的 sub-inference 上下文（防止污染主会话状态）。
 
 ---
 
-## 8. 表引用速查
+## 10. 跨代理协作（Agent Extension + A2A）
+
+`agent` 扩展类型将外部 AI Agent 以工具形式暴露给本地 LLM：
+
+```
+安装 agent 扩展 → 获取远端 Agent Card（/.well-known/agent-card.json）
+  → 解析 capabilities / skills / authentication
+  → INSERT mcp_servers(transport='a2a', url=AgentCard.url)
+  → MCPManager.Add(serverID, A2AClientConfig)
+  → 以 "agent:{serverID}" 注册到 InProcessSandbox
+
+LLM tool_use "agent:{serverID}" {task: "...", context: {...}}
+  → toolExec → A2A Client → POST {AgentCard.url}/tasks/send
+  → 等待 A2A response（支持 streaming / async）
+  → 返回 ToolResult
+```
+
+**Agent Card 标准字段**（遵循 A2A Protocol）：
+
+```json
+{
+  "name": "string",
+  "description": "string",
+  "url": "https://...",
+  "version": "1.0.0",
+  "capabilities": { "streaming": true, "pushNotifications": false },
+  "skills": [{ "id": "skill_id", "name": "...", "description": "..." }],
+  "authentication": { "schemes": ["Bearer"] }
+}
+```
+
+本地 Agent 对外暴露 Agent Card：`GET /.well-known/agent-card.json` → 由 M13 Gateway 自动生成（基于已安装 skills + mcp_servers 的能力描述）。
+
+---
+
+## 11. 学习技能归并（M9 → Extension Registry）
+
+M9 Self-Improvement Engine promote 候选技能时：
+
+1. 写 `extension_instances`（ext_type=skill, origin=learned, trust_tier=1）
+2. 直接 INSERT `skills` 表（runtime='script'，instructions=生成的 SKILL.md，mode='tool'）
+3. install_path 指向 `extensions/skill/learned/{ext_id}/`
+
+**禁止**：M9 不得绕过 extension_instances 直写 skills 表（inv_M6_02）。
+
+技能经过足够次数成功调用后，Logic Collapse 将其编译为 wasm runtime（M6 §2.2）：
+- wasm 编译完成 → UPDATE skills SET runtime='wasm'，instructions 清空
+- Wasm 技能不再走 tool_use 返回 instructions 路径，改走 SkillExecutor.ExecuteSkill()
+
+---
+
+## 12. 表引用速查
 
 | 表 | 迁移文件 | 消费方 |
 |----|---------|-------|
-| `plugin_marketplaces` | 018 | M13 API |
-| `extension_catalog` | 019 | M13 API |
+| `plugin_marketplaces` | 018 | M13 API（市场注册） |
+| `extension_catalog` | 019 | M13 API（目录缓存） |
 | `extension_instances` | 020 | M13 API（SSoT） |
 | `mcp_servers` | 015 | M7 MCPManager |
-| `skills` | 008 | M6 SkillRegistry |
-| `plugins` | 021 | plugin_catalog.go（bundle 元数据写入，子组件各走 mcp_servers/skills） |
+| `skills` | 008 | M6 SkillRegistry + server.buildToolSchemas() |
+| `plugins` | 021 | plugin_catalog.go（bundle 元数据） |
+| `automations` | 022 | M13 Scheduler（待实现） |
+| `cron_jobs` | 014 | M13 Scheduler（旧，automations 统一后废弃） |
 
-**已删除**（不再存在）：`skill_sources`、`apps`——职责统一归入 `extension_instances`（020）。
+**DDL 约束**：`022_automations.sql` 尚未创建，当前 automation 能力由 `cron_jobs`（014）承载，ext_type='automation' 为前向设计，代码实现时同步创建 DDL。
+
+**已删除**（不再存在）：`skill_sources`、`apps`——职责归入 `extension_instances`（020）。
