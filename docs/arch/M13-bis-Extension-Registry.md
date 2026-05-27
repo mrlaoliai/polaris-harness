@@ -332,7 +332,9 @@ MCPManager 内部 goroutine 监控任务完成 → 写入 tasks 缓存
 
 ### 9.1 数据模型
 
-DDL 见 `internal/protocol/schema/017_automations.sql`。核心字段：`prompt`（自包含任务规约）、`trigger_type`（cron/webhook/both/manual）、`cron_schedule`、`working_dir`、`reasoning_effort`、`result_action`（session/channel:{id}/silent）、`sandbox_level`、`cedar_rules_json`、`next_run_at`（cronTick 预计算索引）、`last_run_status`（ok/error/running 防重入）。
+DDL 见 `internal/protocol/schema/017_automations.sql`。核心字段：`prompt`（自包含任务规约）、`trigger_type`（cron/webhook/both/manual）、`cron_schedule`、`working_dir`、`reasoning_effort`、`result_action`（session/channel:{id}/silent）、`sandbox_level`、`cedar_rules_json`、`next_run_at`（cronTick 预计算索引）、`last_run_status`（ok/error/running 防重入）、`created_at`/`updated_at`（审计时间戳，自动生成）。
+
+**执行历史表** `automation_runs`（同 017 文件）：每次触发产生一条 run 记录，包含 `trigger`（触发类型）、`status`（running/ok/error/timeout）、`session_id`（关联 chat_sessions，可跳入查看执行过程）、`prompt_snapshot`（执行时 prompt 快照，防 prompt 修改导致追溯困难）。
 
 ### 9.2 执行环境（env_type）
 

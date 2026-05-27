@@ -3,7 +3,9 @@ package governance
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"os/exec"
+	"sort"
 )
 
 // ShadowExecutor — 影子执行与对比评估。
@@ -47,11 +49,28 @@ type ShadowComparator struct{}
 
 // Compare 对比两个版本的执行结果。
 // 1. diffToolCalls + TokenDiff + LatencyDiff
-// 2. token 增长 > baseline 30% → token_spike
-// 3. Judge 质量对比
-// 4. 对于 write_network 等被强制路由至 M7 Shadow Sink 的步骤，以 tool_call 参数一致性（而非实际输出）作为评估依据。
+// 2. token 增长 > baseline 30% → token_spike（ComparisonResult.ID 标注）
+// 3. write_network 步骤以 tool_call 参数一致性（而非实际输出）作为评估依据。
+// JudgeScore 由外部 L4LLMJudgeEvaluator 异步注入，此处不调 LLM。
 func (sc *ShadowComparator) Compare(baseline, candidate *AgentTrajectory) *ComparisonResult {
-	return &ComparisonResult{}
+	res := &ComparisonResult{}
+	if baseline == nil || candidate == nil {
+		return res
+	}
+	br, cr := baseline.Result, candidate.Result
+	if br == nil || cr == nil {
+		return res
+	}
+	res.BaselineSuccess = br.Success
+	res.CandidateSuccess = cr.Success
+	res.TokenDiff = cr.TokensUsed - br.TokensUsed
+	res.LatencyDiff = cr.LatencyMs - br.LatencyMs
+	res.ToolCallDiff = len(cr.ToolCalls) - len(br.ToolCalls)
+	// token spike：候选 token 用量超出 baseline 30%
+	if br.TokensUsed > 0 && float64(cr.TokensUsed) > float64(br.TokensUsed)*1.3 {
+		res.ID = "token_spike"
+	}
+	return res
 }
 
 // Execute 并行执行 baseline 和 candidate，对比结果。
@@ -258,8 +277,14 @@ func (sb *StatsBucket) Add(val float64) {
 	sb.head = (sb.head + 1) % len(sb.values)
 }
 
-// P95 计算 30 天滑动窗口 P95。
-func (sb *StatsBucket) P95() float64 { return 0 }
+// P95 计算 30 天滑动窗口 P95（环形缓冲区全量排序）。
+func (sb *StatsBucket) P95() float64 {
+	sorted := make([]float64, len(sb.values))
+	copy(sorted, sb.values[:])
+	sort.Float64s(sorted)
+	idx := max(int(math.Ceil(0.95*float64(len(sorted))))-1, 0)
+	return sorted[idx]
+}
 
 // Mean 计算 30 天均值。
 func (sb *StatsBucket) Mean() float64 {
