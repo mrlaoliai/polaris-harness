@@ -299,6 +299,10 @@ fn write_err(out: *mut *mut c_char, msg: &str) {
 mod tests {
     use super::*;
     use std::ffi::CString;
+    use std::sync::Mutex;
+
+    // Cedar 测试共享全局 POLICY_STORE；并行运行会导致竞态，用此锁序列化。
+    static CEDAR_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn cstr(s: &str) -> CString {
         CString::new(s).unwrap()
@@ -306,6 +310,7 @@ mod tests {
 
     #[test]
     fn test_load_and_evaluate_allow() {
+        let _guard = CEDAR_TEST_LOCK.lock().unwrap();
         // 先强制重置为空 PolicySet，避免并行测试的全局状态污染
         let empty_ps = cstr("// empty\n");
         let mut reset_err: *mut c_char = std::ptr::null_mut();
@@ -363,6 +368,7 @@ mod tests {
 
     #[test]
     fn test_forbid_overrides_permit() {
+        let _guard = CEDAR_TEST_LOCK.lock().unwrap();
         // 同时存在 permit 和 forbid，forbid 应胜出
         let policies = cstr(
             r#"
@@ -394,6 +400,7 @@ mod tests {
 
     #[test]
     fn test_policy_count() {
+        let _guard = CEDAR_TEST_LOCK.lock().unwrap();
         // 重置为空
         let empty = cstr("");
         let mut err: *mut c_char = std::ptr::null_mut();

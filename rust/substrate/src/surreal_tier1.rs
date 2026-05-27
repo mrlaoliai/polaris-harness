@@ -33,9 +33,23 @@ impl SurrealTier1Store {
         })?;
         rt.block_on(async { db.use_ns("polaris").use_db("cognition").await })?;
 
-        // Define vector table and index if using HNSW
         rt.block_on(async {
-            let _ = db.query("DEFINE TABLE vectors SCHEMAFULL; DEFINE FIELD embed ON vectors TYPE array<float>; DEFINE INDEX hnsw_idx ON vectors FIELDS embed MTREE DIMENSION 4 DISTANCE COSINE;").await;
+            let _ = db.query(
+                "DEFINE TABLE IF NOT EXISTS vectors SCHEMAFULL; \
+                 DEFINE FIELD IF NOT EXISTS embed ON vectors TYPE array<float>; \
+                 DEFINE INDEX IF NOT EXISTS hnsw_idx ON vectors FIELDS embed MTREE DIMENSION 4 DISTANCE COSINE; \
+                 DEFINE TABLE IF NOT EXISTS edges SCHEMAFULL; \
+                 DEFINE FIELD IF NOT EXISTS from_id ON edges TYPE string; \
+                 DEFINE FIELD IF NOT EXISTS edge_type ON edges TYPE string; \
+                 DEFINE FIELD IF NOT EXISTS to_id ON edges TYPE string; \
+                 DEFINE INDEX IF NOT EXISTS edge_from ON edges FIELDS from_id, edge_type; \
+                 DEFINE TABLE IF NOT EXISTS docs SCHEMAFULL; \
+                 DEFINE FIELD IF NOT EXISTS doc_id ON docs TYPE string; \
+                 DEFINE FIELD IF NOT EXISTS body ON docs TYPE string; \
+                 DEFINE ANALYZER IF NOT EXISTS ascii_lower TOKENIZERS class FILTERS lowercase; \
+                 DEFINE INDEX IF NOT EXISTS fts_idx ON docs FIELDS body SEARCH ANALYZER ascii_lower BM25;",
+            )
+            .await;
         });
 
         Ok(SurrealTier1Store {
@@ -184,13 +198,60 @@ pub unsafe extern "C" fn surreal_kv_delete(key: *const u8, key_len: usize) -> c_
 
 #[no_mangle]
 pub unsafe extern "C" fn surreal_kv_scan(
-    _prefix: *const u8,
-    _prefix_len: usize,
+    prefix: *const u8,
+    prefix_len: usize,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    // For simplicity, fallback empty array for prefix scan currently
-    write_err(out_json, "[]");
-    SURREAL_OK
+    let prefix_owned = if prefix_len == 0 {
+        vec![]
+    } else {
+        unsafe { std::slice::from_raw_parts(prefix, prefix_len) }.to_vec()
+    };
+    let prefix_hex = bytes_to_hex(&prefix_owned);
+    let result = panic::catch_unwind(|| {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            write_err(out_json, "[]");
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+        let rows: Vec<surrealdb::sql::Value> = guard
+            .rt
+            .block_on(async {
+                let mut resp = guard
+                    .db
+                    .query(
+                        "SELECT k, v FROM kv WHERE string::startsWith(k, $prefix) ORDER BY k",
+                    )
+                    .bind(("prefix", prefix_hex))
+                    .await?;
+                resp.take(0)
+            })
+            .unwrap_or_default();
+
+        let mut json = String::from("[");
+        let mut first = true;
+        for row in &rows {
+            if let surrealdb::sql::Value::Object(obj) = row {
+                let k = match obj.get("k") {
+                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    _ => continue,
+                };
+                let v = match obj.get("v") {
+                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    _ => continue,
+                };
+                if !first {
+                    json.push(',');
+                }
+                json.push_str(&format!("{{\"k\":\"{k}\",\"v\":\"{v}\"}}"));
+                first = false;
+            }
+        }
+        json.push(']');
+        write_err(out_json, &json);
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
@@ -219,49 +280,272 @@ pub unsafe extern "C" fn surreal_vec_upsert(
 
 #[no_mangle]
 pub unsafe extern "C" fn surreal_vec_knn(
-    _query: *const f32,
-    _dim: usize,
-    _k: usize,
+    query: *const f32,
+    dim: usize,
+    k: usize,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    // Basic stub return
-    write_err(out_json, "[]");
-    SURREAL_OK
+    if query.is_null() || dim == 0 || k == 0 {
+        write_err(out_json, "[]");
+        return SURREAL_OK;
+    }
+    let q_vec: Vec<f32> = unsafe { std::slice::from_raw_parts(query, dim) }.to_vec();
+    let result = panic::catch_unwind(|| {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            write_err(out_json, "[]");
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+        // k must be a literal in the ANN operator — embed it in the query string.
+        let sql = format!(
+            "SELECT id, vector::similarity::cosine(embed, $q) AS score \
+             FROM vectors WHERE embed <|{k}|> $q ORDER BY score DESC"
+        );
+        let rows: Vec<surrealdb::sql::Value> = guard
+            .rt
+            .block_on(async {
+                let mut resp = guard.db.query(&sql).bind(("q", q_vec)).await?;
+                resp.take(0)
+            })
+            .unwrap_or_default();
+
+        let mut json = String::from("[");
+        let mut first = true;
+        for row in &rows {
+            if let surrealdb::sql::Value::Object(obj) = row {
+                let id_str = match obj.get("id") {
+                    Some(surrealdb::sql::Value::Thing(t)) => t.id.to_string(),
+                    _ => continue,
+                };
+                let score = match obj.get("score") {
+                    Some(surrealdb::sql::Value::Number(n)) => n.as_float(),
+                    _ => 0.0_f64,
+                };
+                if !first {
+                    json.push(',');
+                }
+                json.push_str(&format!("{{\"id\":\"{id_str}\",\"score\":{score}}}"));
+                first = false;
+            }
+        }
+        json.push(']');
+        write_err(out_json, &json);
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn surreal_graph_relate(
-    _from_id: *const c_char,
-    _edge_type: *const c_char,
-    _to_id: *const c_char,
+    from_id: *const c_char,
+    edge_type: *const c_char,
+    to_id: *const c_char,
 ) -> c_int {
-    SURREAL_OK
+    let from = match unsafe { CStr::from_ptr(from_id) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return SURREAL_ERR_PANIC,
+    };
+    let et = match unsafe { CStr::from_ptr(edge_type) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return SURREAL_ERR_PANIC,
+    };
+    let to = match unsafe { CStr::from_ptr(to_id) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return SURREAL_ERR_PANIC,
+    };
+    let result = panic::catch_unwind(move || {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+        guard.rt.block_on(async {
+            let _ = guard
+                .db
+                .query("INSERT INTO edges (from_id, edge_type, to_id) VALUES ($from, $et, $to)")
+                .bind(("from", from))
+                .bind(("et", et))
+                .bind(("to", to))
+                .await;
+        });
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn surreal_graph_traverse(
-    _start_id: *const c_char,
-    _edge_type: *const c_char,
-    _max_depth: usize,
+    start_id: *const c_char,
+    edge_type: *const c_char,
+    max_depth: usize,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    write_err(out_json, "[]");
-    SURREAL_OK
+    let start = match unsafe { CStr::from_ptr(start_id) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            write_err(out_json, "[]");
+            return SURREAL_ERR_PANIC;
+        }
+    };
+    let et = match unsafe { CStr::from_ptr(edge_type) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            write_err(out_json, "[]");
+            return SURREAL_ERR_PANIC;
+        }
+    };
+    let result = panic::catch_unwind(move || {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            write_err(out_json, "[]");
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+
+        // BFS 迭代：每一层查询 frontier 节点的出边
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut frontier = vec![start.clone()];
+        visited.insert(start);
+
+        for _ in 0..max_depth {
+            if frontier.is_empty() {
+                break;
+            }
+            let sql = if et.is_empty() {
+                "SELECT to_id FROM edges WHERE from_id IN $frontier".to_string()
+            } else {
+                "SELECT to_id FROM edges WHERE from_id IN $frontier AND edge_type = $et"
+                    .to_string()
+            };
+            let next: Vec<String> = guard
+                .rt
+                .block_on(async {
+                    let mut resp = guard
+                        .db
+                        .query(&sql)
+                        .bind(("frontier", frontier.clone()))
+                        .bind(("et", et.clone()))
+                        .await?;
+                    let rows: Vec<surrealdb::sql::Value> = resp.take(0)?;
+                    let mut ids = Vec::new();
+                    for row in &rows {
+                        if let surrealdb::sql::Value::Object(obj) = row {
+                            if let Some(surrealdb::sql::Value::Strand(s)) = obj.get("to_id") {
+                                ids.push(s.as_string());
+                            }
+                        }
+                    }
+                    Ok::<Vec<String>, surrealdb::Error>(ids)
+                })
+                .unwrap_or_default();
+
+            frontier = next
+                .into_iter()
+                .filter(|id| visited.insert(id.clone()))
+                .collect();
+        }
+
+        // 排除起点自身
+        let result_ids: Vec<&String> = visited.iter().collect();
+        let mut json = String::from("[");
+        let mut first = true;
+        for id in result_ids {
+            if !first {
+                json.push(',');
+            }
+            json.push_str(&format!("\"{id}\""));
+            first = false;
+        }
+        json.push(']');
+        write_err(out_json, &json);
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn surreal_fts_index(_doc_id: *const c_char, _text: *const c_char) -> c_int {
-    SURREAL_OK
+pub unsafe extern "C" fn surreal_fts_index(doc_id: *const c_char, text: *const c_char) -> c_int {
+    let id = match unsafe { CStr::from_ptr(doc_id) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return SURREAL_ERR_PANIC,
+    };
+    let body = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return SURREAL_ERR_PANIC,
+    };
+    let result = panic::catch_unwind(move || {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+        guard.rt.block_on(async {
+            // 先删旧记录，再插入——实现 upsert 语义（doc_id 作为唯一键）
+            let _ = guard
+                .db
+                .query("DELETE docs WHERE doc_id = $id; INSERT INTO docs (doc_id, body) VALUES ($id, $body)")
+                .bind(("id", id))
+                .bind(("body", body))
+                .await;
+        });
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn surreal_fts_search(
-    _query: *const c_char,
-    _k: usize,
+    query: *const c_char,
+    k: usize,
     out_json: *mut *mut c_char,
 ) -> c_int {
-    write_err(out_json, "[]");
-    SURREAL_OK
+    let q = match unsafe { CStr::from_ptr(query) }.to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            write_err(out_json, "[]");
+            return SURREAL_ERR_PANIC;
+        }
+    };
+    let result = panic::catch_unwind(move || {
+        let Some(store_arc) = STORE_TIER1.get() else {
+            write_err(out_json, "[]");
+            return SURREAL_OK;
+        };
+        let guard = store_arc.read().unwrap();
+        // k 须为字面量嵌入查询字符串
+        let sql = format!(
+            "SELECT doc_id, search::score(0) AS score FROM docs \
+             WHERE body @0@ $q ORDER BY score DESC LIMIT {k}"
+        );
+        let rows: Vec<surrealdb::sql::Value> = guard
+            .rt
+            .block_on(async {
+                let mut resp = guard.db.query(&sql).bind(("q", q)).await?;
+                resp.take(0)
+            })
+            .unwrap_or_default();
+
+        let mut json = String::from("[");
+        let mut first = true;
+        for row in &rows {
+            if let surrealdb::sql::Value::Object(obj) = row {
+                let id_str = match obj.get("doc_id") {
+                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    _ => continue,
+                };
+                let score = match obj.get("score") {
+                    Some(surrealdb::sql::Value::Number(n)) => n.as_float(),
+                    _ => 0.0_f64,
+                };
+                if !first {
+                    json.push(',');
+                }
+                json.push_str(&format!("{{\"id\":\"{id_str}\",\"score\":{score}}}"));
+                first = false;
+            }
+        }
+        json.push(']');
+        write_err(out_json, &json);
+        SURREAL_OK
+    });
+    result.unwrap_or(SURREAL_ERR_PANIC)
 }
 
 #[no_mangle]
