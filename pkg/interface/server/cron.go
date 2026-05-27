@@ -338,10 +338,10 @@ func (s *Server) handleTriggerAutomation(w http.ResponseWriter, r *http.Request)
 	var enabledInt int
 	err := s.db.QueryRowContext(r.Context(), `
 		SELECT id, name, prompt, working_dir, reasoning_effort,
-		       result_action, cedar_rules_json, enabled
+		       result_action, sandbox_level, cedar_rules_json, enabled
 		FROM automations WHERE id=?`, jobID).
 		Scan(&a.ID, &a.Name, &a.Prompt, &a.WorkingDir,
-			&a.ReasoningEffort, &a.ResultAction, &a.CedarRulesJSON, &enabledInt)
+			&a.ReasoningEffort, &a.ResultAction, &a.SandboxLevel, &a.CedarRulesJSON, &enabledInt)
 	if err != nil {
 		http.Error(w, "automation not found", http.StatusNotFound)
 		return
@@ -380,7 +380,7 @@ func (s *Server) cronTick(ctx context.Context) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, name, prompt, trigger_type, cron_schedule,
-		       working_dir, reasoning_effort, result_action, cedar_rules_json
+		       working_dir, reasoning_effort, result_action, sandbox_level, cedar_rules_json
 		FROM automations
 		WHERE enabled=1
 		  AND (trigger_type='cron' OR trigger_type='both')
@@ -399,7 +399,7 @@ func (s *Server) cronTick(ctx context.Context) {
 		var a automation
 		if err := rows.Scan(
 			&a.ID, &a.Name, &a.Prompt, &a.TriggerType, &a.CronSchedule,
-			&a.WorkingDir, &a.ReasoningEffort, &a.ResultAction, &a.CedarRulesJSON,
+			&a.WorkingDir, &a.ReasoningEffort, &a.ResultAction, &a.SandboxLevel, &a.CedarRulesJSON,
 		); err != nil {
 			continue
 		}
@@ -521,9 +521,13 @@ func (s *Server) executeAutomation(ctx context.Context, a *automation, trigger s
 		var history []protocol.Message
 		history = s.injectSystemPrompt(history)
 
-		// 追加用户消息
-		history = append(history, protocol.Message{Role: "user", Content: a.Prompt})
-		if err := s.saveMessage(bgCtx, sessionID, "user", a.Prompt, "", 0); err != nil {
+		// 追加用户消息，working_dir 非空时注入工作目录上下文
+		userMessage := a.Prompt
+		if a.WorkingDir != "" {
+			userMessage = "[工作目录: " + a.WorkingDir + "]\n\n" + a.Prompt
+		}
+		history = append(history, protocol.Message{Role: "user", Content: userMessage})
+		if err := s.saveMessage(bgCtx, sessionID, "user", userMessage, "", 0); err != nil {
 			slog.Warn("automation: saveMessage user failed", "err", err)
 		}
 
@@ -622,8 +626,7 @@ func (s *Server) executeAutomation(ctx context.Context, a *automation, trigger s
 		_ = s.updateSessionTitle(bgCtx, sessionID, a.Name)
 
 		// 处理 result_action
-		if strings.HasPrefix(a.ResultAction, "channel:") {
-			chID := strings.TrimPrefix(a.ResultAction, "channel:")
+		if chID, ok := strings.CutPrefix(a.ResultAction, "channel:"); ok {
 			// 向 Channel 发送消息
 			// 注: 自动化无回话对象，构造空 message
 			s.channelMgr.SendReply(bgCtx, "", chID, nil, channels.Message{ChatID: ""}, reply)

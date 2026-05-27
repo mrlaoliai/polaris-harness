@@ -60,6 +60,26 @@
 - `AGENTS.md` 文件系统注入：LLM 进入目录时自动注入上下文
 - Approval policy: `auto-edit` / `full-auto` / `suggest` — 对应 Polaris 信任门控
 
+### OpenAI Codex Automations
+**来源**: https://developers.openai.com/codex/app/automations
+
+- 触发器：cron（daily/weekly/自定义间隔）+ thread-based heartbeat
+- 执行模式三种：`worktree`（隔离分支）/ `local`（直写主工作区）/ `direct`（非版控目录）
+- Prompt 必须自包含：须声明成功标准与终止条件（非对话延续）
+- `$skill-name` 语法在 automation prompt 内调用已安装技能
+- 沙箱分级：read-only / workspace-write / full-access
+
+### Claude Code Routines（/schedule）
+**来源**: https://code.claude.com/docs/en/routines（2026-04-14 GA）
+
+- 数据模型：`Routine = { prompt, repositories[], environment, connectors(MCP[]), triggers[] }`
+- 触发器三类：
+  - **Schedule**: hourly/daily/weekdays/weekly/cron（最小 1 小时），one-off 不计配额
+  - **API**: `POST /routines/{id}/fire`（bearer token），支持传入 `text` 上下文（alert body 等）→ 返回 session URL
+  - **GitHub**: PR/Release 事件 + author/label/branch/regex 过滤
+- 执行流：触发 → 克隆仓库（默认分支）→ 启动 Cloud Session → Agent 无需审批执行 → 结果写入 `claude/` 前缀分支
+- **架构启示**：`text` 字段透传外部上下文是轻量集成关键路径；Routine 本质是有状态 Agent 配置快照，非无状态脚本
+
 ### Google Agent Development Kit (ADK)
 **来源**: https://google.github.io/adk-docs/
 
@@ -191,8 +211,11 @@ tar.gz 打包，SHA-256 完整性校验，支持 delta 更新。
 | Taint Sandbox | `pkg/action/sandbox.go` + `InProcessSandbox` |
 | buildToolSchemas | `pkg/interface/server/server.go` |
 | toolExec 路由 | `cmd/polaris/main.go` SetToolExecutor |
-| Automation | `014_cron_jobs.sql`（待迁移至 022_automations） |
-| A2A Agent Card | `/.well-known/agent.json`（未实现） |
-| Lazy Loading | `search_tools` meta-tool（未实现） |
-| Ambient Injection | `injectSystemPrompt()`（未实现） |
-| MCP Async Tasks | MCP 2025-11-25 spec（未实现） |
+| Automation（cron/webhook/manual） | `017_automations.sql` + `pkg/interface/server/cron.go` |
+| Automation（event/github trigger） | 规划中（`trigger_type` 扩展） |
+| Automation（worktree 执行环境） | 规划中（DDL 增 `env_type`，Git worktree 集成） |
+| Automation（显式 Workflow DAG） | 规划中（`workflow_json`，复用 M4 dag_executor） |
+| A2A Agent Card | `/.well-known/agent.json`（待实现） |
+| Lazy Loading | `search_tools` meta-tool（待实现） |
+| Ambient Injection | `injectSystemPrompt()`（待实现） |
+| MCP Async Tasks | MCP 2025-11-25 spec（待实现） |

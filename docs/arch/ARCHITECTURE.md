@@ -27,7 +27,7 @@ L1 架构散文(本文档+模块文档) → L2 结构真相(`internal/protocol/s
 - MCP 工具: 外部工具接入，配置驱动
 - 配置文件: `configs/*.yaml` 控制所有运行时行为
 
-> Shell Script Hooks 为开源前落地目标（参见 `[ShellHooks]` in 00-Global-Dictionary §1）。Operator-Developer 直接改源码，无需 hooks。
+> Shell Script Hooks 为 End-User 级生命周期扩展能力（参见 `[ShellHooks]` in 00-Global-Dictionary §1）。Operator-Developer 直接改源码，无需 hooks。
 
 **设计目标**:
 - 单机 HT0 8GB 完整运行
@@ -149,7 +149,7 @@ Default 代码常量 < ~/.polaris-harness/config/m*.toml（或 POLARIS_THRESHOLD
 
 1. **加载与验证边界**: 所有配置必须在进程启动期由 `internal/config` 统一装载与反序列化（包括统一管理 `data_dir`/`host`/`port` 等基础环境，并据此在启动早期预建所有必需的运行子目录），校验缺失或格式错误引发 Fail-Fast，绝不允许在 Agent 执行期延迟崩溃。Threshold 加载在 dataDir 解析之后通过 config.LoadThresholds(dataDir) 单独进行，不在 config.Load() 内完成，避免 dataDir 未知时的 chicken-and-egg 问题。
 2. **热更新约束**:
-   - 通用运行参数（日志级别、调度池上限等）→ 当前仅支持启动时加载；运行时热更新（fsnotify + atomic.Value）待实现
+   - 通用运行参数（日志级别、调度池上限等）→ 启动时统一装载；热更新路径（fsnotify + atomic.Value）已设计，在 `internal/config` 实现 `WatchReload` 能力后可在不重启进程的情况下生效
    - 核心防线(Cedar Policy、KillSwitch 门限、M2 Storage 路径等)的 `ZoneImmutable` 常量 → 启动后冻结,禁运行期修改,必须重启进程使之生效(Crash-Only 哲学)
 
 ---

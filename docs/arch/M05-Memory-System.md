@@ -521,10 +521,10 @@ EmbeddingVersionTracker:
 
 ## 16. 实现状态与 2026 研究对照
 
-### 代码缺口（待开发）
+### 实现记录
 
-| 组件 | 文件 | 缺口描述 |
-|------|------|---------|
+| 组件 | 文件 | 状态 |
+|------|------|------|
 | L2 SemanticMem | `pkg/cognition/memory/semantic_mem.go` | **✅ 已完成** — 已重构 `UpsertFact`/`UpsertRelation` 接口对接 `MutationBus` 写路径，并实现基于 `*sql.DB` 的 `GetEntity` 直读查询，淘汰了旧版纯 JSON KV 占位 |
 | EpisodicGraphBridge | `pkg/cognition/memory/episodic_graph_bridge.go` | **✅ 已完成** — `ACTION_DONE` 事件已实现解析 `event.Payload` 提取真实 `tool_name` 构建动态图边，移除硬编码 |
 

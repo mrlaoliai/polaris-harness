@@ -33,7 +33,7 @@ Layer 2  Runtime（运行时层）
   mcp_servers（015）    MCP 进程连接配置；MCPManager 唯一消费方
   skills（008）         script/wasm 执行元数据 + instructions 全文
   plugins（021）        Bundle 入口元数据（entrypoint/env）
-  automations（022）    触发器 + 动作配置；Scheduler 消费方
+  automations（017）    触发器 + Agent 任务配置；M13 Scheduler 消费方
 ```
 
 **数据流**：`plugin_marketplaces → 同步 → extension_catalog → 安装 → extension_instances → 绑定 → Runtime 表`
@@ -50,7 +50,7 @@ Layer 2  Runtime（运行时层）
 | `skill` | 行为指令集（SKILL.md）或 Wasm 执行单元 | `skills`（008） | marketplace / learned |
 | `plugin` | Skills + MCP + Hooks 的打包分发单元 | `plugins`（021）+ 子组件各自绑定 | marketplace |
 | `app` | URL 应用，通过 WebProxy HTTP 代理访问 | 无独立表（URL 存 extension_instances） | marketplace / user |
-| `automation` | 触发器 + 动作组合（cron/webhook/event/manual） | `automations`（022） | user / marketplace |
+| `automation` | 触发器 + Agent 任务（cron/webhook/both/manual；规划：event/github） | `automations`（017） | user / marketplace |
 | `agent` | 外部 AI Agent 端点（A2A 协议）暴露为工具 | `mcp_servers`（transport=a2a） | marketplace / user |
 
 ### 2.1 多厂商格式适配
@@ -328,50 +328,120 @@ MCPManager 内部 goroutine 监控任务完成 → 写入 tasks 缓存
 
 ## 9. 自动化（Automation Extension）
 
-自动化是**有触发器的技能/工具组合**，是第一类扩展类型（ext_type='automation'）。
+自动化是**有触发器的 Agent 任务**，是第一类扩展类型（ext_type='automation'）。设计参考 Codex Automations + Claude Code Routines 理念：**automation prompt 是自包含的任务规约**（须声明目标与成功标准），Agent 在独立上下文中执行，结果推送至指定目标。这与"对话延续"根本不同——每次执行产生独立 session，与主聊天互相隔离。
 
-### 9.1 数据模型（022_automations.sql）
+### 9.1 数据模型（017_automations.sql）
 
 ```sql
 CREATE TABLE automations (
-  id              TEXT PRIMARY KEY,
-  ext_id          TEXT NOT NULL REFERENCES extension_instances(id),
-  name            TEXT NOT NULL,
-  trigger_type    TEXT NOT NULL,  -- 'cron' | 'webhook' | 'event' | 'manual'
-  trigger_config  TEXT NOT NULL,  -- JSON: cron expr / event type / webhook secret
-  action_type     TEXT NOT NULL,  -- 'skill' | 'mcp_tool' | 'agent' | 'workflow'
-  action_ref      TEXT NOT NULL,  -- skill name / mcp tool / agent id / workflow JSON
-  action_input    TEXT NOT NULL DEFAULT '{}',  -- 默认输入参数 JSON
-  enabled         INTEGER NOT NULL DEFAULT 1,
-  last_run_at     TEXT,
-  last_run_status TEXT,           -- 'success' | 'error' | 'running'
-  trust_tier      INTEGER NOT NULL DEFAULT 1,
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL
+  id               TEXT    PRIMARY KEY,               -- "auto_{8字节hex}"
+  name             TEXT    NOT NULL DEFAULT '',
+  prompt           TEXT    NOT NULL,                  -- 自包含任务规约（含成功标准与终止条件）
+  trigger_type     TEXT    NOT NULL DEFAULT 'cron',   -- 'cron' | 'webhook' | 'both' | 'manual'
+  cron_schedule    TEXT    NOT NULL DEFAULT '',        -- 5字段 cron 表达式；webhook 时可空
+  channel_id       TEXT    NOT NULL DEFAULT '',        -- channels.id；webhook 触发时非空
+  working_dir      TEXT    NOT NULL DEFAULT '',        -- Agent 工作目录；env_type=local/worktree 时必填
+  reasoning_effort TEXT    NOT NULL DEFAULT 'medium',  -- low/medium/high/ultra → model_roles 自动映射
+  result_action    TEXT    NOT NULL DEFAULT 'session', -- 'session' | 'channel:{id}' | 'silent'
+  sandbox_level    INTEGER NOT NULL DEFAULT 2,         -- L1 InProc / L2 Wasm / L3 MicroVM
+  cedar_rules_json TEXT    NOT NULL DEFAULT '[]',      -- Cedar 显式授权规则
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  -- 执行追踪
+  last_run_at      TEXT    NOT NULL DEFAULT '',
+  next_run_at      TEXT    NOT NULL DEFAULT '',        -- cronTick 预计算，索引加速
+  run_count        INTEGER NOT NULL DEFAULT 0,
+  last_run_status  TEXT    NOT NULL DEFAULT '',        -- 'ok' | 'error' | 'running'
+  last_run_error   TEXT    NOT NULL DEFAULT ''
 );
 ```
 
-### 9.2 触发路径
+### 9.2 执行环境（env_type）
+
+参考 Codex Automations 的三种执行模式（`worktree / local / direct`）与 Claude Code Routines 的 `repositories` 概念：
+
+| env_type | 说明 | 工作目录 | Git 隔离 | 对应 Sandbox |
+|----------|------|---------|---------|------------|
+| `chat` | 纯 Agent 对话，无文件访问 | 无 | 无 | L1 InProcess |
+| `local` | 读写 working_dir（项目文件） | `working_dir` | 无（直写主分支） | L2 Wasm |
+| `worktree` | Git worktree 隔离，执行后可生成 PR | 自动创建临时 worktree | ✓ `auto/{date}/{task_id}` | L2 Wasm + Git |
+
+> `env_type` 当前通过 `working_dir` 隐式表达（空=chat，非空=local）。`worktree` 模式为目标设计，需在 DDL 增加 `env_type TEXT NOT NULL DEFAULT 'chat'`，代码实现时同步创建 worktree 并在完成后生成 PR。
+
+**禁止**：`model_id` 不对 automation 暴露——系统根据 `reasoning_effort` 自动映射 model_roles（用户不感知模型名）。
+
+### 9.3 触发路径
 
 ```
-trigger_type='cron'    → Scheduler.RegisterCron(cron_expr) → 到点触发 executeAutomation()
-trigger_type='webhook' → POST /v1/automations/{id}/trigger → executeAutomation()
-trigger_type='event'   → Outbox Worker 监听 event_type → executeAutomation()
-trigger_type='manual'  → POST /v1/automations/{id}/run
+trigger_type='cron'    → cronTick(60s 轮询，防重入: last_run_status != 'running')
+                         → next_run_at <= NOW() → go executeAutomation(ctx, a, "cron")
 
-executeAutomation(id, input):
-  1. 查 automations WHERE id=?，校验 enabled=1
-  2. 合并 action_input + 请求 input
-  3. 按 action_type 路由：
-     'skill'    → 读 skills.instructions → LLM sub-inference（独立上下文）
-     'mcp_tool' → MCPManager.CallTool(action_ref, merged_input)
-     'agent'    → A2A Client → 外部 Agent
-     'workflow' → 按 action_ref 中的 DAG JSON 顺序执行多步 actions
-  4. 写 automations.last_run_at / last_run_status
-  5. 结果写 outbox（供 M8 Blackboard 异步消费）
+trigger_type='webhook' → POST /v1/webhooks/{channelType}/{channelID}
+                         → HMAC-SHA256 验签（密钥存 CredentialVault）
+                         → go executeAutomation(ctx, a, "webhook")   // 与 dispatchChannelMessage 并行
+
+trigger_type='both'    → cron + webhook 两路均可独立触发，互不阻塞
+
+trigger_type='manual'  → POST /v1/automations/{id}/trigger → executeAutomation(ctx, a, "manual")
+                         → 响应 202 Accepted + {run_id}，异步执行
+
+// 规划中：
+trigger_type='api'     → POST /v1/automations/{id}/trigger {text: "外部上下文"}
+                         → text 字段追加注入 prompt，作为 API-driven 触发的上下文
+trigger_type='event'   → Outbox Worker 订阅 events.type → go executeAutomation(ctx, a, "event")
+trigger_type='github'  → Webhook + GitHub event 过滤（PR/Release + author/label/branch/regex）
 ```
 
-**禁止**：automation 不得在触发时调用 LLM 主对话上下文，必须使用独立的 sub-inference 上下文（防止污染主会话状态）。
+calcNextRun 支持：5 字段 cron 表达式（含 `*/n` 步长）+ 别名（@hourly/@daily/@weekly/@monthly）+ 完整 day/weekday 匹配。
+
+### 9.4 执行流（executeAutomation）
+
+```
+executeAutomation(ctx, a, trigger):
+  1. INSERT automation_runs (id=run_{hex}, status='running', prompt_snapshot=a.Prompt, trigger=trigger)
+  2. UPDATE automations SET last_run_status='running', next_run_at=calcNextRun(cron_schedule)
+  3. go (bgCtx, timeout 按 reasoning_effort 动态: low=5m/medium=15m/high=30m/ultra=60m):
+       4. 创建独立 chat_sessions（source='automation', automation_id=a.ID）→ sessionID
+       5. 注入 ImmutableCore（含 env_type、working_dir、cedar_rules_json 安全上下文）
+       6. p.StreamInfer(bgCtx, sessionID, a.Prompt)   // 独立推理上下文，禁污染主会话
+       7. 处理 result_action：
+            'session'       → 记录留在步骤4的 session（用户在会话列表可见🤖标记，可继续对话）
+            'channel:{id}'  → dispatchChannelMessage(channelID, assistantText)
+            'silent'        → 仅落库，不通知
+       8. UPDATE automation_runs SET session_id=sessionID, status=ok/error, finished_at=NOW()
+       9. UPDATE automations SET last_run_status, run_count+1, last_run_error=errMsg
+```
+
+**不变量**：automation 必须使用独立 sub-inference 上下文（`inv_M13_03` cron pool 隔离），禁止注入主聊天上下文。
+
+### 9.5 工作流（Workflow）
+
+当前实现通过单一 prompt 指令 Agent 内部完成多步任务（Agent 自主调用工具→技能→MCP 形成流程）。这是"隐式工作流"——Agent 是流程编排器。
+
+结构化工作流（显式 DAG）为目标设计，将多个 Action 按依赖图顺序编排，每步输出作为下一步输入：
+
+```json
+{
+  "steps": [
+    { "id": "s1", "type": "mcp_tool", "ref": "github:list_prs", "input": {} },
+    { "id": "s2", "type": "skill",    "ref": "code_review",     "input": { "prs": "{{s1.output}}" }, "depends_on": ["s1"] },
+    { "id": "s3", "type": "channel",  "ref": "slack:notify",    "input": { "summary": "{{s2.output}}" }, "depends_on": ["s2"] }
+  ],
+  "on_error": "stop"
+}
+```
+
+DAG 执行器复用 M4 `dag_executor.go`（`pkg/cognition/kernel/dag_executor.go`）。实现时 automations 表新增 `workflow_json TEXT DEFAULT ''`，非空时走 DAG 路径替代 StreamInfer。
+
+### 9.6 防重入与 HITL 审批
+
+**防重入**（cronTick 查询加条件）：
+```sql
+AND last_run_status != 'running'
+```
+
+**HITL 审批**：automation 执行触发危险操作（WriteNetwork / Privileged / 超预算）→ M11 Cedar-Gate 拦截 → automation_runs.status = 'suspended' → SSE push `event:approval_pending` → 用户在 `/automation` 页"待办审批"Tab 处理 → POST /v1/approvals/{id}/resolve → 恢复或取消执行。
+
+**禁止**：automation 不得自动降级绕过 Cedar-Gate（`inv_M11_02`）。
 
 ---
 
@@ -436,9 +506,8 @@ M9 Self-Improvement Engine promote 候选技能时：
 | `mcp_servers` | 015 | M7 MCPManager |
 | `skills` | 008 | M6 SkillRegistry + server.buildToolSchemas() |
 | `plugins` | 021 | plugin_catalog.go（bundle 元数据） |
-| `automations` | 022 | M13 Scheduler（待实现） |
-| `cron_jobs` | 014 | M13 Scheduler（旧，automations 统一后废弃） |
-
-**DDL 约束**：`022_automations.sql` 尚未创建，当前 automation 能力由 `cron_jobs`（014）承载，ext_type='automation' 为前向设计，代码实现时同步创建 DDL。
+| `automations` | 017 | M13 Scheduler（`pkg/interface/server/cron.go`） |
+| `automation_runs` | 017 | M13 Scheduler — 执行历史 |
+| `cron_jobs` | 014 | 旧版定时任务表，由 017_automations 接管，逐步废弃 |
 
 **已删除**（不再存在）：`skill_sources`、`apps`——职责归入 `extension_instances`（020）。
