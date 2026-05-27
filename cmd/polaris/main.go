@@ -450,6 +450,8 @@ func run() error { //nolint:gocyclo
 	agent.Config.DefaultBudget = cfg.Thresholds.M4Kernel.DefaultBudget
 	agent.Config.MaxSteps = cfg.Thresholds.M4Kernel.MaxSteps
 	agent.InjectHITL(hitlGateway)
+	// 注入 ToolRegistry：FSM runExecuteDAG 路径依赖非 nil registry，否则 fail-closed。
+	agent.InjectToolRegistry(toolReg)
 	// 注入记忆系统：ImmutableCore 持有 AgentName/ModelID/SystemPromptTemplate，
 	// NewServer 和 injectSystemPrompt 均依赖 agent.Memory() != nil 才会写入系统提示词。
 	agent.InjectMemory(mem)

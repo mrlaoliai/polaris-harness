@@ -335,11 +335,6 @@ func (sm *StateMachine) promptPlan(sCtx *StateContext) []protocol.Message {
 	return b.Build()
 }
 
-//nolint:unused
-func (sm *StateMachine) onPlanSuccess(sCtx protocol.StateContext, fill []byte) (protocol.State, error) {
-	return protocol.State("S_PLAN_DONE"), nil
-}
-
 func (sm *StateMachine) onPlanFailure(sCtx protocol.StateContext, err error) (protocol.State, error) {
 	return protocol.State("S_PLAN_FAILED"), perrors.New(perrors.CodeInternal, "plan: LLM fill failed")
 }

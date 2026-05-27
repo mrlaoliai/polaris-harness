@@ -94,6 +94,17 @@ func (a *OpenAIAdapter) Infer(ctx context.Context, req *protocol.InferRequest) (
 		contentStr, _ := resp.Choices[0].Message.Content.(string)
 		out.Content = contentStr
 		out.FinishReason = resp.Choices[0].FinishReason
+		for _, tc := range resp.Choices[0].Message.ToolCalls {
+			input := []byte(tc.Function.Arguments)
+			if len(input) == 0 {
+				input = []byte("{}")
+			}
+			out.ToolCalls = append(out.ToolCalls, protocol.InferToolCall{
+				ID:    tc.ID,
+				Name:  tc.Function.Name,
+				Input: input,
+			})
+		}
 	}
 
 	return out, nil

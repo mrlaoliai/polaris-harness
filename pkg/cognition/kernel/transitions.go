@@ -8,6 +8,41 @@ import (
 	"github.com/polarisagi/polaris-harness/internal/protocol"
 )
 
+// parsePlanOnSuccess 将 LLM 返回的 DAG JSON 解析为 DAGModel 并写入 sCtx，消除 S_PLAN / S_REPLAN 重复逻辑。
+func parsePlanOnSuccess(sCtx *StateContext, pCtx protocol.StateContext, content []byte) (protocol.State, error) {
+	var protocolPlan protocol.DAGModel
+	if err := json.Unmarshal(content, &protocolPlan); err != nil {
+		return "S_PLAN_FAILED", perrors.Wrap(perrors.CodeInternal, "failed to unmarshal DAGModel", err)
+	}
+
+	dependsMap := make(map[string][]string)
+	for _, e := range protocolPlan.Edges {
+		dependsMap[e.To] = append(dependsMap[e.To], e.From)
+	}
+
+	execNodes := make([]ExecNode, len(protocolPlan.Nodes))
+	for i, n := range protocolPlan.Nodes {
+		argsBytes, _ := json.Marshal(n.Params)
+		execNodes[i] = ExecNode{
+			ID:        n.ID,
+			ToolName:  n.Action,
+			Args:      argsBytes,
+			DependsOn: dependsMap[n.ID],
+			TaintLevel: pCtx.MaxTaintLevel,
+		}
+	}
+	execEdges := make([]ExecEdge, len(protocolPlan.Edges))
+	for i, e := range protocolPlan.Edges {
+		execEdges[i] = ExecEdge{From: e.From, To: e.To}
+	}
+
+	sCtx.DAGModel = &DAGModel{
+		Nodes: execNodes,
+		Edges: execEdges,
+	}
+	return "S_PLAN_DONE", nil
+}
+
 // registerTransitions 注册全部 10 条转移（spec/state.yaml §m4_par_state_machine）。
 func (sm *StateMachine) registerTransitions() {
 	// S_IDLE → S_PERCEIVE: 收到意图脉冲
@@ -44,39 +79,7 @@ func (sm *StateMachine) registerTransitions() {
 						return sm.promptPlan(sCtx)
 					},
 					OnSuccess: func(pCtx protocol.StateContext, content []byte) (protocol.State, error) {
-						var protocolPlan protocol.DAGModel
-						if err := json.Unmarshal(content, &protocolPlan); err != nil {
-							return "S_PLAN_FAILED", perrors.Wrap(perrors.CodeInternal, "failed to unmarshal DAGModel", err)
-						}
-
-						// Compute DependsOn from edges
-						dependsMap := make(map[string][]string)
-						for _, e := range protocolPlan.Edges {
-							dependsMap[e.To] = append(dependsMap[e.To], e.From)
-						}
-
-						execNodes := make([]ExecNode, len(protocolPlan.Nodes))
-						for i, n := range protocolPlan.Nodes {
-							argsBytes, _ := json.Marshal(n.Params)
-							execNodes[i] = ExecNode{
-								ID:         n.ID,
-								ToolName:   n.Action,
-								Args:       argsBytes,
-								DependsOn:  dependsMap[n.ID],
-								TaintLevel: pCtx.MaxTaintLevel, // 关键修复：从上下文继承最高污点，杜绝 Taint Washing
-							}
-						}
-						execEdges := make([]ExecEdge, len(protocolPlan.Edges))
-						for i, e := range protocolPlan.Edges {
-							execEdges[i] = ExecEdge{From: e.From, To: e.To}
-						}
-
-						sCtx.DAGModel = &DAGModel{
-							Nodes: execNodes,
-							Edges: execEdges,
-						}
-
-						return "S_PLAN_DONE", nil
+						return parsePlanOnSuccess(sCtx, pCtx, content)
 					},
 					OnFailure: sm.onPlanFailure,
 					MaxRetry:  1,
@@ -212,39 +215,7 @@ func (sm *StateMachine) registerTransitions() {
 						return sm.promptPlan(sCtx)
 					},
 					OnSuccess: func(pCtx protocol.StateContext, content []byte) (protocol.State, error) {
-						var protocolPlan protocol.DAGModel
-						if err := json.Unmarshal(content, &protocolPlan); err != nil {
-							return "S_PLAN_FAILED", perrors.Wrap(perrors.CodeInternal, "failed to unmarshal DAGModel", err)
-						}
-
-						// Compute DependsOn from edges
-						dependsMap := make(map[string][]string)
-						for _, e := range protocolPlan.Edges {
-							dependsMap[e.To] = append(dependsMap[e.To], e.From)
-						}
-
-						execNodes := make([]ExecNode, len(protocolPlan.Nodes))
-						for i, n := range protocolPlan.Nodes {
-							argsBytes, _ := json.Marshal(n.Params)
-							execNodes[i] = ExecNode{
-								ID:         n.ID,
-								ToolName:   n.Action,
-								Args:       argsBytes,
-								DependsOn:  dependsMap[n.ID],
-								TaintLevel: pCtx.MaxTaintLevel, // 关键修复：从上下文继承最高污点，杜绝 Taint Washing
-							}
-						}
-						execEdges := make([]ExecEdge, len(protocolPlan.Edges))
-						for i, e := range protocolPlan.Edges {
-							execEdges[i] = ExecEdge{From: e.From, To: e.To}
-						}
-
-						sCtx.DAGModel = &DAGModel{
-							Nodes: execNodes,
-							Edges: execEdges,
-						}
-
-						return "S_PLAN_DONE", nil
+						return parsePlanOnSuccess(sCtx, pCtx, content)
 					},
 					OnFailure: sm.onPlanFailure,
 					MaxRetry:  1,

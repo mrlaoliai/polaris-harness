@@ -116,8 +116,11 @@ func (a *AnthropicAdapter) Infer(ctx context.Context, req *protocol.InferRequest
 
 	var out struct {
 		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			ID    string          `json:"id"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
 		Model      string `json:"model"`
@@ -133,13 +136,26 @@ func (a *AnthropicAdapter) Infer(ctx context.Context, req *protocol.InferRequest
 	}
 
 	textBuilder := new(strings.Builder)
+	var toolCalls []protocol.InferToolCall
 	for _, c := range out.Content {
-		if c.Type == "text" {
+		switch c.Type {
+		case "text":
 			textBuilder.WriteString(c.Text)
+		case "tool_use":
+			input := []byte(c.Input)
+			if len(input) == 0 {
+				input = []byte("{}")
+			}
+			toolCalls = append(toolCalls, protocol.InferToolCall{
+				ID:    c.ID,
+				Name:  c.Name,
+				Input: input,
+			})
 		}
 	}
 	resp := &protocol.InferResponse{
 		Content:      textBuilder.String(),
+		ToolCalls:    toolCalls,
 		FinishReason: out.StopReason,
 		Model:        out.Model,
 		Usage: protocol.Usage{

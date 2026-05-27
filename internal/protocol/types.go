@@ -85,8 +85,16 @@ type ThinkingConfig struct {
 	Mode         string // "auto" | "enabled" | "disabled"
 }
 
+// InferToolCall LLM 返回的工具调用请求（finish_reason=tool_calls / stop_reason=tool_use 时）。
+type InferToolCall struct {
+	ID    string
+	Name  string
+	Input []byte // JSON 编码的工具输入参数
+}
+
 type InferResponse struct {
 	Content      string
+	ToolCalls    []InferToolCall // LLM 请求调用的工具列表；为空表示纯文本回复
 	Usage        Usage
 	Model        string
 	FinishReason string
