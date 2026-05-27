@@ -7,6 +7,7 @@ import (
 
 	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/governance/policy"
 )
 
 // mockStore 实现了 protocol.Store，用于单元测试
@@ -133,17 +134,17 @@ func TestSQLiteEvalStore_PutAndGetCases(t *testing.T) {
 	c1 := EvalCase{ID: "case-1", Level: Level1Assert}
 	c2 := EvalCase{ID: "case-2", Level: Level2Schema}
 
-	err := evalStore.PutCase(ctx, "training", "agent", c1)
+	err := evalStore.PutCase(ctx, "training", policy.RoleM9Optimizer, c1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	err = evalStore.PutCase(ctx, "validation", "agent", c2)
+	err = evalStore.PutCase(ctx, "validation", policy.RoleM9Optimizer, c2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Get training cases
-	trainingCases, err := evalStore.GetTrainingCases(ctx, "agent", nil)
+	trainingCases, err := evalStore.GetTrainingCases(ctx, policy.RoleM9Optimizer, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,7 +153,7 @@ func TestSQLiteEvalStore_PutAndGetCases(t *testing.T) {
 	}
 
 	// Get validation cases
-	validationCases, err := evalStore.GetValidationCases(ctx, "agent", nil)
+	validationCases, err := evalStore.GetValidationCases(ctx, policy.RoleM9Optimizer, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -167,10 +168,10 @@ func TestRunnerImpl_RunSuite(t *testing.T) {
 	runner := NewRunner(store, evalStore)
 
 	ctx := context.Background()
-	evalStore.PutCase(ctx, "training", "agent", EvalCase{ID: "case-1"})
-	evalStore.PutCase(ctx, "training", "agent", EvalCase{ID: "case-2"})
+	evalStore.PutCase(ctx, "training", policy.RoleM9Optimizer, EvalCase{ID: "case-1"})
+	evalStore.PutCase(ctx, "training", policy.RoleM9Optimizer, EvalCase{ID: "case-2"})
 
-	report, err := runner.RunSuite(ctx, "training", "agent")
+	report, err := runner.RunSuite(ctx, "training", "candidate-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

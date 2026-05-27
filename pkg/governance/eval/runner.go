@@ -10,6 +10,7 @@ import (
 
 	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/governance/policy"
 )
 
 type RunnerImpl struct {
@@ -60,9 +61,9 @@ func (r *RunnerImpl) RunSuite(ctx context.Context, suite string, candidateID str
 		var err error
 		switch suite {
 		case "training":
-			casesAny, err = r.evalStore.GetTrainingCases(runCtx, "agent", nil)
+			casesAny, err = r.evalStore.GetTrainingCases(runCtx, policy.RoleM9Optimizer, nil)
 		case "validation":
-			casesAny, err = r.evalStore.GetValidationCases(runCtx, "agent", nil)
+			casesAny, err = r.evalStore.GetValidationCases(runCtx, policy.RoleM9Optimizer, nil)
 		default:
 			return perrors.New(perrors.CodeInternal, fmt.Sprintf("eval_runner: unknown suite %s", suite))
 		}

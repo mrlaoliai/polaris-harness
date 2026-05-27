@@ -7,6 +7,7 @@ import (
 
 	perrors "github.com/polarisagi/polaris-harness/internal/errors"
 	"github.com/polarisagi/polaris-harness/internal/protocol"
+	"github.com/polarisagi/polaris-harness/pkg/governance/policy"
 )
 
 // SQLiteEvalStore 实现了 protocol.EvalAPI，用于管理 EvalCase。
@@ -24,13 +25,17 @@ func NewSQLiteEvalStore(store protocol.Store) *SQLiteEvalStore {
 
 // GetTrainingCases 获取用于训练和优化的评测用例 (Training Set)。
 func (s *SQLiteEvalStore) GetTrainingCases(ctx context.Context, agentRole string, signature []byte) ([]any, error) {
-	// MVP: 忽略签名校验，直接从 store 前缀扫描
-	// 架构约束：DataSplitter 分区，SourceSynthetic → Training
+	if err := policy.CheckAccess(agentRole, policy.PartitionTraining); err != nil {
+		return nil, err
+	}
 	return s.scanCasesByPrefix(ctx, "eval:case:training:"+agentRole+":")
 }
 
 // GetValidationCases 获取用于泛化验证的评测用例 (Holdout Set)。
 func (s *SQLiteEvalStore) GetValidationCases(ctx context.Context, agentRole string, signature []byte) ([]any, error) {
+	if err := policy.CheckAccess(agentRole, policy.PartitionValidation); err != nil {
+		return nil, err
+	}
 	return s.scanCasesByPrefix(ctx, "eval:case:validation:"+agentRole+":")
 }
 
