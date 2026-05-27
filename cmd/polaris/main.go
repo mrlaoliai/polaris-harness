@@ -366,6 +366,14 @@ func run() error { //nolint:gocyclo
 	outboxWorker.RegisterHandler("m9_capability_gap", gapFillWorker.HandleOutbox)
 	slog.Info("polaris: GapFillWorker registered to outbox for m9_capability_gap")
 
+	// M1 CircuitBreaker 恢复 handler：Provider 恢复上线后唤醒被挂起的 Task。
+	// 完整链路依赖 M11.SessionPIIVault + M8.Blackboard.ResumeFromSuspended，当前为日志占位。
+	recoveryHandler := kernel.NewProviderRecoveryHandler()
+	outboxWorker.RegisterHandler("m1_provider_recovered", func(ctx context.Context, rec *substrate.OutboxRecord) error {
+		return recoveryHandler.Handle(ctx, rec.Payload)
+	})
+	slog.Info("polaris: ProviderRecoveryHandler registered to outbox for m1_provider_recovered")
+
 	// ─── 6.5 Skill Library (L1 M6) ───────────────────────────────────────────
 	skillRegistry := skill.NewSQLiteRegistry(store.DB())
 	skillSelector := skill.NewSelector(skillRegistry)

@@ -72,22 +72,19 @@ type Compensation struct {
 	Input    []byte
 }
 
-// DAGExecutor 并发执行 DAG 节点。
-// maxConcurrent = 4 (Tier 0), sem channel 限制并发度。
-// LeaseHeartbeat goroutine 防 M8 Reaper 误判超时回收。
+// DAGExecutor 并发执行 DAG 节点（Deprecated: 请使用 kernel.DAGExecutor）。
 type DAGExecutor struct {
 	maxConcurrent int
-	//nolint:unused
-	sem       chan struct{}
-	nodes     []DAGNode
-	edges     []DAGEdge
-	completed map[string]bool
-	results   map[string][]byte
-	mu        sync.Mutex
+	nodes         []DAGNode
+	edges         []DAGEdge
+	completed     map[string]bool
+	results       map[string][]byte
+	mu            sync.Mutex
 }
 
-// NodeRunner 节点执行器接口。
+// NodeRunner 节点执行器接口（Deprecated: 请使用 kernel.DAGExecutor）。
 type NodeRunner interface {
 	Run(ctx context.Context, node DAGNode) ([]byte, error)
 	Undo(ctx context.Context, nodeID string) error
 }
+

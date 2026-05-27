@@ -225,29 +225,12 @@ func newSessionID() string {
 	return "sess_" + hex.EncodeToString(b)
 }
 
-// dbNullString 处理 nullable string scan。
-//
-//nolint:unused
-func dbNullString(ns sql.NullString) string {
-	if ns.Valid {
-		return ns.String
-	}
-	return ""
-}
-
 // truncate 截断字节，防止错误消息过长写入 SSE。
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return s[:n]
-}
-
-// joinStrings 简单拼接（消除对 strings 包的隐式依赖）。
-//
-//nolint:unused
-func joinStrings(parts []string, sep string) string {
-	return strings.Join(parts, sep)
 }
 
 // ─── 全文搜索 ────────────────────────────────────────────────────────────────

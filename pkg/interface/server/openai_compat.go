@@ -206,7 +206,7 @@ func (s *Server) handleOpenAIChatStream(w http.ResponseWriter, r *http.Request, 
 func (s *Server) handleOpenAIChatSync(w http.ResponseWriter, r *http.Request, p protocol.Provider,
 	inferReq *protocol.InferRequest, id, model string, created int64) {
 
-	// 使用 StreamInfer 收集完整内容（避免 Infer() 的 "not implemented" 问题）
+	// 使用 StreamInfer 逐 chunk 收集完整内容（与流式路径复用同一 Provider 实现）
 	ctx := r.Context()
 	ch, err := p.StreamInfer(ctx, inferReq)
 	if err != nil {

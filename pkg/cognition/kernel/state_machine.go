@@ -272,19 +272,22 @@ func (sm *StateMachine) add(t Transition) {
 // Effect 工厂方法（PromptFn + OnSuccess/OnFailure）
 // ============================================================================
 
-func (sm *StateMachine) promptPerceive(sCtx *StateContext) []protocol.Message {
+func (sm *StateMachine) promptPerceive(sCtx *StateContext, pCtx protocol.StateContext) []protocol.Message {
+	// 有记忆系统时注入历史事件（Episodic 相关任务 + ReasoningState 跨轮持久化）
+	if pCtx.Mem != nil {
+		if msgs, err := buildPerceiveContext(sm.bgCtx(), pCtx.Mem, sCtx); err == nil {
+			return msgs
+		}
+	}
+
 	b := NewPromptBuilder()
-	// 系统指令必须彻底清洗，这里是静态安全的指令，所以直接声明为 TaintNone 然后转换为 SafeString
 	safeInst, _ := substrate.SanitizeToSafe(substrate.NewTaintedString(
 		"将用户意图结构化为 TaskModel JSON",
 		substrate.TaintSource{OriginTaintLevel: protocol.TaintNone},
 		"system_prompt",
 	))
 	b.WriteInstruction(safeInst)
-
-	// 用户输入的意图必须作为不受信数据写入
 	b.WriteUserData(sCtx.RawIntentTS)
-
 	return b.Build()
 }
 
@@ -296,7 +299,14 @@ func (sm *StateMachine) onPerceiveFailure(sCtx protocol.StateContext, err error)
 	return protocol.State("S_PERCEIVE_FAILED"), perrors.New(perrors.CodeInternal, "perceive: LLM fill failed")
 }
 
-func (sm *StateMachine) promptPlan(sCtx *StateContext) []protocol.Message {
+func (sm *StateMachine) promptPlan(sCtx *StateContext, pCtx protocol.StateContext) []protocol.Message {
+	// 有记忆系统时注入历史执行经验（Episodic Top-5 + 任务目标）
+	if pCtx.Mem != nil {
+		if msgs, err := buildPlanContext(sm.bgCtx(), pCtx.Mem, sCtx); err == nil {
+			return msgs
+		}
+	}
+
 	b := NewPromptBuilder()
 	safeInst, _ := substrate.SanitizeToSafe(substrate.NewTaintedString(
 		"基于 TaskModel 生成执行 DAG",
@@ -322,8 +332,6 @@ func (sm *StateMachine) promptPlan(sCtx *StateContext) []protocol.Message {
 	b.WriteComputerUsePolicy(mode, anyAppEnabled, chromeEnabled)
 
 	if sCtx.TaskModel != nil {
-		// TaskModel 已经是被 LLM 处理（消化）过的，所以其 TaintLevel 已经降级为 TaintMedium (摘要清洗法则)
-		// 我们将其包装成 TaintMedium，然后通过 Spotlighting 再次隔离，提供纵深防御
 		goalTS := substrate.NewTaintedString(
 			"Task Goal: "+sCtx.TaskModel.Goal,
 			substrate.TaintSource{OriginTaintLevel: protocol.TaintMedium},
@@ -339,7 +347,14 @@ func (sm *StateMachine) onPlanFailure(sCtx protocol.StateContext, err error) (pr
 	return protocol.State("S_PLAN_FAILED"), perrors.New(perrors.CodeInternal, "plan: LLM fill failed")
 }
 
-func (sm *StateMachine) promptReflect(sCtx *StateContext) []protocol.Message {
+func (sm *StateMachine) promptReflect(sCtx *StateContext, pCtx protocol.StateContext) []protocol.Message {
+	// 有记忆系统时注入历史执行经验
+	if pCtx.Mem != nil {
+		if msgs, err := buildReflectContext(sm.bgCtx(), pCtx.Mem, sCtx); err == nil {
+			return msgs
+		}
+	}
+
 	b := NewPromptBuilder()
 	safeInst, _ := substrate.SanitizeToSafe(substrate.NewTaintedString(
 		"反思执行结果，评估目标达成度",
@@ -348,17 +363,17 @@ func (sm *StateMachine) promptReflect(sCtx *StateContext) []protocol.Message {
 	))
 	b.WriteInstruction(safeInst)
 
-	// 同样，将执行结果用 Spotlighting 隔离
-	resultStr := string(sCtx.ExecuteResult)
 	resultTS := substrate.NewTaintedString(
-		"Execution Result: "+resultStr,
-		substrate.TaintSource{OriginTaintLevel: protocol.TaintHigh}, // 外部执行结果默认视为 High
+		"Execution Result: "+string(sCtx.ExecuteResult),
+		substrate.TaintSource{OriginTaintLevel: protocol.TaintHigh},
 		"m4_execute_result",
 	)
 	b.WriteUserData(resultTS)
-
 	return b.Build()
 }
+
+// bgCtx 返回用于内存检索的后台 context（不绑定任务生命周期）。
+func (sm *StateMachine) bgCtx() context.Context { return context.Background() }
 
 func (sm *StateMachine) onReflectSuccess(sCtx protocol.StateContext, fill []byte) (protocol.State, error) {
 	return protocol.State("S_REFLECT_DONE"), nil

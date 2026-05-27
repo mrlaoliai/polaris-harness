@@ -63,8 +63,6 @@ func buildPerceiveContext(ctx context.Context, memory protocol.Memory, sCtx *Sta
 
 // buildPlanContext 基于已解析的 TaskModel
 // 从 Memory 系统组装生成 DAG 计划所需的 LLM 提示词。
-//
-//nolint:unused
 func buildPlanContext(ctx context.Context, memory protocol.Memory, sCtx *StateContext) ([]protocol.Message, error) {
 	if memory == nil {
 		return []protocol.Message{
@@ -116,8 +114,6 @@ func buildPlanContext(ctx context.Context, memory protocol.Memory, sCtx *StateCo
 }
 
 // buildReflectContext 组装反思阶段的 Prompt。
-//
-//nolint:unused
 func buildReflectContext(ctx context.Context, memory protocol.Memory, sCtx *StateContext) ([]protocol.Message, error) {
 	if memory == nil {
 		return []protocol.Message{

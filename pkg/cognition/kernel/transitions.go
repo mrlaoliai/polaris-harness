@@ -55,7 +55,7 @@ func (sm *StateMachine) registerTransitions() {
 				protocol.LLMFillEffect{
 					SchemaRef: "perceive_task",
 					PromptFn: func(pCtx protocol.StateContext) []protocol.Message {
-						return sm.promptPerceive(sCtx)
+						return sm.promptPerceive(sCtx, pCtx)
 					},
 					OnSuccess: sm.onPerceiveSuccess,
 					OnFailure: sm.onPerceiveFailure,
@@ -76,7 +76,7 @@ func (sm *StateMachine) registerTransitions() {
 				protocol.LLMFillEffect{
 					SchemaRef: "plan_dag",
 					PromptFn: func(pCtx protocol.StateContext) []protocol.Message {
-						return sm.promptPlan(sCtx)
+						return sm.promptPlan(sCtx, pCtx)
 					},
 					OnSuccess: func(pCtx protocol.StateContext, content []byte) (protocol.State, error) {
 						return parsePlanOnSuccess(sCtx, pCtx, content)
@@ -148,7 +148,7 @@ func (sm *StateMachine) registerTransitions() {
 				protocol.LLMFillEffect{
 					SchemaRef: "reflect_result",
 					PromptFn: func(pCtx protocol.StateContext) []protocol.Message {
-						return sm.promptReflect(sCtx)
+						return sm.promptReflect(sCtx, pCtx)
 					},
 					OnSuccess: sm.onReflectSuccess,
 					OnFailure: sm.onReflectFailure,
@@ -212,7 +212,7 @@ func (sm *StateMachine) registerTransitions() {
 				protocol.LLMFillEffect{
 					SchemaRef: "plan_dag",
 					PromptFn: func(pCtx protocol.StateContext) []protocol.Message {
-						return sm.promptPlan(sCtx)
+						return sm.promptPlan(sCtx, pCtx)
 					},
 					OnSuccess: func(pCtx protocol.StateContext, content []byte) (protocol.State, error) {
 						return parsePlanOnSuccess(sCtx, pCtx, content)
