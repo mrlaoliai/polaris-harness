@@ -4,7 +4,15 @@ import "sync"
 
 // SurpriseIndex — System 1/2 路由信号计算。
 // 权威实现位于 M9（因依赖 MEMF），M3 仅暴露 Prometheus Gauge。
-// 架构文档: docs/arch/09-Self-Improvement-Engine-深度选型.md §2.0
+// 架构文档: docs/arch/M09-Self-Improvement-Engine.md §2.0
+
+// DefaultLayerBThreshold Layer B 自动激活所需的默认转移次数。
+// 对应 M09 §2.0 "500+ 成功轨迹"（平均每条轨迹 ~2 次转移）。
+const DefaultLayerBThreshold float64 = 1000
+
+// MinLayerBThreshold Layer B 阈值下限。
+// 低于此值时 Laplace 先验主导信号，马尔可夫统计意义不足。
+const MinLayerBThreshold float64 = 500
 
 type SurpriseIndex struct {
 	EmbeddingSurprise    float64
@@ -33,11 +41,13 @@ func Route(si float64) int {
 
 // SurpriseCalculator 异步计算器 (BoundedWorkQueue + LoadShedder)
 type SurpriseCalculator struct {
-	queue        chan *CalcRequest
-	memfPool     *FallacyMemoryPool
-	rollingAvg   float64 // 滑动平均 SurpriseIndex
-	rollingCount int64
-	mu           sync.Mutex // 保护 rollingAvg/rollingCount
+	queue           chan *CalcRequest
+	memfPool        *FallacyMemoryPool
+	markov          *MarkovMatrix // 始终非 nil；达到 layerBThreshold 后自动激活 Layer B
+	layerBThreshold float64       // 可配置激活阈值，默认 DefaultLayerBThreshold
+	rollingAvg      float64       // 滑动平均 SurpriseIndex
+	rollingCount    int64
+	mu              sync.Mutex // 保护 rollingAvg/rollingCount/markov
 }
 
 type CalcRequest struct {
@@ -48,16 +58,35 @@ type CalcRequest struct {
 	ResultCh chan float64
 }
 
+// NewSurpriseCalculator 使用默认 Layer B 阈值（DefaultLayerBThreshold）构造计算器。
 func NewSurpriseCalculator(memf *FallacyMemoryPool) *SurpriseCalculator {
-	c := &SurpriseCalculator{
-		queue:    make(chan *CalcRequest, 256), // cap=256
-		memfPool: memf,
+	return NewSurpriseCalculatorWith(memf, DefaultLayerBThreshold)
+}
+
+// NewSurpriseCalculatorWith 构造计算器，layerBThreshold 指定 Layer B 激活阈值。
+// 低于 MinLayerBThreshold 的值会被自动修正为 MinLayerBThreshold。
+func NewSurpriseCalculatorWith(memf *FallacyMemoryPool, layerBThreshold float64) *SurpriseCalculator {
+	if layerBThreshold < MinLayerBThreshold {
+		layerBThreshold = MinLayerBThreshold
 	}
-	// 启动固定 4 个 worker
-	for i := 0; i < 4; i++ {
+	c := &SurpriseCalculator{
+		queue:           make(chan *CalcRequest, 256), // cap=256
+		memfPool:        memf,
+		markov:          NewMarkovMatrix(), // 始终初始化，持续积累数据
+		layerBThreshold: layerBThreshold,
+	}
+	for range 4 {
 		go c.workerLoop()
 	}
 	return c
+}
+
+// WithMarkovMatrix 替换内部马尔可夫矩阵（warm-start：从持久化数据恢复预训练矩阵）。
+// 正常运行时无需调用；矩阵由 workerLoop 在线自动积累并在达到阈值后激活。
+func (c *SurpriseCalculator) WithMarkovMatrix(m *MarkovMatrix) {
+	c.mu.Lock()
+	c.markov = m
+	c.mu.Unlock()
 }
 
 // Submit 提交计算任务。如果队列满，执行丢弃降载（LoadShedding）。
@@ -66,8 +95,6 @@ func (c *SurpriseCalculator) Submit(req *CalcRequest) bool {
 	case c.queue <- req:
 		return true
 	default:
-		// Queue full -> LoadShedder
-		// 这里简单直接丢弃，让上层回退 safe default
 		return false
 	}
 }
@@ -90,23 +117,37 @@ func (c *SurpriseCalculator) workerLoop() {
 			embSurprise = 0.8
 		}
 
-		toolSurprise := 0.1
-		for _, t := range req.ToolSeq {
-			if t == "bash" || t == "computer_use" {
-				toolSurprise += 0.3
+		c.mu.Lock()
+		markov := c.markov
+		threshold := c.layerBThreshold
+		c.mu.Unlock()
+
+		// 无论 Layer B 是否激活，始终积累转移数据（先算再更新，避免自我影响）
+		var toolSurprise float64
+		if markov.TotalTransitions() >= threshold {
+			// Layer B（M09 §2.0）：转移数达标，用马尔可夫条件概率惊异值
+			toolSurprise = markov.Surprise(req.ToolSeq)
+		} else {
+			// Tier-0 基线：bash/computer_use 启发式加权
+			toolSurprise = 0.1
+			for _, t := range req.ToolSeq {
+				if t == "bash" || t == "computer_use" {
+					toolSurprise += 0.3
+				}
+			}
+			if toolSurprise > 1.0 {
+				toolSurprise = 1.0
 			}
 		}
-		if toolSurprise > 1.0 {
-			toolSurprise = 1.0
-		}
+		markov.Update(req.ToolSeq) // 在线学习（计算完成后更新）
 
 		memfSurprise := 0.1
 		if c.memfPool != nil && c.memfPool.db != nil {
 			var maxQuality float64
 			err := c.memfPool.db.QueryRow(`
-				SELECT MAX(node_quality_score) 
-				FROM fallacy_records 
-				WHERE task_type = ? 
+				SELECT MAX(node_quality_score)
+				FROM fallacy_records
+				WHERE task_type = ?
 			`, req.TaskType).Scan(&maxQuality)
 			if err == nil && maxQuality > 0 {
 				memfSurprise += maxQuality * 0.5
