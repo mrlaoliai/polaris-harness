@@ -164,7 +164,7 @@
     </div>
 
     <!-- Modals (Env Config, Create Plugin) Ported Over -->
-    <dialog class="modal" id="env_modal" x-effect="$store.plugins.showEnvModal ? (!open && showModal()) : close()" @close="$store.plugins.showEnvModal = false">
+    <dialog class="modal" id="env_modal" x-effect="$store.plugins.showEnvModal ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.plugins.showEnvModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.i18n.t('plugins_env_title') + (($store.plugins.envPending?.entry?.name) ? '：' + $store.plugins.envPending.entry.name : '')"></h3>
         <p class="text-sm text-base-content/70 mb-4" x-text="$store.i18n.t('plugins_env_hint')"></p>
@@ -184,7 +184,7 @@
       <div class="modal-backdrop" @click="$store.plugins.showEnvModal=false"></div>
     </dialog>
 
-    <dialog class="modal" id="create_plugin_modal" x-effect="$store.plugins.showCreateModal ? (!open && showModal()) : close()" @close="$store.plugins.showCreateModal = false">
+    <dialog class="modal" id="create_plugin_modal" x-effect="$store.plugins.showCreateModal ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.plugins.showCreateModal = false">
       <div class="modal-box bg-base-200 border border-base-300 w-11/12 max-w-lg">
         <h3 class="font-bold text-lg mb-4" x-text="`${$store.i18n.t('plugins_create_title')} ${$store.plugins.typeLabel($store.plugins.filter)}`"></h3>
         <div class="space-y-4">

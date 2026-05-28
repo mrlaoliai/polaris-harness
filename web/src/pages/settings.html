@@ -284,7 +284,7 @@
     </div>
 
     <!-- Modals (Provider Edit, Channel Edit, Model Edit) Ported Over -->
-    <dialog class="modal" id="provider_modal" x-effect="$store.providers.showModal ? (!open && showModal()) : close()" @close="$store.providers.showModal = false">
+    <dialog class="modal" id="provider_modal" x-effect="$store.providers.showModal ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.providers.showModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.editMode === 'create' ? $store.i18n.t('providers_modal_create') : $store.i18n.t('providers_modal_edit')"></h3>
         <div class="space-y-4">
@@ -363,7 +363,7 @@
 
     <!-- Provider Model Modal (Ported Over from custom modal logic, just styled with DaisyUI) -->
     <!-- You can find original functionality preserved below -->
-    <dialog class="modal" id="model_modal" x-effect="$store.providers.showModelModal ? (!open && showModal()) : close()" @close="$store.providers.showModelModal = false">
+    <dialog class="modal" id="model_modal" x-effect="$store.providers.showModelModal ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.providers.showModelModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.providers.modelEditMode === 'create' ? $store.i18n.t('settings_add_model') : $store.i18n.t('settings_edit_model')"></h3>
         <div class="space-y-4">
@@ -404,7 +404,7 @@
     </dialog>
 
     <!-- Channel Edit Modal -->
-    <dialog class="modal" id="channel_modal" x-effect="$store.channels.showModal ? (!open && showModal()) : close()" @close="$store.channels.showModal = false">
+    <dialog class="modal" id="channel_modal" x-effect="$store.channels.showModal ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.channels.showModal = false">
       <div class="modal-box bg-base-200 border border-base-300">
         <h3 class="font-bold text-lg mb-4" x-text="$store.channels.editMode === 'create' ? $store.i18n.t('channels_add') : $store.i18n.t('channels_edit')"></h3>
         <div class="space-y-4">

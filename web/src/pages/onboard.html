@@ -1,4 +1,4 @@
-<dialog id="onboard-modal" class="modal" x-effect="$store.onboard.show ? (!open && showModal()) : close()" @close="$store.onboard.show = false" x-cloak x-data>
+<dialog id="onboard-modal" class="modal" x-effect="$store.onboard.show ? (!$el.open && $el.showModal()) : $el.close()" @close="$store.onboard.show = false" x-cloak x-data>
   <div class="modal-box max-w-2xl">
 
     <!-- 关闭 / 跳过 -->
