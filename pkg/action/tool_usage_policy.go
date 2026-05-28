@@ -197,7 +197,8 @@ func (e *PolicyEvolver) extractFailurePattern(toolName string, outcome ToolOutco
 	}
 }
 
-// GetContextHint 提供工具的系统提示信息。
+// GetContextHint 返回工具的自适应使用提示字符串（供调用方注入 Prompt）。
+// 仅当历史调用 ≥ 20 次时激活（冷启动不注入噪声）。
 func (e *PolicyEvolver) GetContextHint(toolName string) string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -223,7 +224,6 @@ func (e *PolicyEvolver) GetContextHint(toolName string) string {
 	// FailurePattern 告警
 	if pats, exists := e.patterns[toolName]; exists {
 		for _, p := range pats {
-			// Frequency > 0.3 * len(hist)
 			if float64(p.Frequency) > 0.3*float64(len(hist)) {
 				hint += "FailureWarning: Frequent error '" + p.ErrorType + "'. "
 				if p.Mitigation != "" {
@@ -233,6 +233,65 @@ func (e *PolicyEvolver) GetContextHint(toolName string) string {
 		}
 	}
 
+	return hint
+}
+
+// BuildSystemHintBlock 将所有注册工具的提示聚合为标准 <tool-hints> XML 块，
+// 供 M4 DAG InferRequest 构建时注入 System Prompt 的 ZoneMutableSkill 区。
+//
+// 格式示例：
+//
+//	<tool-hints>
+//	  <tool name="web_search">FailureWarning: Frequent timeout. Mitigation: reduce scope; </tool>
+//	  <tool name="code_exec">ParamHints: timeout_ms (default: 10000 - ...); </tool>
+//	</tool-hints>
+//
+// 无任何提示时返回空字符串（调用方不注入）。
+func (e *PolicyEvolver) BuildSystemHintBlock() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	var body string
+	for toolName := range e.policies {
+		hist := e.history[toolName]
+		if len(hist) < 20 {
+			continue
+		}
+		hint := e.buildHintLocked(toolName, hist)
+		if hint == "" {
+			continue
+		}
+		body += "  <tool name=\"" + toolName + "\">" + hint + "</tool>\n"
+	}
+	if body == "" {
+		return ""
+	}
+	return "<tool-hints>\n" + body + "</tool-hints>"
+}
+
+// buildHintLocked 内部辅助（调用方持有读锁）。
+func (e *PolicyEvolver) buildHintLocked(toolName string, hist []ToolOutcome) string {
+	policy, ok := e.policies[toolName]
+	if !ok {
+		return ""
+	}
+	var hint string
+	if len(policy.ParamHints) > 0 {
+		hint += "ParamHints: "
+		for k, v := range policy.ParamHints {
+			hint += k + " (default: " + fmt.Sprintf("%v", v.DefaultValue) + " - " + v.Description + "); "
+		}
+	}
+	if pats, exists := e.patterns[toolName]; exists {
+		for _, p := range pats {
+			if float64(p.Frequency) > 0.3*float64(len(hist)) {
+				hint += "FailureWarning: Frequent error '" + p.ErrorType + "'. "
+				if p.Mitigation != "" {
+					hint += "Mitigation: " + p.Mitigation + "; "
+				}
+			}
+		}
+	}
 	return hint
 }
 

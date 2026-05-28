@@ -367,8 +367,8 @@ func run() error { //nolint:gocyclo
 	slog.Info("polaris: GapFillWorker registered to outbox for m9_capability_gap")
 
 	// M1 CircuitBreaker 恢复 handler：Provider 恢复上线后唤醒被挂起的 Task。
-	// 完整链路依赖 M11.SessionPIIVault + M8.Blackboard.ResumeFromSuspended，当前为日志占位。
-	recoveryHandler := kernel.NewProviderRecoveryHandler()
+	// vault/board 暂为 nil（启动时尚未装配），后续通过 SetDeps 热注入。
+	recoveryHandler := kernel.NewProviderRecoveryHandler(nil, nil)
 	outboxWorker.RegisterHandler("m1_provider_recovered", func(ctx context.Context, rec *substrate.OutboxRecord) error {
 		return recoveryHandler.Handle(ctx, rec.Payload)
 	})

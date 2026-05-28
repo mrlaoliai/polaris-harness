@@ -74,22 +74,15 @@ EvalResult: Passed bool / Scores map[string]float64 / Details string / Evaluator
 
 ## 3. 轨迹录制与回放
 
-```
-TrajectoryEvent: Seq / Timestamp / Type(llm_request|llm_response|tool_call|tool_result|state_change) / Data json.RawMessage
+**实现**: `pkg/governance/eval/eval.go` （TrajectoryRecorderImpl / TrajectoryReplayerImpl）
 
-TrajectoryRecorder:
-  events []TrajectoryEvent (sync.Mutex)
-  PathNormalize: 字段感知——仅规范化 tool InputSchema 中 format:path 字段，非路径字段不替换
-  RecordLLMRequest/RecordLLMResponse → 加锁追加 / Save(path) → JSONL
+`TrajectoryTrace` 包含 LLMCalls / ToolCalls / StateTrans 三类记录。
 
-TrajectoryReplayer:
-  events []TrajectoryEvent / replayIndex int
-  LoadTrajectory(path) → 逐行 Unmarshal
-  InterceptLLM/InterceptTool → 返回录制值，Exhausted → ErrReplayExhausted
-```
+**TrajectoryRecorderImpl** 从事件日志扫描 `events:session:{id}:` 前缀，按 Type 分流构建 TrajectoryTrace 快照；`RunnerImpl.RunReplay` 直接扫描 Store 验证 offset 连续性和零新 LLM 调用。
 
-wazero 确定性适配 (`clock_time_get`/`random_get` 录制/回放) 详见 [Wasm-Sandbox]；M7 按 ctx `eval_mode` ("record"|"replay"|"") 动态注入。
-CI 回放(毫秒/零费用/确定性阻塞) + Nightly 重执行(真实模型)。
+**TrajectoryReplayerImpl** 验证规则：状态转移链不断裂（StateTrans[i].From == StateTrans[i-1].To），断裂时返回含 step 位置的 Fail 结果；重放路径不产生新 LLM 调用（zero-token 保证，`new_llm=0`）。
+
+wazero 确定性适配（`clock_time_get`/`random_get` 录制/回放）详见 [Wasm-Sandbox]；M7 按 ctx `eval_mode` 动态注入。CI 回放（毫秒/零费用/确定性）+ Nightly 重执行（真实模型）。
 
 ## 4. Eval Runner
 
@@ -186,17 +179,17 @@ Eval Harness 仅提供对比原语。流量分发由 M9 ProgressiveRollout + M13
 
 ## 11. 回归检测
 
-```
-RollingBaseline: windowSize=30 / buckets map[string]*statsBucket
-statsBucket: values []float64(环形缓冲区) / head int / computeP95() / computeMean()
-MetricSample: Date("YYYY-MM-DD") / MetricName / P50/P95/Mean/Min/Max
-Update: 环形缓冲区覆最旧值
+**实现**: `pkg/governance/eval/eval.go`（RegressionDetector.Check）
 
-RegressionDetector.Check:
-  [TokenBurnRate]: current > baseline P95*2.0 → AlertCritical, auto-throttle
-  [SurpriseIndex]: current > baseline P95 且连续 3 天 → AlertWarning, investigate
-  Task_Success_Rate: current < baseline Mean-0.05 → AlertCritical, auto-rollback
-```
+`RegressionDetector.Check(baseline, current *RunMetrics) *RegressionAlert` 对三个指标执行相对变化率检测：
+
+| 指标 | 触发条件 | 语义 |
+|------|---------|------|
+| TaskSuccessRate | 下降 > 5%（相对值） | 安全一票否决，无例外 |
+| AvgLatencyMs | 上升 > 20%（相对值） | P95 延迟回归 |
+| TokenBurnRate | 上升 > 30%（相对值） | 成本软约束 |
+
+任一触发返回 `RegressionAlert{Metric, Baseline, Current, Threshold}`，nil 表示无回归。调用方（M9 外环 Engine.handleEvalCompleted）基于 Alert 决定是否触发 autoRollback。
 
 ## 12. 集成轨迹回放
 

@@ -480,32 +480,15 @@ Logic Collapse (M6) 创建新技能，本机制提升已有工具使用策略—
 
 ### 8.3 PolicyEvolver
 
-`pkg/action/tool_usage_policy.go` 已实现：`RecordOutcome`（SuccessRate 加权更新 + 失败模式提取）、`GetContextHint`（UseCount≥20 时返回 ParamHint + 失败警告 + CoTool 建议）、`evolvePolicy`（内部演化逻辑）。M4 DAG 注入路径尚未接入（调用方未调用 GetContextHint）。
+`pkg/action/tool_usage_policy.go` 实现：
 
-PolicyEvolver 算法:
+- `RecordOutcome`：SuccessRate 滑动窗口加权更新 + 失败模式提取（ErrorType+频率，连续 3 次同类失败自动生成缓解建议）
+- `GetContextHint(toolName)`：历史调用 ≥20 次时返回 ParamHint 建议 + 高频失败警告；否则返回空（冷启动不注入噪声）
+- `BuildSystemHintBlock()`：聚合所有已激活工具的提示，生成标准 `<tool-hints>...</tool-hints>` XML 块，供 M4 DAG 构建 InferRequest 时注入 System Prompt 的 ZoneMutableSkill 区。无任何提示时返回空字符串（调用方不注入）。
 
-```
-extractFailurePattern(ToolName, Error, InputParams):
-  1. 解析Error → ErrorTimeout/Permission/Schema/Network/Resource/Unknown
-  2. 生成模式签名: ErrorType+input特征 → 唯一样式字符串
-  3. 查找CommonFailures: 存在→Frequency++; 不存在→新增
-  4. Frequency>=3 → LLM生成Mitigation
+**注入位置**：M4 DAG 节点执行前，调用 `PolicyEvolver.BuildSystemHintBlock()` 获取聚合提示块，注入 System Prompt ZoneMutableSkill 区。不修改工具定义和 schema。
 
-Update(ToolCallResult): 每次调用后异步执行
-  1. 更新UseCount/SuccessRate(加权平均)/AvgLatencyMs
-  2. 成功 → 发现最优参数值, 更新ParamHint
-  3. 出错 → extractFailurePattern
-  4. 写入policies map
-
-GetContextHint(ToolName):
-  1. 策略不存在或UseCount<20→空   2. ParamHints(Confidence>0.7)
-  3. FailurePattern告警(Freq>0.3)   4. CoToolPatterns(Freq>0.5)
-  5. 返回";"连接字符串
-```
-
-**注入位置**: M4 DAG节点执行前, GetContextHint → LLM tool selection prompt上下文。不修改工具定义和schema。
-
-**启用条件**: ≥20次历史调用自动激活。Tier 0低频下以冷启动默认值运行; Tier 1+持续优化。
+**启用条件**：单工具 ≥20 次历史调用自动激活。Tier 0 低频下以冷启动默认值运行；Tier 1+ 持续优化。
 
 ---
 

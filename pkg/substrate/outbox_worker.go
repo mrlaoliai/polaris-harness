@@ -129,6 +129,99 @@ func scanOutboxRows(rows *sql.Rows) ([]*OutboxRecord, error) {
 	return records, nil
 }
 
+// Run 启动增量消费主循环，阻塞直到 ctx 取消。
+//
+// 设计约束（HE-Rule-6 State-in-DB）：
+//   - cursor 持久化到 sys_config 表（键 "outbox_cursor"），重启后从 DB 恢复，防止漏消费。
+//   - 每批处理完成后原子 CAS 更新 cursor，保证 Exactly-Once 推进。
+//   - 毒丸记录（crash_recovery_count ≥ 3）直接标记 dead，不再重试。
+//   - 处于 ReplayMode 时跳过所有副作用（只消费，不触发 handler）。
+func (w *OutboxWorker) Run(ctx context.Context) error {
+	// 从 DB 恢复 cursor（崩溃重启场景）
+	cursor := w.loadCursor(ctx)
+
+	ticker := time.NewTicker(time.Duration(w.pollInterval) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			newCursor, err := w.processBatch(ctx, cursor, 50)
+			if err != nil {
+				// 非致命：记录并继续，防止单批失败中断整个 worker
+				continue
+			}
+			if newCursor > cursor {
+				cursor = newCursor
+				w.saveCursor(ctx, cursor)
+			}
+		}
+	}
+}
+
+// processBatch 获取并处理一批记录，返回处理完成后的最大 ID（新 cursor）。
+func (w *OutboxWorker) processBatch(ctx context.Context, cursor int64, batchSize int) (int64, error) {
+	records, err := w.FetchBatch(ctx, cursor, batchSize)
+	if err != nil {
+		return cursor, err
+	}
+
+	maxID := cursor
+	for _, r := range records {
+		_ = w.processAndMark(ctx, r) // 单条失败不中断批次
+		if r.ID > maxID {
+			maxID = r.ID
+		}
+	}
+	return maxID, nil
+}
+
+// processAndMark 处理记录并更新状态（done / failed + 指数退避）。
+func (w *OutboxWorker) processAndMark(ctx context.Context, record *OutboxRecord) error {
+	err := w.Process(ctx, record)
+	now := time.Now().UnixMilli()
+
+	if err == nil {
+		_, _ = w.db.ExecContext(ctx,
+			"UPDATE outbox SET status='done', processed_at=? WHERE id=?",
+			now, record.ID)
+		return nil
+	}
+
+	newAttempts := record.Attempts + 1
+	if newAttempts >= w.maxRetries || record.CrashRecoveryCount >= 3 {
+		_, _ = w.db.ExecContext(ctx,
+			"UPDATE outbox SET status='dead', attempts=?, processed_at=? WHERE id=?",
+			newAttempts, now, record.ID)
+	} else {
+		// 指数退避：2^attempt × 5s
+		backoffMs := (int64(1) << newAttempts) * 5000
+		nextRetry := now + backoffMs
+		_, _ = w.db.ExecContext(ctx,
+			"UPDATE outbox SET status='failed', attempts=?, next_retry_at=? WHERE id=?",
+			newAttempts, nextRetry, record.ID)
+	}
+	return err
+}
+
+// loadCursor 从 sys_config 读取持久化的消费游标。
+func (w *OutboxWorker) loadCursor(ctx context.Context) int64 {
+	var cursor int64
+	row := w.db.QueryRowContext(ctx,
+		"SELECT CAST(value AS INTEGER) FROM sys_config WHERE key='outbox_cursor' LIMIT 1")
+	_ = row.Scan(&cursor)
+	return cursor
+}
+
+// saveCursor 原子更新消费游标到 sys_config。
+func (w *OutboxWorker) saveCursor(ctx context.Context, cursor int64) {
+	_, _ = w.db.ExecContext(ctx,
+		"INSERT INTO sys_config(key,value) VALUES('outbox_cursor',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+		cursor)
+}
+
 // Process 处理单条 Outbox 记录。
 // 版本高水位拦截: existing_version >= incoming_version → 丢弃 + ErrVersionStale
 // Poison Pill: crash_recovery_count >= 3 → 直接标记 dead
@@ -139,7 +232,6 @@ func (w *OutboxWorker) Process(ctx context.Context, record *OutboxRecord) error 
 	}
 
 	if record.CrashRecoveryCount >= 3 {
-		// 标记 dead，阻断确定性崩溃循环
 		return nil
 	}
 	handler, ok := w.handlers[record.TargetEngine]

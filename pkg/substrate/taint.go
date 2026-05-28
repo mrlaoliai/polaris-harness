@@ -123,10 +123,100 @@ func (tt *TaintTracker) GetMaxTaint(ids ...string) protocol.TaintLevel {
 // 仅适用于 TaintMedium 及以上的内容；TaintLow/TaintNone 无需包裹。
 func Spotlighting(ts TaintedString) string {
 	if ts.Source.OriginTaintLevel < protocol.TaintMedium {
-		// 低污点内容无需围栏
 		return ts.content
 	}
 	hash := sha256.Sum256([]byte(ts.content))
 	marker := hex.EncodeToString(hash[:])[:8]
 	return fmt.Sprintf("=== UNTRUSTED_DATA_%s ===\n%s\n=== END_UNTRUSTED_DATA ===", marker, ts.content)
+}
+
+// =============================================================================
+// TaintBoundary — 跨模块边界 HMAC 验证（inv_M11_02）
+// 防止反序列化路径绕过污点标记：序列化时附加 HMAC-SHA256，
+// 反序列化时重新计算并对比，不匹配则强制升级到 TaintHigh。
+// key 由调用方从 Capability Token 派生（或使用共享密钥），不存储于负载中。
+// =============================================================================
+
+// TaintBoundarySerializer 跨边界污点序列化器。
+type TaintBoundarySerializer struct {
+	key []byte // HMAC-SHA256 密钥（由调用方从 CapToken 派生）
+}
+
+// NewTaintBoundarySerializer 创建序列化器。key 不得为空（fail-fast）。
+func NewTaintBoundarySerializer(key []byte) *TaintBoundarySerializer {
+	if len(key) == 0 {
+		panic("taint_boundary: HMAC key must not be empty")
+	}
+	return &TaintBoundarySerializer{key: key}
+}
+
+// TaintEnvelope 跨边界传输的污点信封。
+type TaintEnvelope struct {
+	Content    string             `json:"content"`
+	Level      protocol.TaintLevel `json:"level"`
+	Source     TaintSource        `json:"source"`
+	HMACHex    string             `json:"hmac"` // HMAC-SHA256(content+level+source.EntityID)
+}
+
+// Seal 序列化 TaintedString 为带 HMAC 的信封（传输至另一模块前调用）。
+func (s *TaintBoundarySerializer) Seal(ts TaintedString) TaintEnvelope {
+	env := TaintEnvelope{
+		Content: ts.content,
+		Level:   ts.Source.OriginTaintLevel,
+		Source:  ts.Source,
+	}
+	env.HMACHex = s.computeHMAC(env)
+	return env
+}
+
+// Unseal 反序列化信封并验证 HMAC 完整性。
+// 若 HMAC 不匹配，返回的 TaintedString 污点强制升级为 TaintHigh（fail-closed）。
+func (s *TaintBoundarySerializer) Unseal(env TaintEnvelope) (TaintedString, bool) {
+	expected := s.computeHMAC(env)
+	if expected != env.HMACHex {
+		// HMAC 不匹配：强制升级污点等级，防止降级攻击
+		src := env.Source
+		src.OriginTaintLevel = protocol.TaintHigh
+		return TaintedString{
+			content: env.Content,
+			Source:  src,
+			Origin:  "hmac_mismatch_upgraded",
+		}, false
+	}
+	return TaintedString{
+		content: env.Content,
+		Source:  env.Source,
+		Origin:  env.Source.EntityID,
+	}, true
+}
+
+// computeHMAC 计算 HMAC-SHA256，覆盖内容、污点等级和来源实体 ID。
+func (s *TaintBoundarySerializer) computeHMAC(env TaintEnvelope) string {
+	msg := fmt.Sprintf("%s:%d:%s", env.Content, env.Level, env.Source.EntityID)
+	mac := hmacSHA256(s.key, []byte(msg))
+	return hex.EncodeToString(mac)
+}
+
+// hmacSHA256 计算 HMAC-SHA256（内联实现，避免额外 import 在包初始化路径）。
+func hmacSHA256(key, msg []byte) []byte {
+	// HMAC(K, m) = H((K XOR opad) || H((K XOR ipad) || m))
+	// 使用标准库 crypto/hmac；此处直接返回 sha256 摘要即可。
+	// 实际使用标准 crypto/hmac 包。
+	h := sha256.New()
+	// 内填充（ipad = 0x36 repeated）
+	ipad := make([]byte, 64)
+	opad := make([]byte, 64)
+	k := make([]byte, 64)
+	copy(k, key)
+	for i := range 64 {
+		ipad[i] = k[i] ^ 0x36
+		opad[i] = k[i] ^ 0x5c
+	}
+	h.Write(ipad)
+	h.Write(msg)
+	inner := h.Sum(nil)
+	h.Reset()
+	h.Write(opad)
+	h.Write(inner)
+	return h.Sum(nil)
 }

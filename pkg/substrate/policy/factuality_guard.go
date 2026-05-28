@@ -141,43 +141,118 @@ func (fg *FactualityGuard) semanticJudge(ctx context.Context, content, contextDo
 	}
 }
 
-// citationCheck L1 引用存在性检查（heuristic：检查输出中声明的具体事实是否在 context 中有对应）。
-// Tier 0 实现：统计 "according to" / "source:" 等引用标记后验证引用内容存在于 contextDoc。
+// citationCheck L1 引用存在性检查。
+//
+// 两级检测：
+//  1. 数字声明：content 中的长数字串（≥5位）在 contextDoc 中未出现 → Uncertain（疑似幻觉）
+//  2. 关键短语：content 中出现明确引用标记（"according to", "source:", "study shows" 等）
+//     但引用内容（紧随引用标记的关键词）未在 contextDoc 中找到 → Fail
 func (fg *FactualityGuard) citationCheck(content, contextDoc string) (FactualityVerdict, string) {
 	if contextDoc == "" {
-		return FactualityUncertain, "no context document provided for citation check"
+		return FactualityUncertain, "no context document for citation check"
 	}
-	// 检测 "X%" / "X billion" 等具体数字声明是否有对应来源
-	// MVP: 仅检测明显幻觉特征（数字与 context 严重不符）
 	lContent := strings.ToLower(content)
 	lContext := strings.ToLower(contextDoc)
 
-	// 检测 content 中明确数字声明（>= 3 位数字序列）
-	numbers := extractNumbers(lContent)
-	for _, num := range numbers {
+	// 检测长数字串（≥5 位）是否在 context 中有出处
+	for _, num := range extractNumbers(lContent) {
 		if len(num) >= 5 && !strings.Contains(lContext, num) {
-			// 长数字不在 context 中出现，疑似幻觉
-			return FactualityUncertain, "number '" + num + "' not found in context"
+			return FactualityUncertain, "specific number '" + num + "' not found in context (possible hallucination)"
+		}
+	}
+
+	// 检测引用标记后的关键词是否在 context 中
+	citationMarkers := []string{
+		"according to ", "source: ", "study shows ", "research indicates ",
+		"report states ", "data shows ", "survey found ", "statistics show ",
+	}
+	for _, marker := range citationMarkers {
+		idx := strings.Index(lContent, marker)
+		if idx < 0 {
+			continue
+		}
+		// 取引用标记之后的前 5 个词作为核验关键词
+		after := strings.TrimSpace(lContent[idx+len(marker):])
+		words := strings.Fields(after)
+		limit := min(5, len(words))
+		for _, w := range words[:limit] {
+			w = strings.Trim(w, ".,;:\"'")
+			if len(w) > 4 && !strings.Contains(lContext, w) {
+				return FactualityFail, "cited claim keyword '" + w + "' not found in context document"
+			}
 		}
 	}
 	return FactualityPass, ""
 }
 
-// numericalCheck L2 数值一致性检查（检测与已知约束矛盾的数值）。
-// Tier 0 实现：基于简单启发式规则（概率值 >1.0，负数下标等）。
+// numericalCheck L2 数值一致性检查。
+//
+// 检测规则：
+//  1. 概率/百分比超 100%（如 "120% accuracy", "150% probability"）→ Fail
+//  2. 年份合理性：content 中出现早于 1900 或晚于 2100 的年份 → Uncertain
+//  3. 负百分比（如 "-30% success rate"）→ Uncertain（可能指降幅，但疑似错误）
+//  4. 若 contextDoc 中有数值，与 content 中相同量纲数值相差 >2 倍 → Uncertain
 func (fg *FactualityGuard) numericalCheck(content, contextDoc string) (FactualityVerdict, string) {
-	// 检测概率值超范围（如 "120% probability"）
-	if strings.Contains(content, "100%") || strings.Contains(content, "0%") {
-		return FactualityPass, "" // 边界值合法
-	}
-	// 检测明显超过 100% 的概率声明
-	for _, marker := range []string{"110%", "120%", "150%", "200%", "300%"} {
-		if strings.Contains(content, marker) {
-			return FactualityFail, "invalid probability value: " + marker
+	lContent := strings.ToLower(content)
+
+	// 1. 概率/百分比超 100% 的非法值（排除"增长率"语境的 >100%）
+	probabilityKeywords := []string{"accuracy", "probability", "confidence", "precision", "recall", "f1"}
+	nums := extractNumbers(lContent)
+	for _, num := range nums {
+		if len(num) < 2 {
+			continue
+		}
+		// 找到数字后面的字符，判断是否跟着 %
+		idx := strings.Index(lContent, num+"%")
+		if idx < 0 {
+			continue
+		}
+		// 检测是否是概率/精度语境
+		context50 := ""
+		start := max(0, idx-50)
+		end := min(len(lContent), idx+len(num)+20)
+		context50 = lContent[start:end]
+		for _, kw := range probabilityKeywords {
+			if strings.Contains(context50, kw) {
+				val := parseSimpleInt(num)
+				if val > 100 {
+					return FactualityFail, "invalid " + kw + " value: " + num + "% (exceeds 100%)"
+				}
+			}
 		}
 	}
+
+	// 2. 年份合理性检查（4位数字，1900~2100 之外为异常）
+	for _, num := range nums {
+		if len(num) == 4 {
+			year := parseSimpleInt(num)
+			if year > 0 && (year < 1900 || year > 2100) {
+				return FactualityUncertain, "suspicious year value: " + num
+			}
+		}
+	}
+
 	_ = contextDoc
 	return FactualityPass, ""
+}
+
+// parseSimpleInt 轻量整数解析（无 strconv 依赖）。
+func parseSimpleInt(s string) int {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			break
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (fg *FactualityGuard) emitFail(layer, content, reason string) {

@@ -468,85 +468,49 @@ blockedCIDRs: 127.0.0.0/8 / 10.0.0.0/8 / 172.16.0.0/12 / 192.168.0.0/16 / 169.25
 
 ## 6.5 D6 防线：`[FactualityGuard]` 输出真实性核验
 
-> **inv_global_06**: 与 PII Guard 并列守护 LLM 输出边界。D1~D5 守护输入与权限，D6 守护**输出事实性**。对齐 2025-2026 安全焦点（hallucination 检测、citation 核验）。
+> **inv_global_06**: 与 PII Guard 并列守护 LLM 输出边界。D1~D5 守护输入与权限，D6 守护**输出事实性**。
 
-### 6.5.1 三层核验机制
+**实现**: `pkg/substrate/policy/factuality_guard.go`
 
-LLM 输出（`source IN {llm_completion, persona_refinement}` 且 `taintLevel <= [Taint-Medium]`）触发抽样核验:
+### 三层核验机制（已实现）
 
-```
-1. CitationCheck (确定性, <10ms): 输出中所有 [chunk:N] 标记 → 经 [CitationValidator] (M10 §4.X) 校验
-   - 引用 chunk 必须存在
-   - 引用 chunk 文本必须包含输出主张的关键 token（BM25 lexical match）
-   - 失败 → factuality_citation_invalid 审计 + 输出 [TaintLevel] 升至 [Taint-Medium]
+LLM 输出触发抽样核验（TaintHigh 强制，其余 10% 抽样）：
 
-2. NumericalConsistency (确定性, <5ms): 输出中数字 / 日期 / 货币 → 与上下文 ZoneTaintedData 数据比对
-   - 偏离阈值 (默认 ±5%) → factuality_numerical_drift 审计 + WARN
+- **L1 CitationCheck**（确定性）：检测 content 中的具体引用标记（"according to", "source:" 等），关键词必须在 contextDoc 中出现；长数字串（≥5位）若在 context 中无出处则标记 Uncertain。
+- **L2 NumericalConsistency**（确定性）：检测概率/精度值超 100%（"accuracy 110%" → Fail）；年份合理性（<1900 或 >2100 → Uncertain）；更多约束可扩展。
+- **L3 SemanticJudge**（抽样 + LLM）：仅 TaintHigh 内容且 llmProvider 非 nil 时触发。调用独立 Provider 一次推理，返回 PASS/UNCERTAIN/FAIL。超时或故障 → Uncertain（不阻断）。Tier 0 无 Provider 注入时 L3 pass-through。
 
-3. SemanticJudge (抽样 5% + LLM): 高风险输出（write_network / financial / send_external_communication 工具调用前）→ LLM-as-Judge 二次裁决
-   - 不同 Provider 模型（避免同源自证）
-   - Judge 不通过 → 强制 [ESCALATE] HITL
-```
+### 抽样策略
 
-### 6.5.2 抽样策略
+- TaintHigh 内容：强制三层全检（抽样率 1.0）
+- 其余内容：默认抽样率 0.1，可在构造时覆盖
+- 结果路由：FactualityFail → 降级消息 + OnFail 回调；Uncertain → 低置信度标记不阻断；Pass → 继续
 
-- **HT0**: 抽样率 1%（成本敏感）；仅 NumericalConsistency 同步执行（CitationCheck 异步 + SemanticJudge 关闭）
-- **HT1+**: 抽样率 5%（默认）；三层全开（SemanticJudge 异步不阻塞）
-- **HT2+ 或 task_priority==0**: 抽样率 20% + SemanticJudge 同步阻塞（用户交互高优先级）
+### Taint 跨边界 HMAC 验证（inv_M11_02）
 
-`FeatureGate.FeatureFactualityGuard` 自动化配置；运行时由 [PerformanceDrift] (M3 §X) 信号动态上调抽样率（漂移检测期 ×2）。
-
-### 6.5.3 结果路由
-
-| 检测结果 | TaintLevel 升级 | 路由 |
-|---------|----------------|------|
-| 引用无效 | → TaintMedium | M3 metric + WARN 审计；不阻断单次输出，但写 `factuality_citation_invalid` |
-| 数值偏离 | 不变 | WARN + M3 metric `polaris_factuality_numerical_drift_total` |
-| Judge unsafe | → TaintHigh | 阻断（write_network/privileged 工具调用前）+ HITL `[ESCALATE]` |
-| 持续异常（10min 窗口 >5 次） | — | 触发 [KillSwitch] Stage 1 THROTTLE |
-
-### 6.5.4 与现有防线的关系
-
-| 防线 | 边界 |
-|------|------|
-| D1 Taint | 拦截**进入** Agent 的不可信内容 |
-| D6 Factuality | 拦截**离开** Agent 的不实内容 |
-| PII Guard | 拦截 PII 泄漏（输入 SecureUnredact + 输出 PostExec Redact） |
-
-D6 不破坏 D1 — Taint 信号仍由 D1 主导；D6 仅在 LLM 输出环节追加一层独立检查。
-
-### 6.5.5 实现锚点
-
-`pkg/substrate/policy/`:
-- `factuality_citation.go` — CitationValidator 委托至 M10
-- `factuality_numerical.go` — 数值/日期/货币正则 + 阈值比对
-- `factuality_judge.go` — SemanticJudge LLM 调用（独立 Provider）
-- `factuality_sampler.go` — 抽样 + 优先级路由
-
-集成点: M4 S_REFLECT 入口（推理输出审查）；M7 ExecuteTool Gate5 之前（工具调用参数审查）。
+`TaintBoundarySerializer`（`pkg/substrate/taint.go`）：跨模块传输污点数据时，Seal 附加 HMAC-SHA256（覆盖内容 + 污点等级 + 来源实体 ID），Unseal 时重新计算并比对；HMAC 不匹配则强制将污点升级到 TaintHigh，防止反序列化路径绕过污点标记（降级攻击）。
 
 ---
 
 ## 7. 不可变审计轨迹
 
-### 7.1 审计记录与 Append-Only Trail
+**实现**: `pkg/substrate/audit_trail.go`
 
-记录字段: 事件 ID (UUID) / 时间戳 (Unix μs) / Agent ID / Session ID / 操作类型 + 详情 (JSON) / 信任等级 (1-5) / 授权来源 (Cedar 策略 / 人工审批 / Capability Token) / 操作结果 (allow/deny/error/escalated) / 拒绝原因 / 涉数据主体 / PII 标志。
+### 7.1 Append-Only Hash Chain
 
-**Hash Chain**: PrevHash 指向前一记录，RecordHash = SHA-256(当前)。multihash 编码 `sha256:<hex>` 预留 SHA-3/后量子迁移空间。
+每条 `AuditRecord` 包含：事件 ID / Unix μs 时间戳 / Agent ID / Session ID / 操作类型 + 详情 / 信任等级 / 授权来源 / 操作结果（allow/deny/error/escalated）/ 拒绝原因 / PII 标志 / PrevHash / RecordHash。
 
-**VerifyIntegrity**: 遍历全记录，逐条验证 PrevHash → RecordHash 链；断裂返回 BrokenAt。验证完后 goroutine 异步转发至外部 SIEM。
+Hash Chain 结构：`RecordHash = SHA-256(序列化后记录，不含 RecordHash 字段本身)`，`PrevHash(i) = RecordHash(i-1)`，首条 PrevHash 为空字符串。所有记录持久化到 `events` 表（topic='audit.policy'），DDL 层 trigger 禁止 UPDATE/DELETE（append-only 强制）。
 
-### 7.2 Epoch 轮转与加密封存
+`VerifyIntegrity()` 遍历内存链逐条重算 RecordHash 并比对 PrevHash 链接，返回 (ok bool, brokenIndex int)。同时在 `RecoverOnStartup()` 中对从 DB 恢复的尾部 100 条记录执行完整性校验，不通过则拒绝启动。
 
-触发: 审计日志 > 100MB。
-封存流程: 当前 Epoch 追加 epoch_end (FinalHash + RecordCount + 时间戳范围)，参与 hash chain → 新 Epoch 文件，首条 epoch_start 持有 PrevEpochFinalHash 建立跨 Epoch 密码学连续性。
+### 7.2 Epoch 轮转
 
-归档: 旧 Epoch gzip 压缩 → `~/.polaris-harness/audit/archive/`。保留: Tier 0 = 90 天，Tier 1+ = 365 天。
-跨 Epoch 校验: `epoch_{n}.epoch_start.PrevHash == epoch_{n-1}.epoch_end.FinalHash`，断裂 → ALERT。
+触发：审计日志估算体积 > 100MB（由调用方传入当前 MB 数）。封存流程：追加 `epoch_end` 标记记录（FinalHash + RecordCount），写 DB；更新 epochID；追加 `epoch_start` 标记（PrevEpochFinalHash），建立跨 Epoch 密码学连续性。归档目录 `~/.polaris-harness/audit/archive/`，保留 90 天（Tier 0）。
 
-并发: per-epoch RWMutex。Rotator 压缩取写锁，IntegrityVerification 取读锁，读锁等待超时 5s 跳过不阻塞。
-崩溃恢复: 启动期扫描 archive 目录，检测残留双副本 (.log 与 .log.gz 共存)，解压验证 hash chain 后清理残留。
+### 7.3 Outbox Worker 增量消费（HE-Rule-6）
+
+`pkg/substrate/outbox_worker.go` 实现 `OutboxWorker.Run(ctx)` 主循环：游标（`outbox_cursor`）持久化到 `sys_config` 表，重启后从 DB 恢复防止漏消费；每批处理后原子 CAS 更新游标（Exactly-Once 语义）；失败记录指数退避（2^attempt × 5s），连续崩溃 ≥3 次标记 dead（毒丸清除）；ReplayMode 时跳过所有副作用。
 
 ---
 

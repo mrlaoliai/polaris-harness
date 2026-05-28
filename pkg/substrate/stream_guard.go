@@ -1,6 +1,9 @@
 package substrate
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // StreamBudgetGuard — 流式响应 token 预算守卫。
 // 架构文档: docs/arch/01-Inference-Runtime-深度选型.md §5.2-5.4
@@ -83,7 +86,7 @@ func (g *StreamBudgetGuard) GuardChunk(ctx context.Context, tokens int) error {
 
 // CheckAcceleration 检测 token 消耗加速度异常。
 func (d *TokenBurnDetector) CheckAcceleration(accumulated int) error {
-	now := int64(0) // time.Now().UnixMicro()
+	now := time.Now().UnixMicro()
 	d.samples = append(d.samples, burnSample{tokens: int64(accumulated), ts: now})
 
 	// 保留 5s 窗口
