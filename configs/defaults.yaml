@@ -1,4 +1,4 @@
-# polaris-harness default configuration
+# polarisagi-harness default configuration
 # Tier: 0 (8GB RAM) - all remote API, no local model
 
 system:

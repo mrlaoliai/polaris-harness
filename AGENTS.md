@@ -1,4 +1,4 @@
-# polaris-harness
+# polarisagi-harness
 
 > 开源自托管 AI Agent | Go 1.26+ + Rust 1.94+ | 6 pkg / 13 module / 4 layer | Tier 0 (8GB) floor | provider-agnostic (`configs/defaults.yaml` 推荐 DeepSeek V4)
 
@@ -59,7 +59,7 @@ internal/protocol/ 跨模块共享类型 + 接口契约 + DDL + protoc 生成
 
 rust/substrate/   Rust FFI 性能路径（purego 桥）
 
-~/.polaris-harness/  运行时数据根（polaris.db / logs / hooks / cache / config/）
+~/.polarisagi-harness/  运行时数据根（polaris.db / logs / hooks / cache / config/）
                      config/ 为 Operator-Developer 的阈值覆盖目录（m*.toml，可选）
 ```
 
@@ -86,7 +86,7 @@ make build-skills
 - 跨模块走 `internal/protocol/` 结构化事件（禁字符串隐式耦合）
 - Rust 仅性能关键 FFI（维持语言边界）
 - **[强制] DDL 修改策略**：`internal/protocol/schema/NNN_*.sql` 是 Schema SSoT，禁止以 ALTER TABLE / ADD COLUMN 补丁文件打补丁。
-  - **上线前**（`§当前阶段` 未标注"上线后"）：Schema 变更**直接修改原始建表文件**；开发库删除重建（`rm ~/.polaris-harness/polaris.db`）。
+  - **上线前**（`§当前阶段` 未标注"上线后"）：Schema 变更**直接修改原始建表文件**；开发库删除重建（`rm ~/.polarisagi-harness/polaris.db`）。
   - **上线后**（存在生产数据）：新增编号迁移文件（ALTER TABLE / 数据迁移），不得修改已应用历史文件。
   - Phase 判断 SSoT：本文 `§当前阶段`。不确定 → 主动提问，禁止静默决策。
 

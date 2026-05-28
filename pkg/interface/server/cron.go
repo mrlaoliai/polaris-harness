@@ -821,7 +821,7 @@ func (s *Server) fetchRemoteTemplates(src automationSource) []automationTemplate
 		return nil
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "polaris-harness/1.0")
+	req.Header.Set("User-Agent", "polarisagi-harness/1.0")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {

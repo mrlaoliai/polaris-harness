@@ -6,7 +6,7 @@
 
 ```bash
 git clone https://github.com/polarisagi/polarisagi-harness.git
-cd polaris-harness
+cd polarisagi-harness
 make build            # Rust FFI → Web UI → Go binary（≈ 2 min 首次）
 make test             # go test ./pkg/... ./internal/...
 make lint             # golangci-lint run ./...

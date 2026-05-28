@@ -25,7 +25,7 @@ for arg in "$@"; do
 done
 
 PORT=29999
-DATA_DIR="${POLARIS_DATA_DIR:-$HOME/.polaris-harness}"
+DATA_DIR="${POLARIS_DATA_DIR:-$HOME/.polarisagi-harness}"
 mkdir -p "$DATA_DIR"
 LOG_FILE="$DATA_DIR/polaris.log"
 LOG_MAX_BYTES=10485760  # 10 MB，超过则截断
@@ -138,7 +138,7 @@ eval $GO_CMD
 
 # ── 5. 启动 ───────────────────────────────────────────────
 echo "→ 启动 Polaris..."
-# Polaris 遵循配置层规范，默认使用 ~/.polaris-harness/config.yaml
+# Polaris 遵循配置层规范，默认使用 ~/.polarisagi-harness/config.yaml
 nohup ./bin/polaris >> "$LOG_FILE" 2>&1 &
 
 # 等待最多 5s 确认端口监听

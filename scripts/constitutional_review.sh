@@ -56,7 +56,7 @@ CONSTITUTION_TEXT=$(cat "$CONSTITUTION")
 DIFF_TEXT=$(cat "$DIFF_FILE")
 
 # 严格提示词：只输出违例或 NONE，禁止建议/表扬/推理
-SYSTEM_PROMPT="你是 polaris-harness 项目的宪法审查者。审查以下 PR diff，对照宪法规则逐条违例报告。
+SYSTEM_PROMPT="你是 polarisagi-harness 项目的宪法审查者。审查以下 PR diff，对照宪法规则逐条违例报告。
 
 严格要求:
 1. 仅输出违例（如有）；无违例则输出唯一一行 \"NONE\"

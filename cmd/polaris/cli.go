@@ -564,7 +564,7 @@ func cliPrintSessions() {
 
 func cliSessionFile() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".polaris-harness", "last_cli_session")
+	return filepath.Join(home, ".polarisagi-harness", "last_cli_session")
 }
 
 func cliSaveSession(id string) {

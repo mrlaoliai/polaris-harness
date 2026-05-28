@@ -23,7 +23,7 @@ L1 架构散文(本文档+模块文档) → L2 结构真相(`internal/protocol/s
 
 **可扩展性契约**（开源后 End-User 的扩展边界）:
 - Skills（Wasm）: LLM 主动调用的能力扩展，End-User 可自行编写/加载
-- Shell Script Hooks: 生命周期事件（`gateway.startup` / `session.new` / `message.after` 等）自动触发用户脚本，零依赖、任意语言（`~/.polaris-harness/hooks/`）
+- Shell Script Hooks: 生命周期事件（`gateway.startup` / `session.new` / `message.after` 等）自动触发用户脚本，零依赖、任意语言（`~/.polarisagi-harness/hooks/`）
 - MCP 工具: 外部工具接入，配置驱动
 - 配置文件: `configs/*.yaml` 控制所有运行时行为
 
@@ -144,7 +144,7 @@ Stage 7: full_promotion       (写生产 + audit hash chain)
 四层优先级(高优先级覆盖低优先级):
 
 ```
-Default 代码常量 < ~/.polaris-harness/config/m*.toml（或 POLARIS_THRESHOLDS_DIR）< 环境变量(POLARIS_*) < CLI 启动参数
+Default 代码常量 < ~/.polarisagi-harness/config/m*.toml（或 POLARIS_THRESHOLDS_DIR）< 环境变量(POLARIS_*) < CLI 启动参数
 ```
 
 1. **加载与验证边界**: 所有配置必须在进程启动期由 `internal/config` 统一装载与反序列化（包括统一管理 `data_dir`/`host`/`port` 等基础环境，并据此在启动早期预建所有必需的运行子目录），校验缺失或格式错误引发 Fail-Fast，绝不允许在 Agent 执行期延迟崩溃。Threshold 加载在 dataDir 解析之后通过 config.LoadThresholds(dataDir) 单独进行，不在 config.Load() 内完成，避免 dataDir 未知时的 chicken-and-egg 问题。

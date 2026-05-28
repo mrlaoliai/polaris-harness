@@ -174,7 +174,7 @@ POST /v1/plugins/install {catalog_id, type=plugin}
      mcp_inline{} → installBundleMCP() → mcp_servers + 子 extension_instances
      mcp_servers（.mcp.json）→ 同上（safeJoin 路径校验）
      skills[] → installBundleSkill() → skills + 子 extension_instances
-     hooks{} → 写入 ~/.polaris-harness/hooks/，注册到 M7 HookRunner
+     hooks{} → 写入 ~/.polarisagi-harness/hooks/，注册到 M7 HookRunner
      外部格式 → adapter.ParseManifestDir() → 按类型分发
   5. INSERT plugins (021) 写 bundle 入口元数据
   6. UPDATE parent extension_instances SET status=installed
@@ -251,7 +251,7 @@ DELETE /v1/plugins/{ext_id}
 ## 7. 文件系统布局
 
 ```
-~/.polaris-harness/
+~/.polarisagi-harness/
 ├── extensions/
 │   ├── skill/{ext_id}/         # script/wasm 技能安装目录
 │   │   ├── SKILL.md            # frontmatter: name, description, mode

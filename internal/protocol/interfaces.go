@@ -1,4 +1,4 @@
-// Package protocol 定义 polaris-harness 跨模块共享接口契约。
+// Package protocol 定义 polarisagi-harness 跨模块共享接口契约。
 // 所有接口由消费方定义，实现在各自模块中。
 // 此文件是编译期契约检查的权威源——架构文档 docs/arch/ 中的接口描述
 // 必须与此处定义一致，CI lint 检查不匹配。

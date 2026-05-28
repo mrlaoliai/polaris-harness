@@ -281,7 +281,7 @@ func (e *ContextRefExpander) resolveURL(ctx context.Context, val string) (string
 	if err != nil {
 		return "", 0, perrors.Wrap(perrors.CodeInternal, "bad url", err)
 	}
-	req.Header.Set("User-Agent", "polaris-harness/1.0")
+	req.Header.Set("User-Agent", "polarisagi-harness/1.0")
 
 	client := e.client
 	if client == nil {

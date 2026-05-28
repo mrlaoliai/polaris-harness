@@ -1,4 +1,4 @@
-// polaris-harness main entry point.
+// polarisagi-harness main entry point.
 // 启动序列：配置加载 → 存储初始化 → 策略引擎 → 推理路由器 → 认知核心 → 协同层 → 调度器/HITL → 信号监听优雅退出。
 // 架构文档: docs/arch/ARCHITECTURE.md §3 启动顺序
 package main
@@ -104,7 +104,7 @@ func run() error { //nolint:gocyclo
 	cfgPath := os.Getenv("POLARIS_CONFIG")
 	if cfgPath == "" {
 		home, _ := os.UserHomeDir()
-		cfgPath = filepath.Join(home, ".polaris-harness", "config.yaml")
+		cfgPath = filepath.Join(home, ".polarisagi-harness", "config.yaml")
 	}
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -123,7 +123,7 @@ func run() error { //nolint:gocyclo
 	}
 	cfg.Thresholds = *thresholds
 
-	// ─── 0.4 日志初始化（stdout + ~/.polaris-harness/polaris.log）─────────────
+	// ─── 0.4 日志初始化（stdout + ~/.polarisagi-harness/polaris.log）─────────────
 	if logFile := observability.SetupLogger(dataDir); logFile != nil {
 		defer logFile.Close()
 	}
@@ -687,7 +687,7 @@ func resolveDataDirBase(cfg *config.Config) string {
 	}
 	if dir == "" {
 		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".polaris-harness")
+		dir = filepath.Join(home, ".polarisagi-harness")
 	}
 	return dir
 }
