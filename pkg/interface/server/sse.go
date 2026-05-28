@@ -458,7 +458,24 @@ func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Messa
 		return history
 	}
 
-	// Sync identity and capabilities
+	// ── stable 层：身份 / 用户自定义指令 / 模型引导 / 平台提示 ────────────
+
+	// 用户身份（三层优先级已在 LoadSoulMD 中处理，此处注入结果）
+	ic.SoulMDContent = s.soulMDContent
+
+	// 用户自定义追加指令（~/.polaris-harness/config/prompts/custom_instructions.md）
+	ic.CustomInstructions = memory.ReadPrompt("custom_instructions.md", "")
+
+	// M9 激活的系统提示词优先覆盖（general taskType）
+	// 三层组装时 SystemPromptTemplate 非空则全量走模板渲染，跳过 stable 层组装
+	s.activatedSystemPromptMu.RLock()
+	activatedPrompt := s.activatedSystemPrompt
+	s.activatedSystemPromptMu.RUnlock()
+	if activatedPrompt != "" && ic.SystemPromptTemplate == "" {
+		ic.SystemPromptTemplate = activatedPrompt
+	}
+
+	// 当前 Provider ModelID → 模型感知工具调用引导
 	modelID := ""
 	if p := s.registry.PickProvider("default"); p != nil {
 		modelID = p.ModelID()
@@ -466,6 +483,25 @@ func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Messa
 		modelID = p.ModelID()
 	}
 	ic.ModelID = modelID
+
+	// 三层组装时才注入模型专属引导（模板模式由模板自行处理）
+	if ic.SystemPromptTemplate == "" {
+		if memory.NeedsToolUseEnforcement(modelID) {
+			ic.ModelGuidance = memory.ModelSpecificGuidance(modelID)
+			if ic.ModelGuidance == "" {
+				// 通用工具调用强制引导（兜底）
+				ic.ModelGuidance = "有工具可用时必须立即调用，禁止仅输出执行计划或说明性描述。"
+			}
+		} else {
+			ic.ModelGuidance = ""
+		}
+
+		// 平台感知提示
+		ic.PlatformHint = memory.PlatformHintFor(s.serverPlatform)
+
+		// volatile 层：当前日期（精确到天，不破坏 prefix cache），会话信息由调用方追加
+		ic.VolatileBlock = "当前日期：" + time.Now().Format("2006-01-02")
+	}
 
 	// Built-in tools
 	if s.toolReg != nil {
@@ -478,16 +514,16 @@ func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Messa
 
 	// MCP plugins
 	if s.mcpMgr != nil {
-		var mcp []string
+		var mcpNames []string
 		for _, srv := range s.mcpMgr.ListServers() {
 			if srv.Connected {
-				mcp = append(mcp, srv.Name)
+				mcpNames = append(mcpNames, srv.Name)
 			}
 		}
-		ic.InstalledPlugins = strings.Join(mcp, ", ")
+		ic.InstalledPlugins = strings.Join(mcpNames, ", ")
 	}
 
-	// Ambient skills
+	// Ambient skills（追加到 stable 层，仅在模板模式下走追加路径）
 	if s.db != nil { //nolint:nestif
 		rows, err := s.db.Query(`SELECT name, instructions FROM skills WHERE runtime='script' AND exec_mode='ambient' AND deprecated=0`)
 		if err == nil {
@@ -506,4 +542,15 @@ func (s *Server) injectSystemPrompt(history []protocol.Message) []protocol.Messa
 	}
 
 	return ic.PrependToMessages(history)
+}
+
+// SetActivatedSystemPrompt 热更新 M9 激活的系统提示词（goroutine-safe）。
+// 由 PromptVersionStore.OnActivate 回调触发，对 task_type='general' 的激活版本生效。
+func (s *Server) SetActivatedSystemPrompt(taskType, promptText string) {
+	if taskType != "general" {
+		return
+	}
+	s.activatedSystemPromptMu.Lock()
+	s.activatedSystemPrompt = promptText
+	s.activatedSystemPromptMu.Unlock()
 }

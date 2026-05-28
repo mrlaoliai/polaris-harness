@@ -107,6 +107,8 @@ func (s *Server) handleSetPreference(w http.ResponseWriter, r *http.Request) {
 				ic.GlobalGoal = req.Value
 			case "system_prompt_template":
 				ic.SystemPromptTemplate = req.Value
+			case "custom_instructions":
+				ic.CustomInstructions = req.Value
 			}
 		}
 	}

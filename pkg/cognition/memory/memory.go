@@ -73,6 +73,28 @@ type ImmutableCore struct {
 	UserPreferences      map[string]string `json:"user_preferences"`
 	GlobalGoal           string            `json:"global_goal"`
 	SystemPromptTemplate string            `json:"system_prompt_template"`
+
+	// 三层系统提示词组装字段（stable + volatile）
+
+	// SoulMDContent 用户自定义身份文件内容（~/.polaris-harness/config/SOUL.md）。
+	// 非空时替换 DefaultPolarisIdentity 作为 stable 层首段。
+	SoulMDContent string `json:"soul_md_content,omitempty"`
+
+	// ModelGuidance 模型专属工具调用引导，由 M13 Interface 层按 ModelID 注入到 stable 层。
+	ModelGuidance string `json:"model_guidance,omitempty"`
+
+	// PlatformHint 平台感知提示词，由 M13 Interface 层按接入平台注入到 stable 层末尾。
+	// 取值来自 memory.PlatformHints 映射（cli/webui/api/cron）。
+	PlatformHint string `json:"platform_hint,omitempty"`
+
+	// VolatileBlock 易变信息区（时间戳/会话 ID/模型信息），每轮刷新。
+	// 精确到天而非分钟，确保同一天内 prefix cache 不失效。
+	VolatileBlock string `json:"volatile_block,omitempty"`
+
+	// CustomInstructions 用户追加的行为指令（stable 层末尾，追加而非覆盖身份）。
+	// 来源：~/.polaris-harness/config/prompts/custom_instructions.md 或 Web UI 编辑。
+	// DB 删除不影响（文件持久化），factory reset 时才清空。
+	CustomInstructions string `json:"custom_instructions,omitempty"`
 }
 
 func NewImmutableCore() *ImmutableCore {

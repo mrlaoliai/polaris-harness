@@ -280,28 +280,36 @@ func (a *AnthropicAdapter) buildAnthropicRequest(req *protocol.InferRequest, str
 		payload["tools"] = anthropicTools
 	}
 
-	// Anthropic Prompt Caching: 在 system / last tool / last user message 注入 cache_control
+	// Anthropic Prompt Caching：system_and_3 策略，最多 4 个断点。
+	// 断点 1: system prompt（跨会话稳定，命中率最高）
+	// 断点 2: tools 最后一项（工具列表会话内不变）
+	// 断点 3+4: 最近 2 条非 system 消息（缓存会话历史前缀，多轮对话收益显著）
 	if a.enablePromptCaching { //nolint:nestif
-		// 1. system → array + cache_control
+		cacheMarker := map[string]string{"type": "ephemeral"}
+
+		// 断点 1 — system → text array + cache_control
 		if system != "" {
 			payload["system"] = []map[string]any{
-				{"type": "text", "text": strings.TrimSpace(system), "cache_control": map[string]string{"type": "ephemeral"}},
+				{"type": "text", "text": strings.TrimSpace(system), "cache_control": cacheMarker},
 			}
 		}
-		// 2. last tool → cache_control
+		// 断点 2 — tools 最后一项
 		if tools, ok := payload["tools"].([]map[string]any); ok && len(tools) > 0 {
-			tools[len(tools)-1]["cache_control"] = map[string]string{"type": "ephemeral"}
+			tools[len(tools)-1]["cache_control"] = cacheMarker
 		}
-		// 3. last user message → 最后一个 content block 加 cache_control
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if msgs[i]["role"] == "user" {
-				if parts, ok := msgs[i]["content"].([]any); ok && len(parts) > 0 {
-					if lastPart, ok := parts[len(parts)-1].(map[string]any); ok {
-						lastPart["cache_control"] = map[string]string{"type": "ephemeral"}
-					}
-				}
-				break
+		// 断点 3+4 — 最近 2 条非 system 消息（按序收集非 system 下标，取末尾 2 条）
+		var nonSysIdx []int
+		for i, m := range msgs {
+			if m["role"] != "system" {
+				nonSysIdx = append(nonSysIdx, i)
 			}
+		}
+		start := len(nonSysIdx) - 2
+		if start < 0 {
+			start = 0
+		}
+		for _, idx := range nonSysIdx[start:] {
+			applyMsgCacheControl(msgs[idx], cacheMarker)
 		}
 	}
 
@@ -406,6 +414,24 @@ func (a *AnthropicAdapter) parseAnthropicStream(ctx context.Context, body io.Rea
 			}
 		case "message_stop":
 			return
+		}
+	}
+}
+
+// applyMsgCacheControl 向单条消息的最后一个 content block 注入 cache_control。
+// content 为 string 时转换为 text block 数组；为 []any 时直接在末尾元素追加。
+func applyMsgCacheControl(msg map[string]any, marker map[string]string) {
+	content := msg["content"]
+	switch v := content.(type) {
+	case string:
+		msg["content"] = []map[string]any{
+			{"type": "text", "text": v, "cache_control": marker},
+		}
+	case []any:
+		if len(v) > 0 {
+			if last, ok := v[len(v)-1].(map[string]any); ok {
+				last["cache_control"] = marker
+			}
 		}
 	}
 }

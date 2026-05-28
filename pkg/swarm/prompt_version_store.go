@@ -15,6 +15,10 @@ import (
 // 写路径遵循 XR-04：非实时写用 MutationBus，此处用直接写（CAS Activate 需事务保证原子性）。
 type PromptVersionStore struct {
 	db *sql.DB
+	// OnActivate 版本激活成功后的回调，可选。
+	// 调用方（如 M13 Interface 层）注入此函数以接收激活通知，用于热更新 ImmutableCore。
+	// nil 时跳过回调，不影响激活逻辑。
+	OnActivate func(taskType, promptText string)
 }
 
 // NewPromptVersionStore 创建版本存储，db 必须非 nil。
@@ -105,11 +109,23 @@ func (s *PromptVersionStore) Activate(ctx context.Context, taskType, id string, 
 		return perrors.Wrap(perrors.CodeInternal, "prompt_version_store: deactivate old failed", err)
 	}
 	// 激活候选
+	var promptText string
+	if err = tx.QueryRowContext(ctx,
+		"SELECT prompt_text FROM prompt_versions WHERE id = ?", id).Scan(&promptText); err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "prompt_version_store: read prompt text failed", err)
+	}
 	if _, err = tx.ExecContext(ctx,
 		"UPDATE prompt_versions SET is_active = 1 WHERE id = ?", id); err != nil {
 		return perrors.Wrap(perrors.CodeInternal, "prompt_version_store: activate failed", err)
 	}
-	return perrors.Wrap(perrors.CodeInternal, "prompt_version_store: commit failed", tx.Commit())
+	if err = tx.Commit(); err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "prompt_version_store: commit failed", err)
+	}
+	// 激活成功后通知注入方（如 M13 Interface 层热更新 ImmutableCore）
+	if s.OnActivate != nil && promptText != "" {
+		s.OnActivate(taskType, promptText)
+	}
+	return nil
 }
 
 // ListRecent 获取最近 n 个版本（按 created_at DESC）；n≤0 时返回最近 10 条。

@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"context"
+	"strings"
 	"sync"
 	"text/template"
 
@@ -47,24 +48,51 @@ func (ic *ImmutableCore) Load(ctx context.Context, userID, sessionID string) (pr
 }
 
 func (ic *ImmutableCore) renderSystemPrompt() string {
-	if ic.SystemPromptTemplate == "" {
-		res := "你是 " + ic.AgentName + "，一个 AI Agent。\n"
-		if ic.ModelID != "" {
-			res += "当前运行模型：" + ic.ModelID + "。\n"
+	// M9 / 用户自定义模板：全量委托给模板渲染，跳过三层组装
+	if ic.SystemPromptTemplate != "" {
+		t, err := template.New("sys").Parse(ic.SystemPromptTemplate)
+		if err != nil {
+			return "Error parsing system prompt: " + err.Error() + "\n"
 		}
-		return res
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, ic); err != nil {
+			return "Error rendering system prompt: " + err.Error() + "\n"
+		}
+		return buf.String()
 	}
 
-	t, err := template.New("sys").Parse(ic.SystemPromptTemplate)
-	if err != nil {
-		return "Error parsing system prompt: " + err.Error() + "\n"
+	// 三层组装：stable → model guidance → platform hint → volatile
+	var parts []string
+
+	// 1. stable — 身份（SoulMDContent 已由 server 按三层优先级填充）
+	if ic.SoulMDContent != "" {
+		parts = append(parts, ic.SoulMDContent)
+	} else {
+		// server 未注入时的最终兜底（不应触发，仅防御性保护）
+		parts = append(parts, DefaultIdentity())
 	}
 
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, ic); err != nil {
-		return "Error rendering system prompt: " + err.Error() + "\n"
+	// 2. stable — 模型专属工具调用引导
+	if ic.ModelGuidance != "" {
+		parts = append(parts, ic.ModelGuidance)
 	}
-	return buf.String()
+
+	// 3. stable — 用户自定义追加指令（追加而非覆盖，保留产品基线行为）
+	if ic.CustomInstructions != "" {
+		parts = append(parts, ic.CustomInstructions)
+	}
+
+	// 4. stable — 平台感知提示
+	if ic.PlatformHint != "" {
+		parts = append(parts, ic.PlatformHint)
+	}
+
+	// 5. volatile — 时间戳 / 会话信息（精确到天，不破坏 prefix cache）
+	if ic.VolatileBlock != "" {
+		parts = append(parts, ic.VolatileBlock)
+	}
+
+	return strings.Join(parts, "\n\n")
 }
 
 func (ic *ImmutableCore) PrependToMessages(msgs []protocol.Message) []protocol.Message {

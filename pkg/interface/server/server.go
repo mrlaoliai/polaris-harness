@@ -58,6 +58,14 @@ type Server struct {
 	skillSignKey    []byte
 	toolSchemaCache []protocol.ToolSchema
 	toolSchemaMu    sync.RWMutex
+
+	// 系统提示词组装缓存（启动时一次性加载，运行期不变）
+	soulMDContent string // ~/.polaris-harness/config/SOUL.md 内容
+	serverPlatform string // 接入平台标识，决定平台感知提示词（cli/webui/api/cron）
+
+	// M9 激活的系统提示词（从 DB prompt_versions 表读取，Activate 回调热更新）
+	activatedSystemPromptMu sync.RWMutex
+	activatedSystemPrompt   string // task_type='general' 的激活版本
 }
 
 func (s *Server) SetInstallManager(m *marketplace.Manager) { s.installMgr = m }
@@ -224,6 +232,29 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 		}
 	}
 
+	// 注入 embedded FS 到 memory 包（三层提示词加载的 Layer 0）
+	// 必须在 LoadSoulMD / DefaultIdentity 之前完成
+	memory.SetEmbeddedPrompts(configs.FS)
+
+	// 加载用户身份（三层优先级：user prompts/identity.md > SOUL.md > embedded default）
+	s.soulMDContent = memory.LoadSoulMD()
+
+	// 读取接入平台标识（环境变量 POLARIS_PLATFORM，缺失时默认 webui）
+	s.serverPlatform = os.Getenv("POLARIS_PLATFORM")
+	if s.serverPlatform == "" {
+		s.serverPlatform = "webui"
+	}
+
+	// 从 DB 加载 M9 已激活的 general 系统提示词（启动热恢复）
+	if db != nil {
+		var activatedPrompt string
+		row := db.QueryRowContext(context.Background(),
+			"SELECT prompt_text FROM prompt_versions WHERE task_type='general' AND is_active=1 ORDER BY created_at DESC LIMIT 1")
+		if err := row.Scan(&activatedPrompt); err == nil && activatedPrompt != "" {
+			s.activatedSystemPrompt = activatedPrompt
+		}
+	}
+
 	s.compressor = newCompressor(db, s.hooks)
 	s.channelMgr = channels.NewManager(httpClient, func(channelType, channelID string, cfg map[string]any, msg channels.Message) {
 		s.dispatchChannelMessage(channelType, channelID, cfg, msg)
@@ -265,6 +296,13 @@ func NewServer(addr string, dataDir string, agent *kernel.Agent, bb protocol.Bla
 	// Preferences API
 	mux.HandleFunc("GET /v1/preferences", s.handleGetPreferences)
 	mux.HandleFunc("PUT /v1/preferences/{key}", s.handleSetPreference)
+
+	// 提示词管理 API（三层所有权：Layer 1 用户自定义层，读写 ~/.polaris-harness/config/prompts/）
+	// Layer 0（embedded 内置默认）和 Layer 2（M9 优化）不通过此 API 暴露
+	mux.HandleFunc("GET /v1/config/prompts", s.handleListPrompts)
+	mux.HandleFunc("GET /v1/config/prompts/{name}", s.handleGetPrompt)
+	mux.HandleFunc("PUT /v1/config/prompts/{name}", s.handleSetPrompt)
+	mux.HandleFunc("DELETE /v1/config/prompts/{name}", s.handleResetPrompt)
 
 	// M12 评测 API
 	mux.HandleFunc("POST /v1/eval/run", s.handleEvalRun)

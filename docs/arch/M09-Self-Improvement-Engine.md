@@ -311,6 +311,7 @@ QLoRA/PRM/ActivationSteering 的 Tier 门控由 `FeatureGate` 自动化：`Featu
 |---------|---------|---------|
 | Worker goroutine 崩溃 (Reflexion/Distillation/Curriculum/Fallacy) | suture OneForOne 重启 + backoff（权威源 `spec/state.yaml §m9_self_improve.worker_restart_backoff_initial_ms` / `worker_restart_backoff_max_seconds`） | 5 次上限 → Escalate Root Supervisor |
 | PromptOptimizer 候选生成为空 | 跳过本周期 → 延长触发间隔 | 下次周期正常触发恢复 |
+| PromptVersionStore.OnActivate 回调 nil 或 panic | 激活写库成功，回调失败不回滚；仅热更新路径失效 | Server 重启后从 DB 热恢复 |
 | MEMF 池检索超时 (>50ms) | 跳过剪枝直接放行 | 池大小削减后恢复 |
 | Auto-Curriculum 任务失败 | 标记课程任务 failed→Ephemeral Namespace 绑定，不影响核心功能 | — |
 | Staging Stage 失败 | candidate → rejected/dead_letter → audit | 下一代候选重新进入 |
@@ -334,7 +335,7 @@ QLoRA/PRM/ActivationSteering 的 Tier 门控由 `FeatureGate` 自动化：`Featu
 | M8 Orchestrator | Auto-Curriculum PostTask（priority=3）→ Blackboard CAS 认领 | M8 §1 |
 | M11 Policy Safety | PromptOptimizer 输出安全流水线（Taint Gate → SIC → 独立 LLM-as-Judge）| M11 §2 |
 | M12 Eval Harness | Eval 门控（Training/Validation/Holdout 三层分区、PromptOptimizer 早停依据），通过 EventEvalCompleted 驱动外环 Rollout | M12 §5 |
-| M13 Interface | TrafficSplitter 执行分发、ResourceGovernor 空闲门控 | M13 §2.5 |
+| M13 Interface | TrafficSplitter 执行分发、ResourceGovernor 空闲门控；`PromptVersionStore.OnActivate` 回调热更新 `ImmutableCore`（`task_type='general'`） | M13 §2.5 + M5 §11.0 |
 | 全局字典 | HE-Rule-4 数据驱动迭代、MEMF/HeuristicsMemory/GEPA 定义 | 00-Global-Dictionary §2, §9-bis |
 | 事件总线协议 | EventHeuristicGenerated（内环规避规则注入）、EventEvalCompleted（外环评测结果驱动 Activate） | internal/protocol/event.go |
 | DDL | sys_prompt_versions（Prompt 版本化）、skill_variant_pool（工具描述符变体池）| internal/protocol/schema/010_self_improve.sql |
