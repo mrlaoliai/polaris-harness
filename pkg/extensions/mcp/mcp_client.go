@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -115,8 +116,12 @@ func (c *MCPClient) connectStdio(ctx context.Context) error {
 		return perrors.New(perrors.CodeInternal, "mcp: stdio transport requires command")
 	}
 	cmd := exec.CommandContext(ctx, c.cfg.Command, c.cfg.Args...)
-	for k, v := range c.cfg.Env {
-		cmd.Env = append(cmd.Env, k+"="+v)
+	// 继承父进程完整环境，再叠加 MCP 自定义变量（保证 PATH/HOME/NODE_PATH 等可用）
+	if len(c.cfg.Env) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range c.cfg.Env {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

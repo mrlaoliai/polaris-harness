@@ -129,6 +129,13 @@ func loadMCPConfig(path string) (*protocol.MCPConfig, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, err
 	}
+	// 兼容 Claude Code 顶层 key 格式（{"serverName":{...}}），不含 mcpServers 包装层
+	if len(c.MCPServers) == 0 {
+		var flat map[string]protocol.MCPServerDef
+		if json.Unmarshal(data, &flat) == nil && len(flat) > 0 {
+			c.MCPServers = flat
+		}
+	}
 	return &c, nil
 }
 
