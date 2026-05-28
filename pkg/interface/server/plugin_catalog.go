@@ -242,6 +242,9 @@ func (s *Server) internalInstallMCP(ctx context.Context, extID string, entry *pr
 	cfg.ID = mcpID
 
 	argsBytes, _ := json.Marshal(cfg.Args)
+	if cfg.Env == nil {
+		cfg.Env = map[string]string{}
+	}
 	envBytes, _ := json.Marshal(cfg.Env)
 
 	_, err := s.db.ExecContext(ctx,

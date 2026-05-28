@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/polarisagi/polarisagi-harness/pkg/extensions/mcp"
@@ -219,12 +220,16 @@ func (s *Server) startMCPServer(c MCPServerConfig) {
 }
 
 func (s *Server) startMCPServerCtx(ctx context.Context, c MCPServerConfig) error {
+	args := make([]string, len(c.Args))
+	for i, a := range c.Args {
+		args[i] = strings.ReplaceAll(a, "{DATA_DIR}", s.dataDir)
+	}
 	cfg := mcp.MCPClientConfig{
 		Transport: mcp.MCPTransport(c.Transport),
 		Command:   c.Command,
-		Args:      c.Args,
+		Args:      args,
 		Env:       c.Env,
-		URL:       c.URL,
+		URL:       strings.ReplaceAll(c.URL, "{DATA_DIR}", s.dataDir),
 		Timeout:   time.Duration(c.Timeout) * time.Second,
 	}
 	return s.mcpMgr.Add(ctx, c.ID, c.Name, cfg)

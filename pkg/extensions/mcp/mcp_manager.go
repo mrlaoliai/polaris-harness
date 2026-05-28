@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,7 +147,8 @@ func (m *MCPManager) ListToolSchemas() []protocol.ToolSchema {
 }
 
 // LoadFromDB 启动时从数据库加载并异步连接所有已启用的 MCP Server。
-func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB) {
+// dataDir 用于展开 args/url 中的 {DATA_DIR} 占位符。
+func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT id, name, transport, command, args, env, url, timeout FROM mcp_servers WHERE enabled=1`)
 	if err != nil {
@@ -166,12 +168,16 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB) {
 		var env map[string]string
 		json.Unmarshal([]byte(envJSON), &env) //nolint:errcheck
 
+		for i, a := range args {
+			args[i] = strings.ReplaceAll(a, "{DATA_DIR}", dataDir)
+		}
+
 		cfg := MCPClientConfig{
 			Transport: MCPTransport(transport),
 			Command:   command,
 			Args:      args,
 			Env:       env,
-			URL:       urlStr,
+			URL:       strings.ReplaceAll(urlStr, "{DATA_DIR}", dataDir),
 			Timeout:   time.Duration(timeout) * time.Second,
 		}
 		// 每个 server 独立 goroutine，避免一个慢连接阻塞其他
