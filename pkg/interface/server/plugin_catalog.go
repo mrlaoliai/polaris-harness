@@ -368,12 +368,6 @@ func (s *Server) handleUninstallPlugin(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
-	id := r.PathValue("id")
-	if _, err := s.db.ExecContext(r.Context(), "DELETE FROM extension_instances WHERE id=?", id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	s.clearToolSchemaCache()
 
 	w.Header().Set("Content-Type", "application/json")

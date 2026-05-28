@@ -294,13 +294,14 @@ func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protoc
 	return entries, err
 }
 
-// pullOrClone 尝试执行 git pull 或 clone，返回是否有实质更新。
-func pullOrClone(repoURL, mpDir, gitDir string) bool {
+// pullOrClone 尝试执行 git pull 或 clone。
+// available=false 表示仓库不可用；available=true+updated=false 表示仓库存在但无新变化。
+func pullOrClone(repoURL, mpDir, gitDir string) (available bool, updated bool) {
 	if _, err := os.Stat(gitDir); err == nil {
 		cmd := exec.Command("git", "-C", mpDir, "pull")
 		output, err := cmd.CombinedOutput()
 		if err == nil {
-			return !strings.Contains(string(output), "Already up to date.")
+			return true, !strings.Contains(string(output), "Already up to date.")
 		}
 		os.RemoveAll(mpDir)
 	} else {
@@ -310,11 +311,11 @@ func pullOrClone(repoURL, mpDir, gitDir string) bool {
 	if _, err := os.Stat(mpDir); os.IsNotExist(err) {
 		cmd := exec.Command("git", "clone", "--depth", "1", repoURL, mpDir)
 		if err := cmd.Run(); err != nil {
-			return false
+			return false, false
 		}
-		return true
+		return true, true
 	}
-	return false
+	return false, false
 }
 
 // syncMarketplace 同步单个市场
@@ -327,8 +328,18 @@ func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, t
 	mpDir := filepath.Join(tmpDir, safeID)
 	gitDir := filepath.Join(mpDir, ".git")
 
-	if !pullOrClone(mp.RepoURL, mpDir, gitDir) {
-		return 0 // 如果没有更新或拉取失败，直接跳过解析和写库，节省大量时间
+	available, updated := pullOrClone(mp.RepoURL, mpDir, gitDir)
+	if !available {
+		return 0
+	}
+	if !updated {
+		// 仓库无新变化；若 catalog 已有条目（正常情况）则跳过，节省解析开销。
+		// 若 catalog 为空（如 DB 重建），仍需重新写库，否则插件列表永久为空。
+		var count int
+		_ = s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM extension_catalog WHERE marketplace_id=?", mp.ID).Scan(&count)
+		if count > 0 {
+			return 0
+		}
 	}
 
 	b, err := os.ReadFile(filepath.Join(mpDir, "catalog.json"))

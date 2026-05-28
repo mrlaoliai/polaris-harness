@@ -39,44 +39,6 @@ func NewMCPMarketplaceClient(registryURL, baseInstallDir string) *MCPMarketplace
 
 // Search queries the marketplace for MCP servers or plugins.
 func (c *MCPMarketplaceClient) Search(ctx context.Context, query string) ([]protocol.RegistryEntry, error) {
-	if query == "knowledge_base" || query == "polaris_official" {
-		return []protocol.RegistryEntry{
-			{
-				ID:          "github.com/polarisagi/polarisagi-plugins-official/knowledge_base",
-				Publisher:   "polarisagi",
-				Type:        "mcp",
-				TrustTier:   int(protocol.TrustOfficial),
-				Name:        "Knowledge Base",
-				Description: "Official Polaris Knowledge Base Extension (Go Binary)",
-				Command:     "knowledge_base",
-				Args:        []string{},
-				URL:         "https://github.com/polarisagi/polarisagi-plugins-official/releases/latest/download/knowledge_base_" + runtime.GOOS + "_" + runtime.GOARCH, // Real GitHub Release URL
-			},
-			{
-				ID:          "github.com/polarisagi/polarisagi-plugins-official/browser_use",
-				Publisher:   "polarisagi",
-				Type:        "mcp",
-				TrustTier:   int(protocol.TrustOfficial),
-				Name:        "Browser Use",
-				Description: "Official Polaris Browser Use Extension (Python uvx)",
-				Command:     "uvx",
-				Args:        []string{"--from", "git+https://github.com/polarisagi/polarisagi-plugins-official.git#subdirectory=plugins/browser_use", "run", "server.py"},
-				URL:         "uvx-mode", // 标识无需下载二进制
-			},
-			{
-				ID:          "github.com/polarisagi/polarisagi-plugins-official/computer_use",
-				Publisher:   "polarisagi",
-				Type:        "mcp",
-				TrustTier:   int(protocol.TrustOfficial),
-				Name:        "Computer Use",
-				Description: "Official Polaris Computer Use Extension (Rust Binary)",
-				Command:     "computer_use",
-				Args:        []string{},
-				URL:         "https://github.com/polarisagi/polarisagi-plugins-official/releases/latest/download/computer_use_" + runtime.GOOS + "_" + runtime.GOARCH,
-			},
-		}, nil
-	}
-
 	searchURL := fmt.Sprintf("%s/search?q=%s", c.registryURL, url.QueryEscape(query))
 	slog.Info("marketplace: searching for packages", "query", query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, searchURL, nil)
