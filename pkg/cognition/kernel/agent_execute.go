@@ -312,12 +312,12 @@ func (a *Agent) runValidateDAG(ctx context.Context) error {
 						return "S_VALIDATE_FAIL", perrors.New(perrors.CodeForbidden, "LLM Watchdog denied: "+string(content))
 					}
 					go a.SendIntent(protocol.TriggerValidateOk)
-					return "S_VALIDATE_WAIT", nil
+					return "S_VALIDATE_OK", nil
 				},
 				OnFailure: func(pCtx protocol.StateContext, err error) (protocol.State, error) {
-					// L3 失败为咨询信号，默认放行
+					// L3 失败为咨询信号，默认放行（fail-open）
 					go a.SendIntent(protocol.TriggerValidateOk)
-					return "S_VALIDATE_WAIT", nil
+					return "S_VALIDATE_OK", nil
 				},
 				MaxRetry:  0, // 看门狗不重试
 				ModelPool: "reasoning",
@@ -485,12 +485,9 @@ func (a *Agent) runExecuteDAG(ctx context.Context) error { //nolint:gocyclo
 		return perrors.Wrap(perrors.CodeInternal, "runExecuteDAG: DAG execution failed", err)
 	}
 
-	// 简单 JSON 序列化（详细输出由各节点的 ToolResult.Output 持有）
-	if len(results) > 0 {
-		a.sCtx.ExecuteResult = results[0].Output // 取第一个节点输出作为主结果（MVP）
-	} else {
-		a.sCtx.ExecuteResult = []byte("{}")
-	}
+	// 聚合所有节点输出为 JSON 数组，反思阶段可获取完整 DAG 执行结果。
+	// 单节点时保持向后兼容（直接取 output 字节）；多节点时序列化为 {"results":[...]} 结构。
+	a.sCtx.ExecuteResult = aggregateDAGResults(results)
 	go a.SendIntent(protocol.TriggerExecuteDone)
 	return nil
 }
@@ -553,4 +550,42 @@ func (a *Agent) interceptComputerUse(ctx context.Context, toolName string, args 
 		}
 	}
 	return nil
+}
+
+// aggregateDAGResults 将多节点执行结果聚合为统一 JSON 格式。
+// 单节点直接返回 output；多节点序列化为 {"results":[{id,output},...]}.
+func aggregateDAGResults(results []NodeResult) []byte {
+	if len(results) == 0 {
+		return []byte("{}")
+	}
+	if len(results) == 1 {
+		if results[0].Err != nil {
+			return []byte(`{"error":"` + results[0].Err.Error() + `"}`)
+		}
+		return results[0].Output
+	}
+
+	// 多节点：构建聚合结构
+	var buf []byte
+	buf = append(buf, `{"results":[`...)
+	for i, r := range results {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, `{"id":"`...)
+		buf = append(buf, r.NodeID...)
+		buf = append(buf, `","output":`...)
+		if r.Err != nil {
+			buf = append(buf, `{"error":"`...)
+			buf = append(buf, r.Err.Error()...)
+			buf = append(buf, `"}`...)
+		} else if len(r.Output) > 0 {
+			buf = append(buf, r.Output...)
+		} else {
+			buf = append(buf, `null`...)
+		}
+		buf = append(buf, '}')
+	}
+	buf = append(buf, "]}"...)
+	return buf
 }
