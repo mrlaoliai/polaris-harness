@@ -1,8 +1,10 @@
 package substrate
 
 import (
+	stdhmac "crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -151,11 +153,20 @@ func NewTaintBoundarySerializer(key []byte) *TaintBoundarySerializer {
 }
 
 // TaintEnvelope 跨边界传输的污点信封。
+// HMACHex 覆盖全信封（除 hmac 字段自身外），防止部分字段被篡改。
 type TaintEnvelope struct {
-	Content    string             `json:"content"`
-	Level      protocol.TaintLevel `json:"level"`
-	Source     TaintSource        `json:"source"`
-	HMACHex    string             `json:"hmac"` // HMAC-SHA256(content+level+source.EntityID)
+	Content string             `json:"content"`
+	Level   protocol.TaintLevel `json:"level"`
+	Source  TaintSource        `json:"source"`
+	HMACHex string             `json:"hmac"`
+}
+
+// taintEnvelopeForMAC 是用于 HMAC 计算的信封副本（不含 hmac 字段），
+// 保证序列化字段集合与 TaintEnvelope 完全一致，防止字段遗漏。
+type taintEnvelopeForMAC struct {
+	Content string             `json:"content"`
+	Level   protocol.TaintLevel `json:"level"`
+	Source  TaintSource        `json:"source"`
 }
 
 // Seal 序列化 TaintedString 为带 HMAC 的信封（传输至另一模块前调用）。
@@ -169,12 +180,17 @@ func (s *TaintBoundarySerializer) Seal(ts TaintedString) TaintEnvelope {
 	return env
 }
 
-// Unseal 反序列化信封并验证 HMAC 完整性。
+// Unseal 反序列化信封并以常量时间验证 HMAC 完整性。
 // 若 HMAC 不匹配，返回的 TaintedString 污点强制升级为 TaintHigh（fail-closed）。
 func (s *TaintBoundarySerializer) Unseal(env TaintEnvelope) (TaintedString, bool) {
-	expected := s.computeHMAC(env)
-	if expected != env.HMACHex {
-		// HMAC 不匹配：强制升级污点等级，防止降级攻击
+	expectedHex := s.computeHMAC(env)
+
+	// 常量时间比较，防止时序攻击（timing attack）
+	expectedBytes, err1 := hex.DecodeString(expectedHex)
+	receivedBytes, err2 := hex.DecodeString(env.HMACHex)
+	valid := err1 == nil && err2 == nil && stdhmac.Equal(expectedBytes, receivedBytes)
+
+	if !valid {
 		src := env.Source
 		src.OriginTaintLevel = protocol.TaintHigh
 		return TaintedString{
@@ -190,33 +206,17 @@ func (s *TaintBoundarySerializer) Unseal(env TaintEnvelope) (TaintedString, bool
 	}, true
 }
 
-// computeHMAC 计算 HMAC-SHA256，覆盖内容、污点等级和来源实体 ID。
+// computeHMAC 对完整信封（Content + Level + Source 全部字段）计算 HMAC-SHA256。
+// 使用规范化 JSON 序列化覆盖全部字段，防止部分字段篡改绕过校验。
+// 采用标准库 crypto/hmac + sha256.New，正确处理长密钥（HMAC 规范要求预哈希）。
 func (s *TaintBoundarySerializer) computeHMAC(env TaintEnvelope) string {
-	msg := fmt.Sprintf("%s:%d:%s", env.Content, env.Level, env.Source.EntityID)
-	mac := hmacSHA256(s.key, []byte(msg))
-	return hex.EncodeToString(mac)
-}
-
-// hmacSHA256 计算 HMAC-SHA256（内联实现，避免额外 import 在包初始化路径）。
-func hmacSHA256(key, msg []byte) []byte {
-	// HMAC(K, m) = H((K XOR opad) || H((K XOR ipad) || m))
-	// 使用标准库 crypto/hmac；此处直接返回 sha256 摘要即可。
-	// 实际使用标准 crypto/hmac 包。
-	h := sha256.New()
-	// 内填充（ipad = 0x36 repeated）
-	ipad := make([]byte, 64)
-	opad := make([]byte, 64)
-	k := make([]byte, 64)
-	copy(k, key)
-	for i := range 64 {
-		ipad[i] = k[i] ^ 0x36
-		opad[i] = k[i] ^ 0x5c
-	}
-	h.Write(ipad)
-	h.Write(msg)
-	inner := h.Sum(nil)
-	h.Reset()
-	h.Write(opad)
-	h.Write(inner)
-	return h.Sum(nil)
+	// 序列化不含 hmac 字段的副本，保证确定性（json.Marshal 字段顺序由结构体定义固定）
+	canonical, _ := json.Marshal(taintEnvelopeForMAC{
+		Content: env.Content,
+		Level:   env.Level,
+		Source:  env.Source,
+	})
+	mac := stdhmac.New(sha256.New, s.key)
+	mac.Write(canonical)
+	return hex.EncodeToString(mac.Sum(nil))
 }
