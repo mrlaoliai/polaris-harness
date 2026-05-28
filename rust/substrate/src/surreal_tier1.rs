@@ -233,11 +233,11 @@ pub unsafe extern "C" fn surreal_kv_scan(
         for row in &rows {
             if let surrealdb::sql::Value::Object(obj) = row {
                 let k = match obj.get("k") {
-                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    Some(surrealdb::sql::Value::Strand(s)) => s.0.clone(),
                     _ => continue,
                 };
                 let v = match obj.get("v") {
-                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    Some(surrealdb::sql::Value::Strand(s)) => s.0.clone(),
                     _ => continue,
                 };
                 if !first {
@@ -429,7 +429,7 @@ pub unsafe extern "C" fn surreal_graph_traverse(
                     for row in &rows {
                         if let surrealdb::sql::Value::Object(obj) = row {
                             if let Some(surrealdb::sql::Value::Strand(s)) = obj.get("to_id") {
-                                ids.push(s.as_string());
+                                ids.push(s.0.clone());
                             }
                         }
                     }
@@ -527,7 +527,7 @@ pub unsafe extern "C" fn surreal_fts_search(
         for row in &rows {
             if let surrealdb::sql::Value::Object(obj) = row {
                 let id_str = match obj.get("doc_id") {
-                    Some(surrealdb::sql::Value::Strand(s)) => s.as_string(),
+                    Some(surrealdb::sql::Value::Strand(s)) => s.0.clone(),
                     _ => continue,
                 };
                 let score = match obj.get("score") {
