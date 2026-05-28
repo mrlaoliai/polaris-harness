@@ -112,8 +112,8 @@ func parsePluginEntry(path string, mpDir string, mp protocol.Marketplace) (*prot
 		return nil, err
 	}
 
-	// 如果 plugin.json 在 .claude-plugin 目录下，其上级目录才是插件主目录
-	if filepath.Base(relDir) == ".claude-plugin" {
+	// 如果 plugin.json 在 .claude-plugin / .codex-plugin 目录下，其上级目录才是插件主目录
+	if b := filepath.Base(relDir); b == ".claude-plugin" || b == ".codex-plugin" {
 		relDir = filepath.Dir(relDir)
 	}
 

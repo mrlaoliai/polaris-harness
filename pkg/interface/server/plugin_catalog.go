@@ -463,14 +463,16 @@ func cond(pred bool, a, b string) string {
 //nolint:nestif
 func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalogID string, entry *protocol.RegistryEntry, now, name string) { //nolint:gocyclo,nestif
 	// 1. 获取本地 tmp 目录路径
+	// marketplace_id 本身可含 "/"（如 "polarisagi/polarisagi-plugins-official"），
+	// 不能在第一个 "/" 处分割，必须从 extension_catalog 读取准确值。
 	home, _ := os.UserHomeDir()
-	parts := strings.SplitN(catalogID, "/", 2)
-	if len(parts) != 2 {
-		s.updateExtensionInstanceError(ctx, extID, "invalid catalog_id")
+	var mpID string
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT marketplace_id FROM extension_catalog WHERE id=?`, catalogID).Scan(&mpID); err != nil {
+		s.updateExtensionInstanceError(ctx, extID, "catalog entry not found: "+err.Error())
 		return
 	}
-	mpID := parts[0]
-	relPath := parts[1]
+	relPath := filepath.FromSlash(strings.TrimPrefix(catalogID, mpID+"/"))
 
 	safeMpID := strings.ReplaceAll(mpID, "/", "_")
 	srcDir := filepath.Join(home, ".polarisagi-harness", "tmp", "marketplaces", safeMpID, relPath)
