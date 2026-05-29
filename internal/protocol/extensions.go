@@ -76,7 +76,7 @@ type PluginBundleManifest struct {
 	Description string                  `json:"description"`
 	Entrypoint  string                  `json:"entrypoint,omitempty"`
 	MCPFile     string                  `json:"mcpServers,omitempty"` // 指向 .mcp.json 的相对路径
-	MCPInline   map[string]MCPServerDef `json:"mcp_inline,omitempty"`  // 内联 MCP 服务器映射
+	MCPInline   map[string]MCPServerDef `json:"mcpInline,omitempty"`   // 内联 MCP 服务器映射
 	Skills      []BundleSkillRef        `json:"skills,omitempty"`
 	Hooks       map[string]string       `json:"hooks,omitempty"` // 事件 → 脚本路径
 }
