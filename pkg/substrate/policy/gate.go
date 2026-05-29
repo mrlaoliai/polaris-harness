@@ -383,8 +383,8 @@ func formatCedarUID(defaultType, val string) string {
 // 违反 → ErrTaintBlockedEgress（对应 M11 §2.3 SanitizeBySchema 规则）。
 func (g *Gate) TaintEgressCheck(levels ...protocol.TaintLevel) error {
 	result := protocol.PropagateTaint(levels...)
-	// TaintMedium 硬地板：LLM 输出不可降级为 Low，不可直接出口
-	if result >= protocol.TaintHigh {
+	// TaintMedium 硬地板：Medium 及以上级别数据不得直接出口，必须经过清洗
+	if result >= protocol.TaintMedium {
 		return ErrTaintBlockedEgress
 	}
 	return nil

@@ -219,9 +219,7 @@ pub unsafe extern "C" fn surreal_kv_scan(
             .block_on(async {
                 let mut resp = guard
                     .db
-                    .query(
-                        "SELECT k, v FROM kv WHERE string::startsWith(k, $prefix) ORDER BY k",
-                    )
+                    .query("SELECT k, v FROM kv WHERE string::startsWith(k, $prefix) ORDER BY k")
                     .bind(("prefix", prefix_hex))
                     .await?;
                 resp.take(0)
@@ -412,8 +410,7 @@ pub unsafe extern "C" fn surreal_graph_traverse(
             let sql = if et.is_empty() {
                 "SELECT to_id FROM edges WHERE from_id IN $frontier".to_string()
             } else {
-                "SELECT to_id FROM edges WHERE from_id IN $frontier AND edge_type = $et"
-                    .to_string()
+                "SELECT to_id FROM edges WHERE from_id IN $frontier AND edge_type = $et".to_string()
             };
             let next: Vec<String> = guard
                 .rt

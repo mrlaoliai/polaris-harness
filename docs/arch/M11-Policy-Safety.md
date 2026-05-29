@@ -460,7 +460,7 @@ blockedCIDRs: 127.0.0.0/8 / 10.0.0.0/8 / 172.16.0.0/12 / 192.168.0.0/16 / 169.25
 **统一安全 Dialer** (`internal/protocol/interfaces.go` SafeDialer):
   M11 导出 SafeDialer.DialContext。四层注入覆盖全出站: http.Transport.DialContext / grpc.WithContextDialer / websocket.Dialer.NetDialContext / net.DefaultDialer.Control
   DialContext 内执行五阶段 SSRF (Phase 0-4)。
-  Taint 出口拦截: 调用方在 DialContext 前显式调用 `SafeDialer.TaintEgressCheck(taintLevels)`，`[Taint-Medium]` 未 SanitizeByUserApproval → ErrTaintBlockedEgress。
+  Taint 出口拦截: 调用方在 DialContext 前显式调用 `SafeDialer.TaintEgressCheck(taintLevels)`，`[Taint-Medium]` 及以上级别（TaintMedium/TaintHigh）未经 SanitizeByUserApproval → ErrTaintBlockedEgress。Gate.TaintEgressCheck 与 SafeDialer.TaintEgressCheck 采用同一阈值（`>= TaintMedium`），两层一致防止出口绕过。
   两层纵深: M7 Policy Gate4（声明层预检）+ M11 SafeDialer.TaintEgressCheck（出口层终检，调用方职责）。
   M7/M10/M13 所有出站必经此入口。CI `safe_dialer_lint` 扫描裸 `net.Dial` / `grpc.Dial` / `http.Get` → ERROR。
 

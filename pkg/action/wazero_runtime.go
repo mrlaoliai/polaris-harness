@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/tetratelabs/wazero"
@@ -19,6 +20,7 @@ import (
 
 type WazeroRuntime struct {
 	runtime     wazero.Runtime
+	mu          sync.RWMutex
 	goldCache   map[string]wazero.CompiledModule
 	silverCache map[string]wazero.CompiledModule
 	bronzeCache map[string]*BronzeEntry
@@ -211,6 +213,8 @@ func (wr *WazeroRuntime) ExecuteTool(ctx context.Context, skillName string, inpu
 
 // GetOrCompile 分层缓存查找: gold → silver → bronze → compile.
 func (wr *WazeroRuntime) GetOrCompile(skillID string, successRate float64) (any, error) {
+	wr.mu.RLock()
+	defer wr.mu.RUnlock()
 	if m, ok := wr.goldCache[skillID]; ok {
 		return m, nil
 	}
@@ -229,7 +233,9 @@ func (wr *WazeroRuntime) PreWarmCache(skillID string, wasmBytes []byte) error {
 	if err != nil {
 		return err
 	}
+	wr.mu.Lock()
 	wr.goldCache[skillID] = compiled
+	wr.mu.Unlock()
 	return nil
 }
 

@@ -105,8 +105,8 @@ func (r *InMemoryToolRegistry) ExecuteTool(ctx context.Context, name string, inp
 			map[string]any{
 				"tool_source":            string(tool.Source),
 				"risk_level":             int(tool.RiskLevel),
-				"trust_level":            1,
-				"capability_token_valid": true,
+				"trust_level":            toolTrustLevel(tool.Source),
+				"capability_token_valid": tool.Capability <= protocol.CapReadOnly,
 			})
 		if pErr != nil || !allowed {
 			reason := "policy denied"
@@ -206,6 +206,18 @@ func (rl *rateLimiter) Allow() bool {
 	}
 	rl.tokens.Add(1) // 还回
 	return false
+}
+
+// toolTrustLevel 根据工具来源推导信任等级。
+// ToolBuiltin → 4（系统信任）; ToolMCP/ToolA2A → 2（社区信任）; 其余 → 1
+func toolTrustLevel(source protocol.ToolSource) int {
+	switch source {
+	case protocol.ToolBuiltin:
+		return 4
+	case protocol.ToolMCP, protocol.ToolA2A:
+		return 2
+	}
+	return 1
 }
 
 // ErrToolNotFound 工具未注册时返回的哨兵错误。

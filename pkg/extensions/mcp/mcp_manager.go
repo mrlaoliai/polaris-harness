@@ -41,13 +41,15 @@ type MCPManager struct {
 	entries    map[string]*mcpEntry
 	sandbox    *action.InProcessSandbox
 	httpClient *http.Client
+	policy     protocol.PolicyGate // 对 CallTool 直接路径执行安全检查
 }
 
-func NewMCPManager(sandbox *action.InProcessSandbox, httpClient *http.Client) *MCPManager {
+func NewMCPManager(sandbox *action.InProcessSandbox, httpClient *http.Client, policy protocol.PolicyGate) *MCPManager {
 	return &MCPManager{
 		entries:    make(map[string]*mcpEntry),
 		sandbox:    sandbox,
 		httpClient: httpClient,
+		policy:     policy,
 	}
 }
 
@@ -98,6 +100,7 @@ func (m *MCPManager) Remove(serverID string) {
 }
 
 // CallTool 直接路由调用指定的 MCP 工具。
+// 执行 PolicyGate 校验（与 InMemoryToolRegistry.ExecuteTool 语义一致）。
 func (m *MCPManager) CallTool(ctx context.Context, serverID, toolName string, args map[string]any) (string, error) {
 	m.mu.RLock()
 	e, ok := m.entries[serverID]
@@ -105,6 +108,28 @@ func (m *MCPManager) CallTool(ctx context.Context, serverID, toolName string, ar
 	if !ok {
 		return "", perrors.New(perrors.CodeInternal, "mcp_manager: server not found: "+serverID)
 	}
+
+	// PolicyGate: deny-by-default，与 ToolRegistry 路径保持一致
+	if m.policy != nil {
+		tl := 2 // MCP Server 信任等级（社区级别）
+		if e.cfg.Trusted {
+			tl = 3 // 白名单 MCP Server 提升信任等级
+		}
+		allowed, pErr := m.policy.IsAuthorized(ctx, "agent", "tool_execute",
+			serverID+":"+toolName,
+			map[string]any{
+				"tool_source": "mcp",
+				"trust_level": tl,
+			})
+		if pErr != nil || !allowed {
+			reason := "policy denied"
+			if pErr != nil {
+				reason = pErr.Error()
+			}
+			return "", perrors.New(perrors.CodeForbidden, fmt.Sprintf("mcp_manager: policy blocked %s: %s", toolName, reason))
+		}
+	}
+
 	text, _, err := e.client.CallToolTainted(ctx, toolName, args)
 	return text, err
 }

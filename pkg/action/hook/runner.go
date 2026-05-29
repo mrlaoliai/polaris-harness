@@ -90,6 +90,12 @@ func runCommand(ctx context.Context, cfg HandlerConfig, input HookInput) HookRes
 	// shell 执行：sh -c <command>，stdin 传入 JSON payload
 	cmd := exec.CommandContext(runCtx, "sh", "-c", cfg.Command)
 	cmd.Stdin = bytes.NewReader(payload)
+	// 最小环境变量隔离：仅保留基本 PATH，防止 hook 脏读宿主进程敖感环境变量
+	cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"}
+	// Linux: 注入 namespace 隔离（与 ContainerSandbox.RunScript 一致）
+	if attrs := hookSysProcAttr(); attrs != nil {
+		cmd.SysProcAttr = attrs
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -119,6 +125,7 @@ func runCommand(ctx context.Context, cfg HandlerConfig, input HookInput) HookRes
 		Err:        runErr,
 	}
 }
+
 
 // compileMatchers 编译 MatcherGroup 列表的正则。
 func compileMatchers(groups []MatcherGroup) []MatcherGroup {

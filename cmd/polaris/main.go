@@ -346,7 +346,7 @@ func run() error { //nolint:gocyclo
 	// ─── 6.3 内置工具注册 & MCP Manager ─────────────────────────────────────
 	allowedPaths := []string{dataDir}
 	toolReg := polartool.NewInMemoryToolRegistry(nil)
-	mcpMgr := mcp.NewMCPManager(inProcSandbox, safeHTTPClient)
+	mcpMgr := mcp.NewMCPManager(inProcSandbox, safeHTTPClient, gate)
 
 	mktClient := marketplace.NewMCPMarketplaceClient("", filepath.Join(cfg.System.DataDir, "plugins"))
 

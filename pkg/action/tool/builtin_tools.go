@@ -387,7 +387,6 @@ func makeBashFn(allowedPaths []string) action.InProcessFn {
 			workDir = allowedPaths[0]
 		}
 
-		// 在 context 中设定超时时间
 		execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
@@ -399,6 +398,10 @@ func makeBashFn(allowedPaths []string) action.InProcessFn {
 
 		// 严格的环境变量隔离，仅允许基本 PATH
 		cmd.Env = []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"}
+		// Linux: 注入 PID + 挂载 namespace 隔离，与 SandboxContainer 声明对齐
+		if attrs := action.ContainerSandboxSysProcAttr(); attrs != nil {
+			cmd.SysProcAttr = attrs
+		}
 
 		outBytes, err := cmd.CombinedOutput()
 		result := map[string]any{

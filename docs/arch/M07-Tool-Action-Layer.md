@@ -38,6 +38,8 @@ MCP Client 消费端: `ConnectExternalMCP(serverCmd)` → CommandTransport/Strea
 
 **MCP Transport 污点保护反序列化**：MCP Client 路径强制使用 `TaintPreservingDecoder`（`pkg/action/taint_preserving_decoder.go` + `pkg/extensions/mcp/mcp_client.go`），禁用 `encoding/json` 直解动态 schema——所有 string 叶子包装为 `TaintedString`（Source=MCP, Origin=server_name），初始 `[TaintLevel]` 按 M11 §2.4 `[Connector-Taint-Table]` 判定。决策与被驳回方案见 [ADR-0018](./decisions/ADR-0018-mcp-taint-preserving-decoder.md)。
 
+**MCPManager.CallTool 直接路径安全**：`MCPManager.CallTool` 提供面向外部调用方的直接路由接口。该入口在调用 MCP Client 前强制执行 `PolicyGate.IsAuthorized`（deny-by-default），信任等级根据服务器是否在白名单（Trusted）动态设置。与 `InMemoryToolRegistry.ExecuteTool` 保持一致的安全语义，两条路径均不绕过策略层。
+
 统一错误映射（transport-agnostic）:
 
 - 传输层: stdio | 典型错误: broken pipe, EOF, exit≠0 | Code: CONNECTION_LOST
@@ -89,7 +91,15 @@ M7 桥接层对 MCP 扩展原语强制物理级护栏：
 
 Agent Card 服务端路径: `/.well-known/agent-card.json`（A2A v0.3+ 强制）。远程 Agent Card 签名校验见 M11 §2.6 VerifyExternalAgentCard。
 
-单机: A2A 同进程黑板模式（M8）；跨机: HTTP/gRPC 端点。构建时按部署配置选择。
+**ContainerSandbox Linux 命名空间隔离**（`pkg/action/sandbox_linux.go`）：
+当 SandboxRouter 路由至 `ContainerSandbox`（Tier1+ Linux）时，`cmd.SysProcAttr` 自动注入：
+- `CLONE_NEWPID`：子进程获得独立 PID 命名空间，无法枚举/信号攻击宿主进程
+- `CLONE_NEWNS`：独立挂载命名空间，防止子进程污染全局 mount 表
+- `Pdeathsig=SIGKILL`：父进程退出时自动 SIGKILL 子进程，消灭孤儿
+非 Linux 平台（`sandbox_other.go`）返回 nil，路由层已降级至 WasmSandbox，不到达此路径。
+`ContainerSandboxSysProcAttr()` 已导出，供 `bash` 工具和 Hook Runner 复用相同的隔离属性。
+Landlock LSM 文件系统白名单（`LandlockRestrictSelf`）需在子进程内调用，需 reexec 模式（`POLARIS_SANDBOX_EXEC` 环境变量触发）；Tier1+ 环境由 `maxSandboxTier()` 自动解锁，Tier0 不启用。
+A2A 同进程黑板模式（M8）；跨机: HTTP/gRPC 端点。构建时按部署配置选择。
 
 ---
 
@@ -120,22 +130,6 @@ L3 平台原生 microVM (统一 SandboxProvider 接口，调用方平台无感):
 
 Tier 0 L3 不可用: 全平台 Tier 0 内存不足启动 microVM (每 L3 ≥256MB)。CapWriteNetwork/Privileged 在 Tier 0 → ErrTier0SandboxLimit。**不提供原生子进程降级**（避免突破安全底线）。
 
-**ContainerSandbox Linux 命名空间隔离**（`pkg/action/sandbox_linux.go`）:
-当 SandboxRouter 路由至 `ContainerSandbox`（Tier1+ Linux）时，`cmd.SysProcAttr` 自动注入：
-- `CLONE_NEWPID`：子进程获得独立 PID 命名空间，无法枚举/信号攻击宿主进程
-- `CLONE_NEWNS`：独立挂载命名空间，防止子进程污染全局 mount 表
-- `Pdeathsig=SIGKILL`：父进程退出时自动 SIGKILL 子进程，消灭孤儿
-非 Linux 平台（`sandbox_other.go`）返回 nil，路由层已降级至 WasmSandbox，不到达此路径。
-Landlock LSM 文件系统白名单（`LandlockRestrictSelf`）须在子进程内调用，需 reexec 模式（`POLARIS_SANDBOX_EXEC` 环境变量触发）；Tier1+ 环境（空闲内存 ≥256MB + Linux）下由 `maxSandboxTier()` 自动解锁，Tier0 不启用。
-
-- Tier: [Tier-0-Limit] | 平台: 全平台 | L3 主方案: 不可用（内存不足） | L2 降级: 最高支持 L2 Wasm；L3 权限需求 → ErrTier0SandboxLimit
-- Tier: [Tier-1-Limit] | 平台: Linux | L3 主方案: Firecracker（KVM 不可用 fallback gVisor，≥256MB） | L2 降级: L2 Wasm
-- Tier: [Tier-1-Limit] | 平台: macOS | L3 主方案: Virtualization.framework（≥256MB） | L2 降级: L2 Wasm
-- Tier: [Tier-1-Limit] | 平台: Windows | L3 主方案: WSL2（≥256MB） | L2 降级: L2 Wasm
-- Tier: [Tier-2-Limit]+ | 平台: 全平台 | L3 主方案: 同 Tier-1-Limit，可分配更多内存（≥512MB） | L2 降级: L2 Wasm
-
-`maxSandboxTier()`: M3 HardwareProbe 探测可用内存 + 平台原生虚拟化能力 → <256MB free → SandboxWasm(L2 上限) → ≥256MB + 平台 microVM 可用 → SandboxMicroVM(L3 平台原生)。Tier 0 对 L3 权限请求直接拒绝（ErrTier0SandboxLimit），不退化到 OS 原生子进程沙箱。
-
 ### 4.2 自动分级
 
 `AssignSandboxTier(tool) -> SandboxTier`:
@@ -163,7 +157,7 @@ Auto-Curriculum: M9 `bash_restricted` 强制 L2 Wasm，字符集 `[A-Za-z0-9 ./\
   (b) 红化 → M11 PIIGuard.Redact(RedactReplace) → [MutationBus] → [EventLog] 永久存储。PII 匹配项替换 `[REDACTED_{TYPE}]`，不进入审计链
   对称防护: Step 0 SecureUnredact + Step 5 Redact 闭合 SessionPIIVault 单向击穿——明文 PII/Token/凭证永不进入不可变审计。FSM Snapshot (M4 §8) 保留原始值供同 session 崩溃恢复，Session 关闭随 Vault 销毁
 
-资源硬限制（超限→ErrSandboxResourceExhausted，不重试）:
+资源硬限制（超限→ErrSandboxResourceExhausted，不重试）：
 
 | 维度 | Built-in | User | LLM生成 |
 |------|---------|------|--------|
@@ -171,6 +165,10 @@ Auto-Curriculum: M9 `bash_restricted` 强制 L2 Wasm，字符集 `[A-Za-z0-9 ./\
 | 调用次数 | 10000 | 5000 | 2000 |
 | I/O 总量 | 100MB | 10MB | 1MB |
 | 内存(maxPages) | 256 (16MB) | 128 (8MB) | 64 (4MB) |
+
+**WazeroRuntime 缓存并发安全**: `WazeroRuntime` 三级缓存（goldCache/silverCache/bronzeCache）均由 `sync.RWMutex` 保护，支持并发读写安全。
+
+**SandboxSpec tier 一致性**: `SandboxRouter.Execute` 传入 `SandboxSpec.SandboxTier` 为 `AssignSandboxTier` 升级后的实际 tier，确保审计日志与执行层一致。
 
 共用约束: 每次 I/O ≤ 64KB，同函数 ≤ 100 calls/s（超频 throttle 10ms），Host Func 单次 ≤ 100ms（**仅限低层 I/O 原语**；MCP/A2A 宿主侧独立运行不受此限）；超额 → cancel 优雅 → 1s 后 CloseWithExitCode 强制。
 强制契约: 阻塞调用前必须 `select{case <-ctx.Done():return ctx.Err() default:}`，CI lint `host_func_audit` 强制检查。
@@ -285,6 +283,8 @@ permit(principal in Role::"Agent", action == Action::"call_tool", resource) when
 - 通过 → 执行 L1/L2/L3
 
 三层防线: 语义([Cedar-Gate])→数据([TaintLevel])→网络(SSRF)
+
+**trust_level 动态推导**: `InMemoryToolRegistry.ExecuteTool` 向 PolicyGate 传入的 `trust_level` 刷根据工具来源（`tool.Source`）动态计算：Builtin → 4（系统信任），MCP/A2A → 2（社区信任），其余 → 1。`capability_token_valid` 根据 `tool.Capability <= CapReadOnly` 动态设置。Cedar 策略中 `trust_level >= N` 的条件正确生效。
 
 ### 5.3 Shadow Sink
 
@@ -607,9 +607,11 @@ hooks:
           command: "/path/to/session_summary.sh"
 ```
 
-**安全不变量**:
+**安全不变量**：
 - Hook 脚本输出封装为 `TaintLevel=High` 的 TaintedString，不得直接注入 Immutable Zone
 - Hook 执行超时 30s（可配置），超时不中断主流程，记录 EventLog 警告事件
 - 并发 Hook（同事件多个匹配）由 errgroup 并发执行，互不影响
+- **环境变量隔离**: Hook 子进程仅继承最小化 PATH，不继承宿主进程完整环境
+- **Linux namespace 隔离**: 自动注入 `ContainerSandboxSysProcAttr()`（PID + 挂载 namespace），与 ContainerSandbox.RunScript 保持一致的隔离策略
 
-**代码位置**: `pkg/action/hook/` (hook.go / runner.go / registry.go)
+**代码位置**: `pkg/action/hook/` (hook.go / runner.go / registry.go / hook_linux.go / hook_other.go)

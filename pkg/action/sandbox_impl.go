@@ -3,6 +3,7 @@ package action
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"sync"
 	"time"
@@ -306,12 +307,14 @@ func (r *SandboxRouter) Route(tool protocol.Tool) SandboxProvider {
 }
 
 // Execute 完整执行路径：Route → Run → ToolResult。
+// SandboxSpec.SandboxTier 使用 AssignSandboxTier 升级后的实际 tier，保证审计信息与执行一致。
 func (r *SandboxRouter) Execute(ctx context.Context, tool protocol.Tool, input []byte) (*protocol.ToolResult, error) {
+	actualTier := AssignSandboxTier(tool, r.hwTier, r.goos)
 	provider := r.Route(tool)
 	spec := SandboxSpec{
 		ToolName:    tool.Name,
 		Input:       input,
-		SandboxTier: tool.SandboxTier,
+		SandboxTier: actualTier,
 		Capability:  tool.Capability,
 		SideEffects: tool.SideEffects,
 		CPUQuotaMs:  int(tool.Timeout.Milliseconds()),
@@ -333,7 +336,7 @@ type noopReadCloser struct {
 
 func (r *noopReadCloser) Read(p []byte) (int, error) {
 	if r.pos >= len(r.data) {
-		return 0, perrors.New(perrors.CodeInternal, "EOF")
+		return 0, io.EOF
 	}
 	n := copy(p, r.data[r.pos:])
 	r.pos += n
