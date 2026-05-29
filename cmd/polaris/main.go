@@ -641,6 +641,11 @@ func run() error { //nolint:gocyclo
 	httpServer.SetInstallManager(installMgr)
 	httpServer.SetSkillSigningKey(skillSigningKey)
 	httpServer.SetMCPManager(mcpMgr)
+	// install hook 沙箱执行器：containerSandbox 可为 nil（Tier-0 macOS），
+	// server.downloadAndInstallExtension 会降级为 skip+warn。
+	if containerSandbox != nil {
+		httpServer.SetScriptRunner(containerSandbox)
+	}
 	httpServer.SetToolRegistry(toolReg)
 	httpServer.SetSkillRegistry(skillRegistry)
 	httpServer.SetToolExecutor(func(ctx context.Context, name string, args []byte) (*protocol.ToolResult, error) {

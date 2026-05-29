@@ -3,6 +3,7 @@ package server
 import (
 	"crypto/subtle"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -173,6 +174,42 @@ func (lrw *LoggingResponseWriter) Flush() {
 	}
 }
 
+// adminWritePaths 是无 API Key 时仅限 localhost 访问的高权限端点前缀集。
+// 覆盖所有写入/删除操作，防止 CORS-* + 无认证组合被局域网页面利用。
+var adminWritePaths = []string{
+	"POST /v1/mcp-servers",
+	"PUT /v1/mcp-servers",
+	"DELETE /v1/mcp-servers",
+	"POST /v1/plugins/install",
+	"DELETE /v1/plugins/",
+	"POST /v1/plugins/create",
+	"POST /v1/mcp/create",
+	"POST /v1/skills/create",
+	"POST /v1/apps/create",
+	"POST /v1/providers",
+	"PUT /v1/providers",
+	"DELETE /v1/providers",
+}
+
+// isAdminWrite 判断当前请求是否属于高权限写操作。
+func isAdminWrite(method, path string) bool {
+	key := method + " " + path
+	for _, prefix := range adminWritePaths {
+		if strings.HasPrefix(key, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLoopback 判断 IP 是否为回环地址（127.x / ::1）。
+func isLoopback(ip string) bool {
+	// 去掉方括号（IPv6 格式）
+	ip = strings.Trim(ip, "[]")
+	parsed := net.ParseIP(ip)
+	return parsed != nil && parsed.IsLoopback()
+}
+
 // withMiddleware 挂载所有基础网关级别的安全防护（Auth + Rate Limit + CORS + Logging）
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	// 按照 M13 规范，为每个 IP 分配一个单独的桶，限制默认并发 QPS
@@ -181,6 +218,9 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 
 	// API 密钥，如果在环境中设置了则进行验证
 	expectedKey := os.Getenv("POLARIS_API_KEY")
+	if expectedKey == "" {
+		slog.Warn("http: POLARIS_API_KEY not set — all /v1/ endpoints are unauthenticated; admin write paths restricted to localhost only")
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lrw := NewLoggingResponseWriter(w)
@@ -247,7 +287,11 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			}
 			ctx = WithAuthContext(ctx, authCtx)
 		} else {
-			// 如果没有要求强制认证，或者请求健康检查，标记为匿名
+			// 无全局 API Key：管理写操作只允许来自 localhost，防止 CORS + 无认证被利用
+			if expectedKey == "" && isAdminWrite(r.Method, r.URL.Path) && !isLoopback(clientIP) {
+				http.Error(w, "403 Forbidden: admin endpoints require POLARIS_API_KEY or localhost access", http.StatusForbidden)
+				return
+			}
 			authCtx := &AuthContext{
 				UserID:     "anonymous",
 				ClientType: "unknown",

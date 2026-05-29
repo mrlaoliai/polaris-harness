@@ -175,7 +175,7 @@ func (m *MCPManager) ListToolSchemas() []protocol.ToolSchema {
 // dataDir 用于展开 args/url 中的 {DATA_DIR} 占位符。
 func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT id, name, transport, command, args, env, url, timeout FROM mcp_servers WHERE enabled=1`)
+		`SELECT id, name, transport, command, args, env, url, timeout, trust_tier FROM mcp_servers WHERE enabled=1`)
 	if err != nil {
 		slog.Error("mcp_manager: load from db", "err", err)
 		return
@@ -184,8 +184,8 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string)
 
 	for rows.Next() {
 		var id, name, transport, command, argsJSON, envJSON, urlStr string
-		var timeout int
-		if err := rows.Scan(&id, &name, &transport, &command, &argsJSON, &envJSON, &urlStr, &timeout); err != nil {
+		var timeout, trustTier int
+		if err := rows.Scan(&id, &name, &transport, &command, &argsJSON, &envJSON, &urlStr, &timeout, &trustTier); err != nil {
 			continue
 		}
 		var args []string
@@ -209,6 +209,8 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string)
 			Env:       env,
 			URL:       resolvedURL,
 			Timeout:   time.Duration(timeout) * time.Second,
+			// trust_tier >= 3 (Official/System) → TaintMedium；其余保持 TaintHigh
+			Trusted: trustTier >= 3,
 		}
 		// 每个 server 独立 goroutine，避免一个慢连接阻塞其他
 		go func(id, name string, cfg MCPClientConfig) {

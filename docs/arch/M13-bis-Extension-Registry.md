@@ -246,6 +246,30 @@ DELETE /v1/plugins/{ext_id}
 
 安装时 trust_tier 强制从 extension_catalog 继承，禁止客户端覆盖。Plugin hooks 存在时 trust_tier < 3 触发 HITL 审批。
 
+### 6.1 所有安装入口必须过门——禁止并行旁路
+
+系统存在多条写入 `mcp_servers` / `extension_instances` 的 HTTP 端点，**每一条**都必须独立调用 `Manager.InstallExtension`，不得以"父路径已审查"为由跳过：
+
+| 端点 | 必须过门 | 常见违规写法 |
+|------|---------|------------|
+| `POST /v1/plugins/install` | ✅ | — |
+| `POST /v1/mcp/create` | ✅ | — |
+| `POST /v1/mcp-servers`（运维管理接口） | ✅ **不可例外** | 直接写库，无 PolicyGate |
+| Plugin Bundle 内 `installBundleMCP()` | ✅ **每个子 MCP 独立过门** | 父插件通过后子 MCP 无审查 |
+| `PUT /v1/mcp-servers/{id}`（更新） | ✅ | — |
+
+### 6.2 安全门 nil 不等于可选
+
+`Manager` 通过依赖注入传入。**`if installMgr != nil { gate }` 之后继续执行的写法是 R1.14 反模式**——nil 时必须返回 503，不得静默绕过。安全门是强制路径，不是可选优化。
+
+### 6.3 Plugin Bundle 子组件门控
+
+Plugin Bundle（`§5.3`）安装时会展开子 MCP / 子 Skill。子组件不能继承父插件的门控结果——**每个子 MCP 必须独立调用 `Manager.InstallExtension`**，失败则跳过该子组件并记录 Warn，不中断父插件安装整体。
+
+### 6.4 HasHooks 判断规则
+
+市场安装路径在下载前无法读取 plugin.json，因此 hooks 存在性无法确认。**保守策略**：`plugin` 类型且 `trust_tier < 3` 时，`HasHooks` 置 `true`，强制触发 HITL 审批。trust_tier ≥ 3（Official）的插件方可豁免。
+
 ---
 
 ## 7. 文件系统布局

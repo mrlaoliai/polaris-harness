@@ -10,7 +10,6 @@ import (
 	"maps"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -161,43 +160,48 @@ func (s *Server) handleInstallPlugin(w http.ResponseWriter, r *http.Request) { /
 	_, _ = rand.Read(b)
 	extID := "ext_" + hex.EncodeToString(b)
 
-	// Call Manager.InstallExtension to evaluate security gate
-	if s.installMgr != nil { //nolint:nestif
-		authCtx := FromContext(r.Context())
-		principal := authCtx.UserID
-		if principal == "" {
-			principal = "user"
-		}
-		installReq := marketplace.InstallRequest{
-			Principal:   principal,
-			ExtensionID: extID,
-			ExtType:     entry.Type,
-			TrustTier:   entry.TrustTier,
-			Publisher:   entry.Publisher,
-			HasHooks:    false, // Assuming catalog entries need explicit hook checking, or false for now
-		}
-		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
-			if errors.Is(err, marketplace.ErrRequiresApproval) {
-				// Trigger HITL via hitlGateway
-				if s.hitlGateway != nil {
-					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
-						ID:             extID,
-						CheckpointType: "security_review",
-						PromptText:     "Approve installation for extension: " + entry.Name,
-						Options: []protocol.HITLOption{
-							{Key: "approve", Label: "Approve"},
-							{Key: "deny", Label: "Deny"},
-						},
-					})
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusAccepted) // 202 Accepted
-					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
-					return
-				}
+	// PolicyGate 是安全门，不允许 nil 跳过（fail-closed）。
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	authCtx := FromContext(r.Context())
+	principal := authCtx.UserID
+	if principal == "" {
+		principal = "user"
+	}
+	// plugin 类型在下载前无法确认是否含 hooks；
+	// trust_tier < 3 (Community 及以下) 保守假设有 hooks，强制走 HITL 审查。
+	hasHooks := entry.Type == "plugin" && entry.TrustTier < 3
+	installReq := marketplace.InstallRequest{
+		Principal:   principal,
+		ExtensionID: extID,
+		ExtType:     entry.Type,
+		TrustTier:   entry.TrustTier,
+		Publisher:   entry.Publisher,
+		HasHooks:    hasHooks,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil { //nolint:nestif
+		if errors.Is(err, marketplace.ErrRequiresApproval) {
+			// Trigger HITL via hitlGateway
+			if s.hitlGateway != nil {
+				_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+					ID:             extID,
+					CheckpointType: "security_review",
+					PromptText:     "Approve installation for extension: " + entry.Name,
+					Options: []protocol.HITLOption{
+						{Key: "approve", Label: "Approve"},
+						{Key: "deny", Label: "Deny"},
+					},
+				})
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted) // 202 Accepted
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+				return
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
 		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	switch entry.Type {
@@ -607,10 +611,15 @@ func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalog
 
 		if hook, ok := bundle.Hooks["install"]; ok && hook != "" {
 			if hookPath, ok := safeJoin(destDir, hook); ok {
-				cmd := exec.CommandContext(ctx, hookPath)
-				cmd.Dir = destDir
-				if err := cmd.Run(); err != nil {
-					slog.Warn("plugin_catalog: install hook failed", "ext", extID, "err", err)
+				if s.scriptRunner != nil {
+					// ContainerSandbox.RunScript：Linux 下有 PID/NS namespace 隔离
+					if err := s.scriptRunner.RunScript(ctx, hookPath, destDir); err != nil {
+						slog.Warn("plugin_catalog: install hook failed", "ext", extID, "err", err)
+					}
+				} else {
+					// scriptRunner 未注入（如 Tier-0 macOS 无 L3）：skip，记录警告
+					slog.Warn("plugin_catalog: install hook skipped (no scriptRunner, call SetScriptRunner to enable)",
+						"ext", extID, "hook", hookPath)
 				}
 			}
 		}
@@ -690,7 +699,24 @@ func safeJoin(base, rel string) (string, bool) {
 }
 
 // installBundleMCP 在 Plugin Bundle 安装过程中写入子 MCP 的运行时记录和安装记录。
+// 每个子 MCP 独立经过 PolicyGate 校验（M11 §3.2）；校验失败则跳过该子组件，不中断父插件安装。
 func (s *Server) installBundleMCP(ctx context.Context, parentExtID, name string, def protocol.MCPServerDef, trustTier int, now string) {
+	// 子 MCP 独立过安全门：校验失败则跳过，不影响父插件整体安装
+	if s.installMgr != nil {
+		subReq := marketplace.InstallRequest{
+			Principal:   "system",
+			ExtensionID: "bundle_mcp_" + name,
+			ExtType:     "mcp",
+			TrustTier:   trustTier,
+			Publisher:   "bundle",
+			HasHooks:    false,
+		}
+		if err := s.installMgr.InstallExtension(ctx, subReq); err != nil {
+			slog.Warn("plugin_catalog: bundle MCP blocked by policy", "name", name, "parent", parentExtID, "err", err)
+			return
+		}
+	}
+
 	childExtID := "ext_" + newHex(8)
 	mcpID := "mcp_" + childExtID[4:]
 

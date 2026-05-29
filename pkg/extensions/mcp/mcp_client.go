@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -116,12 +115,12 @@ func (c *MCPClient) connectStdio(ctx context.Context) error {
 		return perrors.New(perrors.CodeInternal, "mcp: stdio transport requires command")
 	}
 	cmd := exec.CommandContext(ctx, c.cfg.Command, c.cfg.Args...)
-	// 继承父进程完整环境，再叠加 MCP 自定义变量（保证 PATH/HOME/NODE_PATH 等可用）
-	if len(c.cfg.Env) > 0 {
-		cmd.Env = os.Environ()
-		for k, v := range c.cfg.Env {
-			cmd.Env = append(cmd.Env, k+"="+v)
-		}
+	// 始终从消毒后的父进程环境开始（过滤密钥类变量），再叠加显式配置的 MCP 自定义变量。
+	// 不依赖 len(c.cfg.Env) > 0 的条件分支：Go exec.Command 在 cmd.Env==nil 时
+	// 同样会继承完整父进程环境，必须显式赋值才能隔离。
+	cmd.Env = sanitizeParentEnv()
+	for k, v := range c.cfg.Env {
+		cmd.Env = append(cmd.Env, k+"="+v)
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/polarisagi/polarisagi-harness/pkg/extensions/marketplace"
 	"github.com/polarisagi/polarisagi-harness/pkg/extensions/mcp"
 )
 
@@ -76,11 +77,35 @@ func (s *Server) handleListMCPServers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateMCPServer(w http.ResponseWriter, r *http.Request) {
+	// PolicyGate 是安全门，不允许 nil 跳过（fail-closed）。
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
 	var c MCPServerConfig
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	authCtxM := FromContext(r.Context())
+	principal := authCtxM.UserID
+	if principal == "" {
+		principal = "user"
+	}
+	installReq := marketplace.InstallRequest{
+		Principal:   principal,
+		ExtensionID: "mcp_pending",
+		ExtType:     "mcp",
+		TrustTier:   c.TrustTier,
+		Publisher:   "user",
+		HasHooks:    false,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
+		http.Error(w, "policy denied: "+err.Error(), http.StatusForbidden)
+		return
+	}
+
 	if c.ID == "" {
 		b := make([]byte, 8)
 		rand.Read(b) //nolint:errcheck

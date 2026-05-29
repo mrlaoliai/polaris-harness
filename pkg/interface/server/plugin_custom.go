@@ -28,41 +28,43 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) { //n
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
 
-	if s.installMgr != nil { //nolint:nestif
-		authCtx := FromContext(r.Context())
-		principal := authCtx.UserID
-		if principal == "" {
-			principal = "user"
-		}
-		installReq := marketplace.InstallRequest{
-			Principal:   principal,
-			ExtensionID: extID,
-			ExtType:     "skill",
-			TrustTier:   1, // TrustLocal
-			Publisher:   "user",
-			HasHooks:    false,
-		}
-		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
-			if errors.Is(err, marketplace.ErrRequiresApproval) {
-				if s.hitlGateway != nil {
-					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
-						ID:             extID,
-						CheckpointType: "security_review",
-						PromptText:     "Approve creation for custom skill: " + req.Name,
-						Options: []protocol.HITLOption{
-							{Key: "approve", Label: "Approve"},
-							{Key: "deny", Label: "Deny"},
-						},
-					})
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusAccepted)
-					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
-					return
-				}
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	authCtx0 := FromContext(r.Context())
+	principal0 := authCtx0.UserID
+	if principal0 == "" {
+		principal0 = "user"
+	}
+	installReq0 := marketplace.InstallRequest{
+		Principal:   principal0,
+		ExtensionID: extID,
+		ExtType:     "skill",
+		TrustTier:   1, // TrustLocal
+		Publisher:   "user",
+		HasHooks:    false,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq0); err != nil { //nolint:nestif
+		if errors.Is(err, marketplace.ErrRequiresApproval) {
+			if s.hitlGateway != nil {
+				_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+					ID:             extID,
+					CheckpointType: "security_review",
+					PromptText:     "Approve creation for custom skill: " + req.Name,
+					Options: []protocol.HITLOption{
+						{Key: "approve", Label: "Approve"},
+						{Key: "deny", Label: "Deny"},
+					},
+				})
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+				return
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
 		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	configJSON, _ := json.Marshal(map[string]any{
@@ -104,41 +106,43 @@ func (s *Server) handleCreatePlugin(w http.ResponseWriter, r *http.Request) { //
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
 
-	if s.installMgr != nil { //nolint:nestif
-		authCtx := FromContext(r.Context())
-		principal := authCtx.UserID
-		if principal == "" {
-			principal = "user"
-		}
-		installReq := marketplace.InstallRequest{
-			Principal:   principal,
-			ExtensionID: extID,
-			ExtType:     "plugin",
-			TrustTier:   1, // TrustLocal
-			Publisher:   "user",
-			HasHooks:    false,
-		}
-		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
-			if errors.Is(err, marketplace.ErrRequiresApproval) {
-				if s.hitlGateway != nil {
-					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
-						ID:             extID,
-						CheckpointType: "security_review",
-						PromptText:     "Approve creation for custom plugin: " + req.Name,
-						Options: []protocol.HITLOption{
-							{Key: "approve", Label: "Approve"},
-							{Key: "deny", Label: "Deny"},
-						},
-					})
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusAccepted)
-					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
-					return
-				}
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	authCtx1 := FromContext(r.Context())
+	principal1 := authCtx1.UserID
+	if principal1 == "" {
+		principal1 = "user"
+	}
+	installReq1 := marketplace.InstallRequest{
+		Principal:   principal1,
+		ExtensionID: extID,
+		ExtType:     "plugin",
+		TrustTier:   1, // TrustLocal
+		Publisher:   "user",
+		HasHooks:    false,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq1); err != nil { //nolint:nestif
+		if errors.Is(err, marketplace.ErrRequiresApproval) {
+			if s.hitlGateway != nil {
+				_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+					ID:             extID,
+					CheckpointType: "security_review",
+					PromptText:     "Approve creation for custom plugin: " + req.Name,
+					Options: []protocol.HITLOption{
+						{Key: "approve", Label: "Approve"},
+						{Key: "deny", Label: "Deny"},
+					},
+				})
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+				return
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
 		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	configJSON, _ := json.Marshal(map[string]any{
@@ -179,41 +183,43 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) { //nol
 	now := time.Now().UTC().Format(time.RFC3339)
 	extID := "ext_" + newHex(8)
 
-	if s.installMgr != nil { //nolint:nestif
-		authCtx := FromContext(r.Context())
-		principal := authCtx.UserID
-		if principal == "" {
-			principal = "user"
-		}
-		installReq := marketplace.InstallRequest{
-			Principal:   principal,
-			ExtensionID: extID,
-			ExtType:     "app",
-			TrustTier:   1, // TrustLocal
-			Publisher:   "user",
-			HasHooks:    false,
-		}
-		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
-			if errors.Is(err, marketplace.ErrRequiresApproval) {
-				if s.hitlGateway != nil {
-					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
-						ID:             extID,
-						CheckpointType: "security_review",
-						PromptText:     "Approve creation for custom app: " + req.Name,
-						Options: []protocol.HITLOption{
-							{Key: "approve", Label: "Approve"},
-							{Key: "deny", Label: "Deny"},
-						},
-					})
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusAccepted)
-					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
-					return
-				}
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	authCtx2 := FromContext(r.Context())
+	principal2 := authCtx2.UserID
+	if principal2 == "" {
+		principal2 = "user"
+	}
+	installReq2 := marketplace.InstallRequest{
+		Principal:   principal2,
+		ExtensionID: extID,
+		ExtType:     "app",
+		TrustTier:   1, // TrustLocal
+		Publisher:   "user",
+		HasHooks:    false,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq2); err != nil { //nolint:nestif
+		if errors.Is(err, marketplace.ErrRequiresApproval) {
+			if s.hitlGateway != nil {
+				_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+					ID:             extID,
+					CheckpointType: "security_review",
+					PromptText:     "Approve creation for custom app: " + req.Name,
+					Options: []protocol.HITLOption{
+						{Key: "approve", Label: "Approve"},
+						{Key: "deny", Label: "Deny"},
+					},
+				})
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+				return
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
 		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	configJSON, _ := json.Marshal(map[string]any{"url": req.URL})
@@ -257,41 +263,43 @@ func (s *Server) handleCreateMCP(w http.ResponseWriter, r *http.Request) { //nol
 	mcpID := "mcp_" + newHex(8)
 	extID := "ext_" + newHex(8)
 
-	if s.installMgr != nil { //nolint:nestif
-		authCtx := FromContext(r.Context())
-		principal := authCtx.UserID
-		if principal == "" {
-			principal = "user"
-		}
-		installReq := marketplace.InstallRequest{
-			Principal:   principal,
-			ExtensionID: extID,
-			ExtType:     "mcp",
-			TrustTier:   1, // TrustLocal
-			Publisher:   "user",
-			HasHooks:    false,
-		}
-		if err := s.installMgr.InstallExtension(r.Context(), installReq); err != nil {
-			if errors.Is(err, marketplace.ErrRequiresApproval) {
-				if s.hitlGateway != nil {
-					_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
-						ID:             extID,
-						CheckpointType: "security_review",
-						PromptText:     "Approve creation for custom mcp: " + req.Name,
-						Options: []protocol.HITLOption{
-							{Key: "approve", Label: "Approve"},
-							{Key: "deny", Label: "Deny"},
-						},
-					})
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusAccepted)
-					_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
-					return
-				}
+	if s.installMgr == nil {
+		http.Error(w, "install manager not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	authCtx3 := FromContext(r.Context())
+	principal3 := authCtx3.UserID
+	if principal3 == "" {
+		principal3 = "user"
+	}
+	installReq3 := marketplace.InstallRequest{
+		Principal:   principal3,
+		ExtensionID: extID,
+		ExtType:     "mcp",
+		TrustTier:   1, // TrustLocal
+		Publisher:   "user",
+		HasHooks:    false,
+	}
+	if err := s.installMgr.InstallExtension(r.Context(), installReq3); err != nil { //nolint:nestif
+		if errors.Is(err, marketplace.ErrRequiresApproval) {
+			if s.hitlGateway != nil {
+				_, _ = s.hitlGateway.Prompt(r.Context(), protocol.HITLPrompt{
+					ID:             extID,
+					CheckpointType: "security_review",
+					PromptText:     "Approve creation for custom mcp: " + req.Name,
+					Options: []protocol.HITLOption{
+						{Key: "approve", Label: "Approve"},
+						{Key: "deny", Label: "Deny"},
+					},
+				})
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusAccepted)
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "pending_approval", "id": extID})
+				return
 			}
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
 		}
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
 	}
 
 	argsBytes, _ := json.Marshal(req.Args)

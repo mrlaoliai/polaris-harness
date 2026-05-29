@@ -55,6 +55,7 @@ type Server struct {
 	evalRunner      protocol.EvalRunner                                                               // M12 评测套件
 	dataDir         string                                                                            // 项目统一的数据根目录
 	installMgr      *marketplace.Manager
+	scriptRunner    marketplace.HookRunner // install hook 沙箱执行器（ContainerSandbox.RunScript）
 	skillSignKey    []byte
 	toolSchemaCache []protocol.ToolSchema
 	toolSchemaMu    sync.RWMutex
@@ -71,8 +72,9 @@ type Server struct {
 	cronCancel context.CancelFunc
 }
 
-func (s *Server) SetInstallManager(m *marketplace.Manager) { s.installMgr = m }
-func (s *Server) SetSkillSigningKey(k []byte)              { s.skillSignKey = k }
+func (s *Server) SetInstallManager(m *marketplace.Manager)       { s.installMgr = m }
+func (s *Server) SetScriptRunner(r marketplace.HookRunner)       { s.scriptRunner = r }
+func (s *Server) SetSkillSigningKey(k []byte)                    { s.skillSignKey = k }
 
 // SetMCPManager 注入 MCPManager（NewServer 之后、Start 之前调用）。
 func (s *Server) SetMCPManager(m *mcp.MCPManager) { s.mcpMgr = m }

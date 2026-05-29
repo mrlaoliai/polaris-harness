@@ -21,3 +21,42 @@
 - L2 模块不能直接反向引用 L3 (pkg/edge) 或 L4 模块。
 - 此模块内的工具不应拥有裸 `http.Client` 逃逸，所有外发网络强制使用 M11 `SafeDialer` [XR-06]。
 - 此模块内的逻辑需要执行 `bash` 或文件读写时，应调度对应的内置沙箱工具执行，或者由 `pkg/action/sandbox` 提供安全接口 [XR-11]。
+
+## 高频绕过陷阱（禁止清单）
+
+以下四种写法是已知的安全漏洞模式，代码审查时必须驳回：
+
+**陷阱 1：PolicyGate nil 旁路（R1.14）**
+```go
+// 禁止：nil 时静默跳过安全门
+if s.installMgr != nil {
+    s.installMgr.InstallExtension(...) // 安全检查
+}
+// 无论如何继续安装 ← 漏洞
+```
+正确做法：nil → `http.Error(503)` + `return`。安全门是强制路径。
+
+**陷阱 2：MCP stdio 子进程继承完整父环境（R1.15）**
+```go
+// 禁止：将宿主密钥类环境变量传入 MCP 子进程
+cmd.Env = os.Environ()
+// 或者不设置 cmd.Env（Go exec 默认同样继承父进程环境）
+```
+正确做法：`cmd.Env = sanitizeParentEnv()` 过滤 `*_KEY/_TOKEN/_SECRET` 等，再叠加 `MCPClientConfig.Env`。
+
+**陷阱 3：Bundle 子 MCP 跳过独立门控**
+```go
+// 禁止：父插件通过了安全门，子 MCP 直接写库
+for name, def := range bundle.MCPServers {
+    s.installBundleMCP(ctx, ...) // 无 PolicyGate 调用
+}
+```
+正确做法：`installBundleMCP` 内部独立调用 `installMgr.InstallExtension`，失败则 skip+Warn，不中断父插件。
+
+**陷阱 4：并行安装路径跳过 PolicyGate**
+```go
+// 禁止：POST /v1/mcp-servers 直接写库，不调用 Manager.InstallExtension
+s.db.ExecContext(ctx, "INSERT INTO mcp_servers ...")
+go s.startMCPServer(c)
+```
+正确做法：所有写入 `mcp_servers` / `extension_instances` 的端点都必须先调用 `Manager.InstallExtension`。见 M13-bis §6.1。

@@ -40,6 +40,12 @@ MCP Client 消费端: `ConnectExternalMCP(serverCmd)` → CommandTransport/Strea
 
 **MCPManager.CallTool 直接路径安全**：`MCPManager.CallTool` 提供面向外部调用方的直接路由接口。该入口在调用 MCP Client 前强制执行 `PolicyGate.IsAuthorized`（deny-by-default），信任等级根据服务器是否在白名单（Trusted）动态设置。与 `InMemoryToolRegistry.ExecuteTool` 保持一致的安全语义，两条路径均不绕过策略层。
 
+**MCP stdio 子进程环境隔离（R1.15）**：`connectStdio` 启动子进程时**禁止直接 `cmd.Env = os.Environ()`**，必须调用 `sanitizeParentEnv()`（`pkg/extensions/mcp/env.go`）过滤 `*_KEY/_TOKEN/_SECRET/_PASSWORD` 等密钥类键名，再叠加 `MCPClientConfig.Env` 显式配置。`cmd.Env == nil` 时 Go exec 同样继承完整父进程环境，因此必须显式赋值，不得依赖条件分支。
+
+**MCP 工具注册路径与 AssignSandboxTier 的关系**：`AssignSandboxTier` 规定 `ToolMCP → SandboxWasm`，描述的是**工具调用层**的沙箱要求。`MCPManager` 的实际执行路径是：MCP 工具以 `InProcessFn` 注册到 `InProcessSandbox`，执行时通过 JSON-RPC 调用外部 MCP 进程（stdio/HTTP），外部进程本身即为隔离边界。Wasm 级别的隔离发生在 MCP Server 进程内部，而非宿主侧 `InProcessSandbox.Run`。这是当前已知的沙箱层级差异，Tier 0 macOS 无 microVM 时接受此设计，Tier 1+ Linux 可在 MCP Server 进程外再套 Firecracker。
+
+**LoadFromDB 必须读取 trust_tier**：启动时从 `mcp_servers` 表加载 MCP Server 时，必须 SELECT `trust_tier` 并以 `trust_tier >= 3` 设置 `MCPClientConfig.Trusted = true`，否则所有服务器（含官方）均降级为 `TaintHigh`，破坏 publisherTrustMap 的设计意图。
+
 统一错误映射（transport-agnostic）:
 
 - 传输层: stdio | 典型错误: broken pipe, EOF, exit≠0 | Code: CONNECTION_LOST
