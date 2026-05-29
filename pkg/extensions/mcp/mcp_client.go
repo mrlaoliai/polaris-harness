@@ -131,12 +131,26 @@ func (c *MCPClient) connectStdio(ctx context.Context) error {
 	if err != nil {
 		return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("mcp: stdout pipe: %v", err), err)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("mcp: stderr pipe: %v", err), err)
+	}
 	if err := cmd.Start(); err != nil {
 		return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("mcp: start process: %v", err), err)
 	}
 	c.cmd = cmd
 	c.stdin = stdin
 	go c.readLoop(stdout)
+	// stderr 转发到 slog，避免启动错误信息丢失
+	go func() {
+		sc := bufio.NewScanner(stderr)
+		for sc.Scan() {
+			slog.Debug("mcp: server stderr", "server", c.cfg.ServerName, "line", sc.Text())
+		}
+		if err := sc.Err(); err != nil {
+			slog.Debug("mcp: server stderr scan error", "server", c.cfg.ServerName, "err", err)
+		}
+	}()
 	return nil
 }
 
@@ -155,6 +169,9 @@ func (c *MCPClient) readLoop(r io.Reader) {
 			continue
 		}
 		c.dispatch(&resp)
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Debug("mcp: readLoop scan error", "server", c.cfg.ServerName, "err", err)
 	}
 	c.Close()
 }
@@ -197,10 +214,15 @@ func (c *MCPClient) connectSSE(ctx context.Context) error {
 func (c *MCPClient) readSSE(body io.ReadCloser, endpointCh chan<- string) {
 	defer body.Close()
 	scanner := bufio.NewScanner(body)
-	var event, data string
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	var event string
+	var dataLines []string
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
+			// 事件边界：SSE 规范要求多行 data 以 \n 拼接
+			data := strings.Join(dataLines, "\n")
+			dataLines = dataLines[:0]
 			switch event {
 			case "endpoint":
 				select {
@@ -213,14 +235,18 @@ func (c *MCPClient) readSSE(body io.ReadCloser, endpointCh chan<- string) {
 					c.dispatch(&resp)
 				}
 			}
-			event, data = "", ""
+			event = ""
 			continue
 		}
 		if v, ok := strings.CutPrefix(line, "event: "); ok {
 			event = v
 		} else if v, ok := strings.CutPrefix(line, "data: "); ok {
-			data = v
+			dataLines = append(dataLines, v)
 		}
+		// id: / retry: 字段当前不需要处理，忽略
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Debug("mcp: readSSE scan error", "server", c.cfg.ServerName, "err", err)
 	}
 	c.Close()
 }
@@ -292,12 +318,19 @@ func (c *MCPClient) send(ctx context.Context, req mcpRPCRequest) error {
 	return perrors.New(perrors.CodeInternal, "mcp: unknown transport")
 }
 
+// setMCPHeaders 在 HTTP 请求上设置 MCP 规范要求的请求头。
+// MCP 2025-11-25 §Transports：HTTP 模式下所有请求必须携带 MCP-Protocol-Version。
+func (c *MCPClient) setMCPHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("MCP-Protocol-Version", mcpProtocolVersion)
+}
+
 func (c *MCPClient) httpPostOnly(ctx context.Context, url string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	c.setMCPHeaders(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -310,13 +343,14 @@ func (c *MCPClient) httpPostOnly(ctx context.Context, url string, body []byte) e
 	return nil
 }
 
-// httpPostReceive 向 Streamable HTTP endpoint POST，同步读取 JSON 或 SSE 响应。
+// httpPostReceive 向 Streamable HTTP endpoint POST，读取 JSON 或 SSE 响应。
+// SSE 模式：扫描流中所有事件，返回首个 id 匹配的 RPC 响应（通知事件异步 dispatch）。
 func (c *MCPClient) httpPostReceive(ctx context.Context, url string, body []byte) (*mcpRPCResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	c.setMCPHeaders(req)
 	req.Header.Set("Accept", "application/json, text/event-stream")
 
 	resp, err := c.httpClient.Do(req)
@@ -327,21 +361,35 @@ func (c *MCPClient) httpPostReceive(ctx context.Context, url string, body []byte
 
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
 		scanner := bufio.NewScanner(resp.Body)
-		var data string
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+		var dataLines []string
 		for scanner.Scan() {
 			line := scanner.Text()
-			if line == "" && data != "" {
-				var r mcpRPCResponse
-				if json.Unmarshal([]byte(data), &r) == nil {
-					return &r, nil
+			if line == "" {
+				// 事件边界：合并多行 data（SSE 规范：多行 data 以 \n 连接）
+				if len(dataLines) > 0 {
+					data := strings.Join(dataLines, "\n")
+					dataLines = dataLines[:0]
+					var r mcpRPCResponse
+					if json.Unmarshal([]byte(data), &r) != nil {
+						continue
+					}
+					// 有 ID 的是 RPC 响应；无 ID 的是通知，异步 dispatch
+					if r.ID != nil {
+						return &r, nil
+					}
+					c.dispatch(&r)
 				}
-				data = ""
+				continue
 			}
 			if v, ok := strings.CutPrefix(line, "data: "); ok {
-				data = v
+				dataLines = append(dataLines, v)
 			}
 		}
-		return nil, perrors.New(perrors.CodeInternal, "mcp: streamable http: no response in SSE stream")
+		if err := scanner.Err(); err != nil {
+			slog.Debug("mcp: streamable http SSE scan error", "server", c.cfg.ServerName, "err", err)
+		}
+		return nil, perrors.New(perrors.CodeInternal, "mcp: streamable http: no rpc response in SSE stream")
 	}
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
@@ -375,14 +423,33 @@ func (c *MCPClient) dispatch(resp *mcpRPCResponse) {
 
 // ─── MCP 协议方法 ─────────────────────────────────────────────────────────────
 
-// Initialize 执行 MCP 初始化握手。
+// mcpProtocolVersion 当前实现支持的 MCP 协议版本（2025-11-25 为当前稳定版本）。
+const mcpProtocolVersion = "2025-11-25"
+
+// Initialize 执行 MCP 初始化握手，校验服务器返回的协议版本。
 func (c *MCPClient) Initialize(ctx context.Context) error {
-	if _, err := c.call(ctx, "initialize", map[string]any{
-		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]any{"name": "polaris", "version": "1.0"},
-	}); err != nil {
+	result, err := c.call(ctx, "initialize", map[string]any{
+		"protocolVersion": mcpProtocolVersion,
+		"capabilities": map[string]any{
+			// 声明客户端支持的能力，服务器据此开启对应功能
+			"roots":   map[string]any{"listChanged": false},
+			"sampling": map[string]any{},
+		},
+		"clientInfo": map[string]any{"name": "polaris", "version": "1.0"},
+	})
+	if err != nil {
 		return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("mcp: initialize: %v", err), err)
+	}
+	// 校验服务器返回的协议版本（规范要求：不支持则应断连）
+	var initResp struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	if json.Unmarshal(result, &initResp) == nil && initResp.ProtocolVersion != "" {
+		if initResp.ProtocolVersion != mcpProtocolVersion {
+			slog.Warn("mcp: server protocol version mismatch",
+				"server", initResp.ProtocolVersion, "client", mcpProtocolVersion)
+			// 仅警告不中断：允许向下兼容旧版服务器（2024-11-05）
+		}
 	}
 	return c.notify(ctx, "notifications/initialized", nil)
 }

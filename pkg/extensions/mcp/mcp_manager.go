@@ -172,12 +172,17 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string)
 			args[i] = strings.ReplaceAll(a, "{DATA_DIR}", dataDir)
 		}
 
+		resolvedURL := strings.ReplaceAll(urlStr, "{DATA_DIR}", dataDir)
+		// "streamable_http" 是数据库存储值，兼容 Claude Code 的 "streamable-http" 别名
+		if transport == "streamable-http" {
+			transport = string(MCPStreamableHTTP)
+		}
 		cfg := MCPClientConfig{
 			Transport: MCPTransport(transport),
 			Command:   command,
 			Args:      args,
 			Env:       env,
-			URL:       strings.ReplaceAll(urlStr, "{DATA_DIR}", dataDir),
+			URL:       resolvedURL,
 			Timeout:   time.Duration(timeout) * time.Second,
 		}
 		// 每个 server 独立 goroutine，避免一个慢连接阻塞其他

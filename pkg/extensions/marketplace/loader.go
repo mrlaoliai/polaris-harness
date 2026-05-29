@@ -129,11 +129,26 @@ func loadMCPConfig(path string) (*protocol.MCPConfig, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, err
 	}
-	// 兼容 Claude Code 顶层 key 格式（{"serverName":{...}}），不含 mcpServers 包装层
+	// 兼容部分第三方工具的扁平格式（{"serverName":{...}}，无 mcpServers 包装层）。
+	// 注意：Claude Code 官方 .mcp.json 格式是 {"mcpServers":{...}}，不走此分支。
+	// 扁平解析仅在标准解析得到空集合时触发，避免误解析含其他顶层字段的 JSON。
 	if len(c.MCPServers) == 0 {
 		var flat map[string]protocol.MCPServerDef
-		if json.Unmarshal(data, &flat) == nil && len(flat) > 0 {
-			c.MCPServers = flat
+		if json.Unmarshal(data, &flat) == nil {
+			// 过滤掉 JSON 根对象中非 MCPServerDef 的字段（如 "mcpServers" 本身为空时）
+			filtered := make(map[string]protocol.MCPServerDef, len(flat))
+			for k, v := range flat {
+				if k == "mcpServers" {
+					continue // 标准 key，不视为服务器名
+				}
+				// 有效的服务器定义：必须有 command（stdio）或 url（HTTP/SSE）
+				if v.Command != "" || v.URL != "" {
+					filtered[k] = v
+				}
+			}
+			if len(filtered) > 0 {
+				c.MCPServers = filtered
+			}
 		}
 	}
 	return &c, nil

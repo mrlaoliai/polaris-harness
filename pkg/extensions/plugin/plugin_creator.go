@@ -106,11 +106,12 @@ func (c *PluginCreator) GeneratePlugin(ctx context.Context, intent string) (stri
 		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to write plugin.json", err)
 	}
 
-	// Create .mcp.json using uvx to run the server
+	// Create .mcp.json 使用 uv run 执行 server.py（uvx 用于运行已安装的 Python 包命令，
+	// 不适用于直接执行脚本文件；脚本应通过 `uv run` 调用）
 	mcpJSON := fmt.Sprintf(`{
   "mcpServers": {
     "%s": {
-      "command": "uvx",
+      "command": "uv",
       "args": ["run", "server.py"]
     }
   }

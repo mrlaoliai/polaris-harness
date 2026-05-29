@@ -49,11 +49,18 @@ type PluginJSON struct {
 	MCPServers  string `json:"mcp_servers,omitempty"`
 }
 
-// MCPServerDef 定义单个 MCP Server 配置
+// MCPServerDef 定义单个 MCP Server 配置。
+// Type 对应 Claude Code .mcp.json 的 "type" 字段：
+//   - "stdio"（默认）: 本地进程，使用 Command/Args/Env
+//   - "http" / "streamable-http": 远端 HTTP，使用 URL/Headers
+//   - "sse": 已废弃（Anthropic 2026-04-01 停止接受），仍保留兼容
 type MCPServerDef struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
+	Type    string            `json:"type,omitempty"`    // "stdio"|"http"|"streamable-http"|"sse"
+	Command string            `json:"command,omitempty"` // stdio 专用
+	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
+	URL     string            `json:"url,omitempty"`     // http/sse 专用
+	Headers map[string]string `json:"headers,omitempty"` // http/sse 专用，Bearer 等
 }
 
 // MCPConfig 表示 .mcp.json 的结构

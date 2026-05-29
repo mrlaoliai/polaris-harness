@@ -121,13 +121,34 @@ func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg protocol.Registr
 		actualCommand = binaryPath
 	}
 
-	// Generate .mcp.json
+	// Generate .mcp.json — 根据传输类型选择正确字段
+	var serverDef protocol.MCPServerDef
+	switch pkg.Transport {
+	case "http", "streamable-http", "streamable_http":
+		// HTTP transport：URL 是 MCP 端点，无本地命令
+		serverDef = protocol.MCPServerDef{
+			Type: "http",
+			URL:  pkg.URL,
+			Env:  pkg.Env,
+		}
+	case "sse":
+		serverDef = protocol.MCPServerDef{
+			Type: "sse",
+			URL:  pkg.URL,
+			Env:  pkg.Env,
+		}
+	default:
+		// stdio（默认）：本地进程
+		serverDef = protocol.MCPServerDef{
+			Type:    "stdio",
+			Command: actualCommand,
+			Args:    pkg.Args,
+			Env:     pkg.Env,
+		}
+	}
 	mcpConfig := protocol.MCPConfig{
 		MCPServers: map[string]protocol.MCPServerDef{
-			pkg.Name: {
-				Command: actualCommand,
-				Args:    pkg.Args,
-			},
+			pkg.Name: serverDef,
 		},
 	}
 

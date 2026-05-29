@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -85,12 +84,23 @@ func (m *Manager) InstallExtension(ctx context.Context, req InstallRequest) erro
 	}
 
 	if result.Allowed {
-		// Proceed with installation
-		// (simulate DB write to extension_instances with status=installing)
-		_, _ = m.db.ExecContext(ctx, "INSERT INTO extension_instances (id, status) VALUES (?, ?)", req.ExtensionID, "installing")
-		// Log action (using string literal from substrate.ActionInstallApproved conceptually)
-		// Assuming we emit a generic event via eventLogger:
-		// m.eventLogger.AppendEvent(...)
+		// 写入 extension_instances：必须提供所有 NOT NULL 字段，否则 SQLite 报约束错误
+		_, err = m.db.ExecContext(ctx,
+			`INSERT OR IGNORE INTO extension_instances
+			 (id, ext_type, origin, catalog_id, name, publisher, trust_tier, status)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			req.ExtensionID,
+			req.ExtType,
+			"marketplace",
+			req.ExtensionID, // catalog_id 与 id 相同（市场安装）
+			req.ExtensionID, // name 临时使用 id，安装完成后由调用方 UPDATE
+			req.Publisher,
+			req.TrustTier,
+			"installing",
+		)
+		if err != nil {
+			return perrors.Wrap(perrors.CodeInternal, "install: db insert failed", err)
+		}
 		return nil
 	}
 
@@ -140,13 +150,12 @@ func (m *Manager) UninstallExtension(ctx context.Context, catalogID string) erro
 					_ = json.Unmarshal(raw, &bundle)
 					if hook, ok := bundle.Hooks["uninstall"]; ok && hook != "" {
 						hookPath := filepath.Join(inst.installPath, hook)
-						// 简单的路径防穿越（避免逃逸出 installPath）
+						// 路径防穿越：禁止逃逸出 installPath
 						if strings.HasPrefix(filepath.Clean(hookPath), filepath.Clean(inst.installPath)) {
-							cmd := exec.CommandContext(ctx, hookPath)
-							cmd.Dir = inst.installPath
-							if err := cmd.Run(); err != nil {
-								slog.Warn("marketplace: uninstall hook failed", "ext", inst.id, "err", err)
-							}
+							// AGENTS.md [XR-11]: L2 层禁止直接 exec，Hook 执行应通过
+							// pkg/action/sandbox.Run 调度；此处暂记录警告，待 sandbox 接口就绪后接入。
+							slog.Warn("marketplace: uninstall hook skipped (requires sandbox integration)",
+								"ext", inst.id, "hook", hookPath)
 						}
 					}
 				}

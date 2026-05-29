@@ -89,11 +89,15 @@ func parseAIPlugin(dir, baseID string, mp protocol.Marketplace) (protocol.Regist
 		return protocol.RegistryEntry{}, false
 	}
 
+	// OpenAI ai-plugin.json 的 api.type 一般是 "openapi"（REST API），极少数声明 "mcp"。
+	// - openapi: 注册为 "app" 类型，URL 指向 OpenAPI spec；不生成 command（非 stdio 进程）
+	// - mcp: 服务器是 MCP HTTP 端点，URL 作为 HTTP transport 的 endpoint
 	extType := "app"
-	command := ""
+	transport := ""
+	entryURL := p.API.URL
 	if strings.EqualFold(p.API.Type, "mcp") {
 		extType = "mcp"
-		command = p.API.URL
+		transport = "http" // MCP HTTP transport，非 stdio
 	}
 
 	return protocol.RegistryEntry{
@@ -103,10 +107,11 @@ func parseAIPlugin(dir, baseID string, mp protocol.Marketplace) (protocol.Regist
 		TrustTier:   mp.TrustTier,
 		Name:        name,
 		Description: desc,
-		URL:         p.API.URL,
+		Transport:   transport,
+		URL:         entryURL,
 		Homepage:    p.LegalInfoURL,
-		Command:     command,
-		Timeout:     60,
+		// Command 留空：OpenAI 插件是 HTTP 服务，不是本地 stdio 进程
+		Timeout: 60,
 	}, true
 }
 
