@@ -77,7 +77,7 @@ func (bb *SQLiteBlackboard) removeCancelFunc(taskID string) {
 }
 
 // PostTask 发布任务到黑板（INSERT OR IGNORE，幂等键保护）。
-func (bb *SQLiteBlackboard) PostTask(ctx context.Context, task protocol.TaskEntry) error {
+func (bb *SQLiteBlackboard) PostTask(ctx context.Context, task *protocol.TaskEntry) error {
 	_, err := bb.db.ExecContext(ctx, `
 		INSERT OR IGNORE INTO tasks(task_id, session_id, status, priority, version, created_at, updated_at)
 		VALUES(?,?,?,?,0,datetime('now'),datetime('now'))`,
@@ -90,6 +90,43 @@ func (bb *SQLiteBlackboard) PostTask(ctx context.Context, task protocol.TaskEntr
 		Type:   "task_posted",
 		TaskID: task.ID,
 	})
+	return nil
+}
+
+// PostBatch 原子性地批量发布多个任务到黑板。
+func (bb *SQLiteBlackboard) PostBatch(ctx context.Context, tasks []*protocol.TaskEntry) error {
+	tx, err := bb.db.BeginTx(ctx, nil)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.PostBatch", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT OR IGNORE INTO tasks(task_id, session_id, status, priority, version, created_at, updated_at)
+		VALUES(?,?,?,?,0,datetime('now'),datetime('now'))`)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.PostBatch", err)
+	}
+	defer stmt.Close()
+
+	for _, task := range tasks {
+		if _, err := stmt.ExecContext(ctx, task.ID, task.Type, statusPending, task.Priority); err != nil {
+			return perrors.Wrap(perrors.CodeInternal, "blackboard.PostBatch", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.PostBatch", err)
+	}
+
+	for _, task := range tasks {
+		bb.broadcast(protocol.BlackboardEvent{
+			Type:   "task_posted",
+			TaskID: task.ID,
+		})
+	}
 	return nil
 }
 
@@ -224,6 +261,178 @@ func (bb *SQLiteBlackboard) RenewLease(ctx context.Context, taskID, agentID stri
 	return nil
 }
 
+// SuspendForHITL 将 Executing 的任务挂起（HITL超时戳覆盖ExpiresAt）。
+func (bb *SQLiteBlackboard) SuspendForHITL(ctx context.Context, taskID, agentID string, timeout int64) error {
+	bb.mu.Lock()
+	defer bb.mu.Unlock()
+
+	expiresAt := time.Unix(timeout, 0).UTC().Format(time.RFC3339)
+	res, err := bb.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status=?, expires_at=?, updated_at=datetime('now'), version=version+1
+		WHERE task_id=? AND claimed_by=? AND status=?`,
+		statusSuspend, expiresAt, taskID, agentID, statusRunning,
+	)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.SuspendForHITL", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrTaskNotOwned
+	}
+	return nil
+}
+
+// ResumeFromHITL 恢复被挂起的任务（!approved → Failed）。
+func (bb *SQLiteBlackboard) ResumeFromHITL(ctx context.Context, taskID, agentID string, approved bool) error {
+	bb.mu.Lock()
+	defer bb.mu.Unlock()
+
+	var newStatus string
+	if approved {
+		newStatus = statusRunning
+	} else {
+		newStatus = statusFailed
+	}
+
+	expiresAt := time.Now().Add(DefaultLeaseTTL).UTC().Format(time.RFC3339)
+	res, err := bb.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status=?, expires_at=?, updated_at=datetime('now'), version=version+1
+		WHERE task_id=? AND claimed_by=? AND status=?`,
+		newStatus, expiresAt, taskID, agentID, statusSuspend,
+	)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.ResumeFromHITL", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrTaskNotOwned
+	}
+	return nil
+}
+
+// BeginCompensation 开始补偿链（状态改为 compensating，提供 300s 时间预算）。
+func (bb *SQLiteBlackboard) BeginCompensation(ctx context.Context, taskID, agentID string) error {
+	bb.mu.Lock()
+	defer bb.mu.Unlock()
+
+	expiresAt := time.Now().Add(300 * time.Second).UTC().Format(time.RFC3339)
+
+	res, err := bb.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status='compensating', expires_at=?, updated_at=datetime('now'), version=version+1
+		WHERE task_id=? AND claimed_by=? AND status=?`,
+		expiresAt, taskID, agentID, statusRunning,
+	)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.BeginCompensation", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrTaskNotOwned
+	}
+	return nil
+}
+
+// EndCompensation 补偿完成（状态改为 failed，进入正常回收）。
+func (bb *SQLiteBlackboard) EndCompensation(ctx context.Context, taskID, agentID string) error {
+	bb.mu.Lock()
+	defer bb.mu.Unlock()
+
+	res, err := bb.db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status=?, updated_at=datetime('now'), version=version+1
+		WHERE task_id=? AND claimed_by=? AND status='compensating'`,
+		statusFailed, taskID, agentID,
+	)
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.EndCompensation", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrTaskNotOwned
+	}
+	return nil
+}
+
+// SideEffectPreCheck TOCTOU 校验。
+func (bb *SQLiteBlackboard) SideEffectPreCheck(ctx context.Context, taskID, agentID string, claimedVersion int32) error {
+	bb.mu.Lock()
+	defer bb.mu.Unlock()
+
+	var status string
+	var claimedBy sql.NullString
+	var expiresAtStr string
+	var version int32
+
+	err := bb.db.QueryRowContext(ctx, `
+		SELECT status, claimed_by, expires_at, version FROM tasks WHERE task_id=?`,
+		taskID,
+	).Scan(&status, &claimedBy, &expiresAtStr, &version)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrTaskNotOwned // using existing error
+		}
+		return perrors.Wrap(perrors.CodeInternal, "blackboard.SideEffectPreCheck", err)
+	}
+
+	if !claimedBy.Valid || claimedBy.String != agentID {
+		return ErrStaleBlackboardLease
+	}
+
+	if version != claimedVersion {
+		return ErrStaleBlackboardLease
+	}
+
+	if status != statusRunning {
+		return ErrStaleBlackboardLease
+	}
+
+	expiresAt, _ := time.Parse(time.RFC3339, expiresAtStr)
+	if time.Now().UTC().After(expiresAt) {
+		return ErrStaleBlackboardLease
+	}
+
+	return nil
+}
+
+// PeekTask 只读快照提取。
+func (bb *SQLiteBlackboard) PeekTask(ctx context.Context, taskID string) (*protocol.TaskSnapshot, error) {
+	var statusStr string
+	err := bb.db.QueryRowContext(ctx, "SELECT status FROM tasks WHERE task_id=?", taskID).Scan(&statusStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, perrors.Wrap(perrors.CodeInternal, "blackboard.PeekTask", err)
+	}
+
+	var status protocol.TaskStatus
+	switch statusStr {
+	case statusPending:
+		status = protocol.TaskPending
+	case statusClaimed:
+		status = protocol.TaskClaimed
+	case statusRunning:
+		status = protocol.TaskExecuting
+	case statusDone:
+		status = protocol.TaskDone
+	case statusFailed:
+		status = protocol.TaskFailed
+	case statusSuspend:
+		status = protocol.TaskSuspended
+	case "compensating":
+		status = protocol.TaskCompensating
+	}
+
+	return &protocol.TaskSnapshot{
+		ID:     taskID,
+		Status: status,
+	}, nil
+}
+
 // Subscribe 返回事件订阅通道（chan cap=64，背压丢弃策略）。
 // 调用方须在 context 取消后不再读取通道。
 func (bb *SQLiteBlackboard) Subscribe(ctx context.Context) (<-chan protocol.BlackboardEvent, error) {
@@ -274,8 +483,8 @@ func (bb *SQLiteBlackboard) reap(ctx context.Context) {
 
 	rows, err := bb.db.QueryContext(ctx, `
 		SELECT task_id, claimed_by FROM tasks
-		WHERE status=? AND expires_at < datetime('now')`,
-		statusClaimed,
+		WHERE status IN (?,?) AND expires_at < datetime('now')`,
+		statusClaimed, statusRunning,
 	)
 	if err != nil {
 		bb.mu.Unlock()
@@ -322,8 +531,8 @@ func (bb *SQLiteBlackboard) reap(ctx context.Context) {
 			    provider_suspended_count=provider_suspended_count+1,
 			    toxicity=toxicity+1,
 			    version=version+1, updated_at=datetime('now')
-			WHERE task_id=? AND status=?`,
-			statusFailed, statusPending, r.taskID, statusClaimed,
+			WHERE task_id=? AND status IN (?,?)`,
+			statusFailed, statusPending, r.taskID, statusClaimed, statusRunning,
 		)
 		bb.broadcast(protocol.BlackboardEvent{
 			Type:    "task_lease_expired",

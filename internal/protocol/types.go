@@ -387,6 +387,7 @@ type TaskEntry struct {
 	DependsOn   []string
 	SubTasks    []string
 	Deadline    int64
+	SpawnDepth  int // 防止 Custom Agent 递归超限
 	CreatedAt   int64
 	UpdatedAt   int64
 }
@@ -402,6 +403,13 @@ const (
 	TaskDone
 	TaskFailed
 )
+
+// TaskSnapshot Task 状态只读快照（避免拷贝含原子字段的 TaskEntry）。
+type TaskSnapshot struct {
+	ID     string
+	Status TaskStatus
+	Result []byte
+}
 
 type BlackboardEvent struct {
 	Type      string

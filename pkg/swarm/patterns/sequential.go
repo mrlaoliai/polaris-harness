@@ -30,7 +30,8 @@ func NewSequentialExecutor(bb *swarm.SQLiteBlackboard, perTaskTimeout time.Durat
 func (se *SequentialExecutor) Execute(ctx context.Context, parentTaskID string, subTasks []protocol.TaskEntry) error {
 	var lastResult []byte
 
-	for i, task := range subTasks {
+	for i := range subTasks {
+		task := &subTasks[i]
 		// 1. 如果不是第一个任务，将上一个任务的结果注入到当前任务的 Payload（这里以追加 Intent 为例）
 		if i > 0 && len(lastResult) > 0 {
 			task.Intent = append(task.Intent, []byte(fmt.Sprintf("\n[Previous Result]: %s", string(lastResult)))...)

@@ -1,26 +1,30 @@
 package swarm
 
 import (
+	"context"
 	"sync"
 	"testing"
+
+	"github.com/polarisagi/polarisagi-harness/internal/protocol"
 )
 
 func TestBlackboard_Lifecycle(t *testing.T) {
 	b := NewBlackboard()
+	ctx := context.Background()
 
-	task := &TaskEntry{
+	task := &protocol.TaskEntry{
 		ID: "task-1",
 	}
 
-	b.PostTask(task)
+	b.PostTask(ctx, task)
 
 	// Check initial state
-	if task.Status.Load() != int32(TaskPending) {
-		t.Errorf("Expected TaskPending, got %d", task.Status.Load())
+	if task.Status != protocol.TaskPending {
+		t.Errorf("Expected TaskPending, got %v", task.Status)
 	}
 
 	// Claim
-	success, err := b.Claim("task-1", "agent-a")
+	success, err := b.ClaimTask(ctx, "task-1", "agent-a")
 	if err != nil {
 		t.Fatalf("Claim failed: %v", err)
 	}
@@ -28,33 +32,34 @@ func TestBlackboard_Lifecycle(t *testing.T) {
 		t.Fatal("Expected claim to succeed")
 	}
 
-	if task.Status.Load() != int32(TaskClaimed) {
-		t.Errorf("Expected TaskClaimed, got %d", task.Status.Load())
+	if task.Status != protocol.TaskClaimed {
+		t.Errorf("Expected TaskClaimed, got %v", task.Status)
 	}
 
 	// Start execution
-	err = b.StartExecution("task-1", "agent-a")
+	err = b.StartExecution(ctx, "task-1", "agent-a")
 	if err != nil {
 		t.Fatalf("StartExecution failed: %v", err)
 	}
-	if task.Status.Load() != int32(TaskExecuting) {
-		t.Errorf("Expected TaskExecuting, got %d", task.Status.Load())
+	if task.Status != protocol.TaskExecuting {
+		t.Errorf("Expected TaskExecuting, got %v", task.Status)
 	}
 
 	// Complete
-	err = b.CompleteTask("task-1", "agent-a", []byte("success"))
+	err = b.CompleteTask(ctx, "task-1", "agent-a", []byte("success"))
 	if err != nil {
 		t.Fatalf("CompleteTask failed: %v", err)
 	}
-	if task.Status.Load() != int32(TaskDone) {
-		t.Errorf("Expected TaskDone, got %d", task.Status.Load())
+	if task.Status != protocol.TaskDone {
+		t.Errorf("Expected TaskDone, got %v", task.Status)
 	}
 }
 
 func TestBlackboard_CAS_Concurrency(t *testing.T) {
 	b := NewBlackboard()
-	task := &TaskEntry{ID: "task-2"}
-	b.PostTask(task)
+	ctx := context.Background()
+	task := &protocol.TaskEntry{ID: "task-2"}
+	b.PostTask(ctx, task)
 
 	var wg sync.WaitGroup
 	workers := 50
@@ -65,7 +70,7 @@ func TestBlackboard_CAS_Concurrency(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			success, _ := b.Claim("task-2", "agent-worker")
+			success, _ := b.ClaimTask(ctx, "task-2", "agent-worker")
 			if success {
 				countMu.Lock()
 				successCount++

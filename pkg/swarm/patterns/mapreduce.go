@@ -41,7 +41,8 @@ func (mre *MapReduceExecutor) Execute(ctx context.Context, parentTaskID string, 
 		return nil, perrors.Wrap(perrors.CodeInternal, "failed to subscribe", err)
 	}
 
-	for _, task := range subTasks {
+	for i := range subTasks {
+		task := &subTasks[i]
 		if err := mre.bb.PostTask(ctx, task); err != nil {
 			return nil, perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("failed to post map task %s", task.ID), err)
 		}

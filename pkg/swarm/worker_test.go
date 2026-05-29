@@ -30,12 +30,15 @@ func (m *mockAgentKernel) SetTaskIntent(intent []byte)   {}
 func (m *mockAgentKernel) GetExecuteResult() []byte      { return m.result }
 
 type mockBlackboard struct {
-	tasks  map[string]*TaskEntry
+	tasks  map[string]*protocol.TaskEntry
 	events chan protocol.BlackboardEvent
 }
 
-func (b *mockBlackboard) PostTask(ctx context.Context, task protocol.TaskEntry) error {
+func (b *mockBlackboard) PostTask(ctx context.Context, task *protocol.TaskEntry) error {
 	b.events <- protocol.BlackboardEvent{Type: "task_posted", TaskID: task.ID}
+	return nil
+}
+func (b *mockBlackboard) PostBatch(ctx context.Context, tasks []*protocol.TaskEntry) error {
 	return nil
 }
 func (b *mockBlackboard) ClaimTask(ctx context.Context, taskID, agentID string) (bool, error) {
@@ -43,14 +46,16 @@ func (b *mockBlackboard) ClaimTask(ctx context.Context, taskID, agentID string) 
 	if !ok {
 		return false, nil
 	}
-	agentPtr := &agentID
-	entry.ClaimedBy.Store(agentPtr)
-	entry.Status.Store(int32(TaskClaimed))
+	entry.ClaimedBy = agentID
+	entry.Status = protocol.TaskClaimed
 	return true, nil
+}
+func (b *mockBlackboard) StartExecution(ctx context.Context, taskID, agentID string) error {
+	return nil
 }
 func (b *mockBlackboard) CompleteTask(ctx context.Context, taskID, agentID string, result []byte) error {
 	entry := b.tasks[taskID]
-	entry.Status.Store(int32(TaskDone))
+	entry.Status = protocol.TaskDone
 	return nil
 }
 func (b *mockBlackboard) FailTask(ctx context.Context, taskID, agentID string, errBytes []byte) error {
@@ -59,18 +64,36 @@ func (b *mockBlackboard) FailTask(ctx context.Context, taskID, agentID string, e
 func (b *mockBlackboard) RenewLease(ctx context.Context, taskID, agentID string) error {
 	return nil
 }
+func (b *mockBlackboard) SuspendForHITL(ctx context.Context, taskID, agentID string, timeout int64) error {
+	return nil
+}
+func (b *mockBlackboard) ResumeFromHITL(ctx context.Context, taskID, agentID string, approved bool) error {
+	return nil
+}
+func (b *mockBlackboard) BeginCompensation(ctx context.Context, taskID, agentID string) error {
+	return nil
+}
+func (b *mockBlackboard) EndCompensation(ctx context.Context, taskID, agentID string) error {
+	return nil
+}
+func (b *mockBlackboard) SideEffectPreCheck(ctx context.Context, taskID, agentID string, claimedVersion int32) error {
+	return nil
+}
+func (b *mockBlackboard) PeekTask(ctx context.Context, taskID string) (*protocol.TaskSnapshot, error) {
+	return nil, nil
+}
 func (b *mockBlackboard) Subscribe(ctx context.Context) (<-chan protocol.BlackboardEvent, error) {
 	return b.events, nil
 }
 
 func TestWorker_ListenLoop(t *testing.T) {
 	bb := &mockBlackboard{
-		tasks:  make(map[string]*TaskEntry),
+		tasks:  make(map[string]*protocol.TaskEntry),
 		events: make(chan protocol.BlackboardEvent, 10),
 	}
 
-	entry := &TaskEntry{ID: "task-1"}
-	entry.Status.Store(int32(TaskPending))
+	entry := &protocol.TaskEntry{ID: "task-1"}
+	entry.Status = protocol.TaskPending
 	bb.tasks["task-1"] = entry
 
 	kernel := &mockAgentKernel{
@@ -92,7 +115,7 @@ func TestWorker_ListenLoop(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// 发布任务
-	task := protocol.TaskEntry{
+	task := &protocol.TaskEntry{
 		ID:       "task-1",
 		Type:     "test_task",
 		Priority: 1,
@@ -109,23 +132,23 @@ func TestWorker_ListenLoop(t *testing.T) {
 		t.Fatalf("task not found in blackboard")
 	}
 
-	if entry.Status.Load() != int32(TaskDone) {
-		t.Errorf("expected task to be Done, got %d", entry.Status.Load())
+	if entry.Status != protocol.TaskDone {
+		t.Errorf("expected task to be Done, got %v", entry.Status)
 	}
 
-	if entry.ClaimedBy.Load() == nil || *entry.ClaimedBy.Load() != "agent-1" {
+	if entry.ClaimedBy != "agent-1" {
 		t.Errorf("expected task to be claimed by agent-1")
 	}
 }
 
 func TestWorker_ListenLoop_Push(t *testing.T) {
 	bb := &mockBlackboard{
-		tasks:  make(map[string]*TaskEntry),
+		tasks:  make(map[string]*protocol.TaskEntry),
 		events: make(chan protocol.BlackboardEvent, 10),
 	}
 
-	entry := &TaskEntry{ID: "task-pushed"}
-	entry.Status.Store(int32(TaskPending))
+	entry := &protocol.TaskEntry{ID: "task-pushed"}
+	entry.Status = protocol.TaskPending
 	bb.tasks["task-pushed"] = entry
 
 	kernel := &mockAgentKernel{
@@ -158,11 +181,11 @@ func TestWorker_ListenLoop_Push(t *testing.T) {
 		t.Fatalf("task not found in blackboard")
 	}
 
-	if entry.Status.Load() != int32(TaskDone) {
-		t.Errorf("expected task to be Done, got %d", entry.Status.Load())
+	if entry.Status != protocol.TaskDone {
+		t.Errorf("expected task to be Done, got %v", entry.Status)
 	}
 
-	if entry.ClaimedBy.Load() == nil || *entry.ClaimedBy.Load() != "agent-push" {
+	if entry.ClaimedBy != "agent-push" {
 		t.Errorf("expected task to be claimed by agent-push")
 	}
 }

@@ -146,7 +146,7 @@ func (ag *AutoCurriculumGenerator) Generate(ctx context.Context, bb protocol.Bla
 				`{"type":"auto_curriculum","skill":%q,"desc":%q,"difficulty":%.2f}`,
 				skill, sample.TaskDescription, sample.DifficultyEstimate,
 			))
-			entry := protocol.TaskEntry{
+			entry := &protocol.TaskEntry{
 				ID:        fmt.Sprintf("ac_%s_%d", skill, time.Now().UnixNano()),
 				Type:      skill,
 				Priority:  3,

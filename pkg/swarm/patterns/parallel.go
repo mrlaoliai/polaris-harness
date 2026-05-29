@@ -34,7 +34,8 @@ func (pe *ParallelExecutor) Execute(ctx context.Context, parentTaskID string, su
 		return perrors.Wrap(perrors.CodeInternal, "failed to subscribe to blackboard", err)
 	}
 
-	for _, task := range subTasks {
+	for i := range subTasks {
+		task := &subTasks[i]
 		if err := pe.bb.PostTask(ctx, task); err != nil {
 			return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("failed to post parallel task %s", task.ID), err)
 		}

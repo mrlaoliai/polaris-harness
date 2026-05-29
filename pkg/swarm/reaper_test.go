@@ -48,7 +48,7 @@ func TestReaperCancelGracePeriod(t *testing.T) {
 	reaper := NewReaper(bb)
 
 	ctx := context.Background()
-	task := protocol.TaskEntry{ID: "malicious_task"}
+	task := &protocol.TaskEntry{ID: "malicious_task"}
 	bb.PostTask(ctx, task)
 
 	claimed, err := bb.ClaimTask(ctx, task.ID, "bad_agent")

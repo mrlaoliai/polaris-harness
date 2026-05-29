@@ -10,6 +10,7 @@ import (
 	"time"
 
 	perrors "github.com/polarisagi/polarisagi-harness/internal/errors"
+	"github.com/polarisagi/polarisagi-harness/internal/protocol"
 )
 
 // CSVFanoutJob CSV batch fan-out 任务描述（ADR-0015 §2.5）。
@@ -55,7 +56,7 @@ type FanoutResult struct {
 // RunCSVFanout 执行 CSV fan-out，将每行 CSV 作为独立任务发布到 Blackboard。
 // 调用方负责提供 Blackboard 实例和 SubAgent 执行后端。
 // 本函数：读 CSV → 构建 TaskEntry → PostBatch → 并发等待 → 聚合结果。
-func RunCSVFanout(ctx context.Context, bb *Blackboard, job CSVFanoutJob) (*FanoutResult, error) {
+func RunCSVFanout(ctx context.Context, bb protocol.Blackboard, job CSVFanoutJob) (*FanoutResult, error) {
 	if err := validateFanoutJob(&job); err != nil {
 		return nil, err
 	}
@@ -72,13 +73,13 @@ func RunCSVFanout(ctx context.Context, bb *Blackboard, job CSVFanoutJob) (*Fanou
 
 	jobID := fmt.Sprintf("csv-job-%d", time.Now().UnixNano())
 	results := make([]RowResult, len(rows))
-	entries := make([]*TaskEntry, 0, len(rows))
+	entries := make([]*protocol.TaskEntry, 0, len(rows))
 
 	for i, row := range rows {
 		itemID := itemIDForRow(row, headers, job.IDColumn, i)
 		instruction := expandTemplate(job.Instruction, row)
 
-		entry := &TaskEntry{
+		entry := &protocol.TaskEntry{
 			ID:       fmt.Sprintf("%s-row-%d", jobID, i),
 			Type:     "csv_fanout_row",
 			Priority: 5,
@@ -92,7 +93,7 @@ func RunCSVFanout(ctx context.Context, bb *Blackboard, job CSVFanoutJob) (*Fanou
 		}
 	}
 
-	if err := bb.PostBatch(entries); err != nil {
+	if err := bb.PostBatch(ctx, entries); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("csv_fanout: post batch: %v", err), err)
 	}
 
@@ -112,7 +113,7 @@ func RunCSVFanout(ctx context.Context, bb *Blackboard, job CSVFanoutJob) (*Fanou
 	for i, entry := range entries {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(idx int, e *TaskEntry) {
+		go func(idx int, e *protocol.TaskEntry) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
@@ -161,7 +162,7 @@ func RunCSVFanout(ctx context.Context, bb *Blackboard, job CSVFanoutJob) (*Fanou
 }
 
 // waitForTask 轮询 Blackboard 等待 Task 达到终态（done/failed）。
-func waitForTask(ctx context.Context, bb *Blackboard, taskID string) (string, error) {
+func waitForTask(ctx context.Context, bb protocol.Blackboard, taskID string) (string, error) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -170,7 +171,7 @@ func waitForTask(ctx context.Context, bb *Blackboard, taskID string) (string, er
 		case <-ctx.Done():
 			return "", perrors.New(perrors.CodeInternal, fmt.Sprintf("timeout waiting for task %s", taskID))
 		case <-ticker.C:
-			snap, err := bb.PeekTask(taskID)
+			snap, err := bb.PeekTask(ctx, taskID)
 			if err != nil {
 				return "", err
 			}
@@ -178,9 +179,9 @@ func waitForTask(ctx context.Context, bb *Blackboard, taskID string) (string, er
 				continue
 			}
 			switch snap.Status {
-			case TaskDone:
+			case protocol.TaskDone:
 				return string(snap.Result), nil
-			case TaskFailed:
+			case protocol.TaskFailed:
 				return "", perrors.New(perrors.CodeInternal, fmt.Sprintf("task %s failed", taskID))
 			}
 		}

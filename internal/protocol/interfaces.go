@@ -205,11 +205,19 @@ type ToolRegistry interface {
 // 常量: DefaultLeaseTTL=60s, HeartbeatInterval=15s(±5s jitter), ReaperScanInterval=1s。
 // 优先级: 0=用户交互, 1=前台辅助, 2=后台优化, 3=Auto-Curriculum。
 type Blackboard interface {
-	PostTask(ctx context.Context, task TaskEntry) error
+	PostTask(ctx context.Context, task *TaskEntry) error
+	PostBatch(ctx context.Context, tasks []*TaskEntry) error
 	ClaimTask(ctx context.Context, taskID, agentID string) (bool, error)
+	StartExecution(ctx context.Context, taskID, agentID string) error
 	CompleteTask(ctx context.Context, taskID, agentID string, result []byte) error
 	FailTask(ctx context.Context, taskID, agentID string, errBytes []byte) error
 	RenewLease(ctx context.Context, taskID, agentID string) error
+	SuspendForHITL(ctx context.Context, taskID, agentID string, timeout int64) error
+	ResumeFromHITL(ctx context.Context, taskID, agentID string, approved bool) error
+	BeginCompensation(ctx context.Context, taskID, agentID string) error
+	EndCompensation(ctx context.Context, taskID, agentID string) error
+	SideEffectPreCheck(ctx context.Context, taskID, agentID string, claimedVersion int32) error
+	PeekTask(ctx context.Context, taskID string) (*TaskSnapshot, error)
 	Subscribe(ctx context.Context) (<-chan BlackboardEvent, error)
 }
 
