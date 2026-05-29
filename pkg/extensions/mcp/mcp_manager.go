@@ -275,6 +275,17 @@ func (m *MCPManager) unregisterTools(serverID string, tools []MCPTool) {
 	}
 }
 
+// mcpToolName 生成 LLM 工具名：使用 __ 分隔，避免冒号违反 OpenAI ^[a-zA-Z0-9_-]+$ 约束。
 func mcpToolName(serverID, toolName string) string {
-	return "mcp:" + serverID + ":" + toolName
+	return "mcp__" + sanitizeToolNamePart(serverID) + "__" + sanitizeToolNamePart(toolName)
+}
+
+// sanitizeToolNamePart 将工具名组件中不合规字符替换为下划线。
+func sanitizeToolNamePart(s string) string {
+	return strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			return r
+		}
+		return '_'
+	}, s)
 }

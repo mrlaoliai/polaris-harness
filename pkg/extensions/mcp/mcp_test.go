@@ -38,7 +38,7 @@ func TestMCPRetryPolicy_UnknownCode(t *testing.T) {
 
 func TestMCPToolName(t *testing.T) {
 	name := mcpToolName("server-1", "get_weather")
-	expected := "mcp:server-1:get_weather"
+	expected := "mcp__server-1__get_weather"
 	if name != expected {
 		t.Errorf("expected %q, got %q", expected, name)
 	}
@@ -46,8 +46,8 @@ func TestMCPToolName(t *testing.T) {
 
 func TestMCPToolName_EmptyParts(t *testing.T) {
 	name := mcpToolName("", "")
-	if name != "mcp::" {
-		t.Errorf("expected 'mcp::', got %q", name)
+	if name != "mcp____" {
+		t.Errorf("expected 'mcp____', got %q", name)
 	}
 }
 
