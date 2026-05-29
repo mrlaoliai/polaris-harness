@@ -41,6 +41,10 @@ type AgentConfig struct {
 	MaxReplan     int
 	DefaultBudget int
 	MaxSteps      int
+	// SystemTier 对应硬件层级（0=Tier0/8GB, 1+=Tier1+）。
+	// L3 LLM 看门狗仅在 SystemTier >= 1 时激活。
+	// 由 M3 HardwareProbe 探测结果注入。
+	SystemTier int
 }
 
 func NewAgent(id string, db *sql.DB, taintGate TaintGate, provider protocol.Provider) *Agent {

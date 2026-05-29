@@ -12,6 +12,7 @@ package kernel
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -313,8 +314,17 @@ func (e *DAGExecutor) runCompensation(ctx context.Context) {
 		// 补偿失败记录但继续（Saga 尽力补偿原则）
 		// 补偿动作继承与原节点相同的污染等级
 		if res, err := e.toolExec(compCtx, comp.ToolName, comp.Args, comp.TaintLevel); err != nil || (res != nil && !res.Success) {
-			// 生产环境应写 EventLog audit("saga_compensation_failed")
-			_ = err
+			// 写入审计日志：生产环境应通过 EventLog 记录 saga_compensation_failed
+			errMsg := ""
+			if err != nil {
+				errMsg = err.Error()
+			} else if res != nil {
+				errMsg = res.Error
+			}
+			slog.Warn("dag_executor: saga compensation failed",
+				"tool", comp.ToolName,
+				"error", errMsg,
+			)
 		}
 	}
 }

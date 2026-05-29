@@ -246,10 +246,13 @@ CircuitBreaker 三态：Closed（正常）→ Open（熔断，冷却期拒绝请
 
 `FallbackExecutor.Execute()` 按注入的 Provider 列表顺序依次检查可用性，选中第一个可用 Provider 并更新 CircuitBreaker 状态；全部不可用时标记失败并返回 `ErrAllProvidersFailed`，触发调用方进入 GracefulDegradation 或 [ESCALATE] 路径。实现见 `pkg/substrate/fallback.go`。
 
+**StreamInfer Failover**：`StreamInfer` 与 `Infer` 同等纳入 CircuitBreaker 覆盖。每次 StreamInfer 调用记录延迟并更新 HealthScorer，若 Provider 返回错误则触发 Failover 切换至下一可用 Provider（逻辑与 Infer 路径一致）。流式错误中断时 usage 标记 `estimated=true`（inv_M1_04）。
+
 **Provider 恢复事件**: 当所有 Provider 均处于 Open 状态（`ErrAllProvidersExhausted` 已触发）后，任意一个 Provider 的 CircuitBreaker 完成 HalfOpen→Closed 转换（半开探测成功）时，M1 向 M2 Outbox 写入：
   `MutationIntent{Table:"outbox", Op:OpInsert, Payload:{target_engine:"m4_provider_recovery", provider_id:<providerID>, recovered_at:<timestamp>}}`
 此事件经 M2 Outbox Worker 投递至 M4（M4 §8 Provider 恢复唤醒路径），M4 据此自动唤醒处于 `Suspended(suspend_reason=provider_exhausted)` 的任务。
 多 Provider 场景下，若多个 Provider 同时恢复，事件幂等合并（M4 Outbox Worker 在同一 batch 内去重 task_id，避免重复唤醒）。
+
 
 ### 7.4 HealthScorer
 

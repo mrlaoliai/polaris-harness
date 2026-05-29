@@ -43,30 +43,28 @@ func (a *Agent) executeEffect(ctx context.Context, effect protocol.Effect) error
 		var inferErr error
 
 		// 2. System 1/2 Routing & World Model Inference Skip
-		// 如果在 S_PERCEIVE 阶段，且 SurpriseIndex 很低 (<0.3) 或 WorldModel 置信度高，尝试走 FastPath
+		// 如果在 S_PERCEIVE 阶段，且 SurpriseIndex 很低 (<0.3)，走 FastPath 跳过 LLM
 		if a.sm.Current() == protocol.AgentStatePerceive {
-			// FastPath (M09 Logic Collapse): 直接映射为预编译的 Wasm 技能
-			if a.sCtx.SurpriseIndex < 0.3 {
-				// 走系统 1：构建坍缩的执行 DAG，跳过 LLM S_PLAN
-				a.sCtx.DAGModel = &DAGModel{
-					Nodes: []ExecNode{
-						{
-							ID:       "collapsed_skill",
-							ToolName: "system1_fast_skill", // 生产中将通过 intent 向量检索匹配 Wasm Skill
-							Args:     []byte(fmt.Sprintf(`{"intent": %q}`, a.sCtx.RawIntentTS.Content())),
-						},
-					},
-				}
-				fastResult := `{"Goal": "` + a.sCtx.RawIntentTS.Content() + `", "Complexity": 0.1}`
+			// FastPath (M09 Logic Collapse): 跳过 S_PERCEIVE LLM 推理，产生合成感知结果。
+			// 不操作 DAGModel/ExecuteResult——外部注入的 DAGModel 保持不变。
+			// 具体能力识别将在后续通过 intent 向量检索实现（ADR-M09）。
+			// 注意: SurpriseIndex == 0 表示"未计算"（默认值），不触发 FastPath。
+			if a.sCtx.SurpriseIndex > 0 && a.sCtx.SurpriseIndex < 0.3 {
+
+				fastResult := `{"Goal":` + mustMarshalString(a.sCtx.RawIntentTS.Content()) + `,"Complexity":0.1}`
 				nextState, err = llmEff.OnSuccess(protocol.StateContext{}, []byte(fastResult))
 				goto HANDLE_MEM
 			}
 		}
 
+
 		// S_PLAN 阶段
 		if a.sm.Current() == protocol.AgentStatePlan {
-			if a.sCtx.SurpriseIndex < 0.3 && a.sCtx.DAGModel != nil {
-				// 已经被 S_PERCEIVE 坍缩，直接旁路 LLM
+			if a.sCtx.SurpriseIndex > 0 && a.sCtx.SurpriseIndex < 0.3 {
+				// FastPath 路径：S_PERCEIVE 已坍缩，直接旁路 LLM 规划。
+				// DAGModel 为 nil 时 runExecuteDAG 直接推进 ExecuteDone，
+				// 为非 nil 时执行已生成的 DAG（高置信路径）。
+				// SurpriseIndex == 0 表示"未计算"，不触发。
 				nextState = "S_PLAN_DONE"
 				err = nil
 				goto HANDLE_MEM
@@ -210,12 +208,19 @@ func (a *Agent) executeEffect(ctx context.Context, effect protocol.Effect) error
 		// 此分支由 runValidateDAG 自行通过 SendIntent 推进 FSM（ValidateOk / ValidateFail），
 		// 因此直接返回，不走 stateToTriggerMap 路径，避免双重推进。
 		if a.sm.Current() == protocol.AgentStateValidate {
+			// FastPath 空执行路径（SurpriseIndex 触发但无 LLM 生成 DAG）：nil DAGModel 直接放行。
+			// runValidateDAG 对 nil plan 会触发 L0 拦截，因此在进入前短路。
+			if a.sCtx.DAGModel == nil {
+				go a.SendIntent(protocol.TriggerValidateOk)
+				return nil
+			}
 			if err := a.runValidateDAG(ctx); err != nil {
 				// 业务校验失败会触发 ValidateFail，不应被视为系统级致命错误导致 Run 崩溃退出
 				slog.Debug("kernel: validate DAG", "err", err)
 			}
 			return nil
 		}
+
 
 		// S_EXECUTE 阶段拦截：调用 Agent 层 DAG 执行（可访问 toolRegistry 与完整 sCtx）。
 		// 同理，由 runExecuteDAG 自行推进 FSM（ExecuteDone / ExecuteFail）。
@@ -235,7 +240,7 @@ func (a *Agent) executeEffect(ctx context.Context, effect protocol.Effect) error
 		}
 
 		if detEff.Fn != nil {
-			nextState, err = detEff.Fn(ctx, protocol.StateContext{})
+			nextState, err = detEff.Fn(ctx, a.toProtocolCtx())
 		}
 	}
 
@@ -271,11 +276,16 @@ func (a *Agent) runValidateDAG(ctx context.Context) error {
 	}
 
 	vCtx := &DAGValidationContext{
-		Plan:             plan,
-		ActiveTaintLevel: protocol.TaintNone, // 默认无污点；实际系统中应读取 ActiveContext.TaintLevel
+		Plan: plan,
+		// ActiveTaintLevel: per-node TaintLevel 已在 parsePlanOnSuccess 中按 pCtx.MaxTaintLevel 传播。
+		// 此处 session 级全局污点暂设 TaintNone——待 ActiveContext.TaintLevel 正式引入后再读取。
+		// 注意: 不可直接赋 RawIntentTS.Level()（TaintHigh），否则 validateTaintGate
+		// 会拦截所有非只读工具，导致任何包含写操作的 DAG 永远无法通过校验。
+		ActiveTaintLevel: protocol.TaintNone,
 		PolicyGate:       a.policyGate,
 		AgentID:          a.sCtx.AgentID,
 		SessionID:        a.sCtx.SessionID,
+		SystemTier:       a.Config.SystemTier, // 由 M3 HardwareProbe 探测后通过 AgentConfig.SystemTier 注入
 	}
 
 	if err := ValidateDAG(ctx, vCtx); err != nil {
@@ -284,6 +294,7 @@ func (a *Agent) runValidateDAG(ctx context.Context) error {
 		// 返回非致命 error 提示调用方失败原因，但不能让 Run 循环崩溃
 		return perrors.Wrap(perrors.CodeInternal, "s_validate failed", err)
 	}
+
 
 	// L3: LLM 看门狗校验 (上提为标准 FSM Effect)
 	// 仅对 Tier 1+ 生效
@@ -469,7 +480,7 @@ func (a *Agent) runExecuteDAG(ctx context.Context) error { //nolint:gocyclo
 
 			// 通过 outbox 异步投递 m9_capability_gap 事件，触发 GapFillWorker 进行能力补全
 			if a.db != nil {
-				payloadBytes := []byte(fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+				payloadBytes, _ := json.Marshal(map[string]string{"error": err.Error()})
 				_, _ = a.db.ExecContext(ctx, `
 					INSERT INTO outbox (created_at, target_engine, operation, scope, payload, idempotency_key, status)
 					VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -588,4 +599,11 @@ func aggregateDAGResults(results []NodeResult) []byte {
 	}
 	buf = append(buf, "]}"...)
 	return buf
+}
+
+// mustMarshalString 将字符串 JSON 安全序列化为带引号的 JSON 字符串字面量。
+// 用于拼接 FastPath JSON payload，避免直接字符串拼接导致的 JSON 注入风险。
+func mustMarshalString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
 }

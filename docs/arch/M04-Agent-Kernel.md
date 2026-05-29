@@ -22,7 +22,7 @@
 | inv_M4_01 | LLM 仅做结构化填空——Go 状态机持有控制流，禁止 `while True: call LLM` | spec/state.yaml FSM 校验 |
 | inv_M4_02 | 重放时不重新调 LLM——用 EventLog 录像值（请求全文 + 响应全文） | M4 §8 ReplayMode 物理切断 |
 | inv_M4_03 | PromptFn 为纯函数——同 StateContext → 同 prompt 字节，禁止 wall_clock/random | CI `prompt_determinism` 测试 |
-| inv_M4_04 | System 1 路径零 LLM 调用——SurpriseIndex <0.3 物理边界不可逾越 | M4 RouteReasoning 代码审计 |
+| inv_M4_04 | System 1 路径零 LLM 调用——`0 < SurpriseIndex < 0.3` 时触发 FastPath（0 表示"未计算"，不触发）；FastPath 仅合成 S_PERCEIVE 结果，不操作 DAGModel/ExecuteResult | M4 RouteReasoning 代码审计 |
 | inv_M4_05 | Suspend-on-Idle——空闲 Agent 不轮询，等待 intent channel 唤醒，空载 CPU<1% | M3 `polaris_goroutines` Gauge |
 | inv_M4_06 | 不可逆操作（write_network/privileged）禁止自动回滚——必须显式 HITL | M7 §5.3 DryRunMode + HITL |
 
@@ -93,12 +93,16 @@ Agent 运行循环: 等待 intent channel 上的意图脉冲 → 唤醒推进状
 
 ## 3. S_VALIDATE 四层校验
 
+**前置条件**：若 `DAGModel == nil`（FastPath 空执行路径），`executeEffect` 在调用四层校验前直接发出 TriggerValidateOk，不进入校验流程。四层校验仅在 DAGModel 非 nil 时执行。
+
 ```
 L0 拓扑 (<1ms, 所有 DAG): 节点熔断(`spec/state.yaml §m4_kernel.plan_dag_max_nodes`)→环检测(DFS 三色)→深度熔断(`spec/state.yaml §m4_kernel.plan_dag_max_depth`)→孤立节点
 L1 确定性 (<1ms, 所有动作): TaintGate + JSON Schema + Tool availability + PolicyGate[Cedar-Gate]
 L2 启发式 (<5ms, RiskHigh+): 批量规模(>100)→受保护路径→资源预估
 L3 LLM 看门狗 (~200ms, 仅 RiskPrivileged): Tier1 模型语义判断, <10次/小时
 ```
+
+**ActiveTaintLevel（session 级全局污点）**：当前实现暂设 TaintNone，待 ActiveContext.TaintLevel 正式引入后再从 session 聚合污点读取。per-node 污点已在 `parsePlanOnSuccess` 中按 `pCtx.MaxTaintLevel` 传播，L1 TaintGate 对单节点污点的拦截仍有效。
 
 L1.1 资源冲突检测: 规范 artifactID → 对无依赖边的并行写冲突节点自动注入隐式序列化边 (EdgePrecondition), 审计 `implicit_resource_edge`。
 
@@ -217,9 +221,9 @@ S_PLAN 阶段检测到 prm != nil && ShouldActivate(complexity):
 默认 effort 配置: System 1.5 → low; System 2 → medium; 用户 `/set reasoning=high` + Cedar permit → high。
 
 RouteReasoning:
-0. si = resolveSurpriseIndex(): 优先读 M3 `polaris_surprise_index`（M9 完整版）→ staleness >60s 回退 `polaris_surprise_index_basic`（M3 基础版）→ 两者均不可用 → 0.5
-1. si <0.3 → `skillCache.Lookup(IntentSignature)` (仅依赖 S_PERCEIVE: GoalDescription+InputTypes+OutputTypes+DomainHint, 消除因果倒置) → Persona 兼容性检查 → 命中直接执行 Wasm; 不兼容 fall through
-2. 未命中或 si>=0.3 → 调用 `M6.SkillSelector.SelectTopK(intent, K=5)` 选取候选工具/技能描述(**Tool Selection > Tool Design**:避免把全部工具列表塞给 LLM 导致选择崩溃)→ buildMessages → `providerRouter.Route`
+0. si = resolveSurpriseIndex(): 优先读 M3 `polaris_surprise_index`（M9 完整版）→ staleness >60s 回退 `polaris_surprise_index_basic`（M3 基础版）→ 两者均不可用 → 0.5。**`si=0` 为默认零值（未经 M3 计算），不触发 FastPath；正式 FastPath 仅在 `0 < si < 0.3` 时激活。**
+1. `0 < si < 0.3` → FastPath：合成 S_PERCEIVE 结果跳过 LLM，S_PLAN 阶段同样旁路 LLM（保留已有 DAGModel 或走空执行路径）。skillCache 命中直接执行 Wasm; 不兼容 fall through
+2. 未命中或 si>=0.3 → 调用 `M6.SkillSelector.SelectTopK(intent, K=5)` 选取候选工具/技能描述（**Tool Selection > Tool Design**：避免把全部工具列表塞给 LLM 导致选择崩溃）→ buildMessages → `providerRouter.Route`
 3. buildMessages: ImmutableCore + GoalDescription + DAG 上下文 + SkillSelector 选取的 top-K 工具描述。si≥0.6 追加 "extended reasoning"; si<0.3 追加 "use cached skills"
 
 ---

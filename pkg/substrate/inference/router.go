@@ -310,14 +310,52 @@ func (ir *InferenceRouter) Infer(ctx context.Context, req *protocol.InferRequest
 	return resp, nil
 }
 
-// StreamInfer 路由流式请求。
+// StreamInfer 路由流式请求，内嵌延迟记录与 Failover。
 func (ir *InferenceRouter) StreamInfer(ctx context.Context, req *protocol.InferRequest) (<-chan protocol.StreamEvent, error) {
 	entry := ir.registry.best(req)
 	if entry == nil {
 		return nil, perrors.New(perrors.CodeInternal, "inference_router: no available providers")
 	}
+	start := time.Now()
 	ch, err := entry.provider.StreamInfer(ctx, req)
+	entry.recordLatency(float64(time.Since(start).Milliseconds()))
 	entry.recordOutcome(err == nil)
+	if err != nil {
+		// Failover: 尝试次优 Provider
+		return ir.streamFailover(ctx, req, entry.name)
+	}
+	return ch, nil
+}
+
+// streamFailover 流式路径次优选择。
+func (ir *InferenceRouter) streamFailover(ctx context.Context, req *protocol.InferRequest, skip string) (<-chan protocol.StreamEvent, error) {
+	ir.registry.mu.RLock()
+	defer ir.registry.mu.RUnlock()
+	var chosen *providerEntry
+	bestScore := -1.0
+	for name, e := range ir.registry.entries {
+		if name == skip || !e.cb.Allow() {
+			continue
+		}
+		if req != nil {
+			caps := e.provider.Capabilities()
+			if req.HasImageParts() && !caps.SupportsVision {
+				continue
+			}
+			if req.HasVideoParts() && !caps.SupportsVideo {
+				continue
+			}
+		}
+		if s := e.healthScore(); s > bestScore {
+			bestScore = s
+			chosen = e
+		}
+	}
+	if chosen == nil {
+		return nil, perrors.New(perrors.CodeInternal, "inference_router: all providers failed (stream)")
+	}
+	ch, err := chosen.provider.StreamInfer(ctx, req)
+	chosen.recordOutcome(err == nil)
 	return ch, err
 }
 

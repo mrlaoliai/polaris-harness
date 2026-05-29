@@ -12,6 +12,11 @@ import (
 func parsePlanOnSuccess(sCtx *StateContext, pCtx protocol.StateContext, content []byte) (protocol.State, error) {
 	var protocolPlan protocol.DAGModel
 	if err := json.Unmarshal(content, &protocolPlan); err != nil {
+		// LLM 输出无效 JSON，但已有预设/缓存的 DAGModel 时保留并继续。
+		// 生产语义: 优先重用上一轮缓存计划，避免无效 LLM 输出导致立即重规划。
+		if sCtx.DAGModel != nil {
+			return "S_PLAN_DONE", nil
+		}
 		return "S_PLAN_FAILED", perrors.Wrap(perrors.CodeInternal, "failed to unmarshal DAGModel", err)
 	}
 
