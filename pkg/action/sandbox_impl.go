@@ -222,6 +222,25 @@ func (s *ContainerSandbox) Run(ctx context.Context, spec SandboxSpec) (*protocol
 	}, nil
 }
 
+// RunScript 在与 ContainerSandbox 相同的 OS 命名空间隔离下直接执行任意脚本。
+// 适用于插件 uninstall hook 等需要运行任意二进制路径的场景。
+// workDir 为脚本工作目录；超时固定 30s（与 Run 一致）。
+func (s *ContainerSandbox) RunScript(ctx context.Context, scriptPath, workDir string) error {
+	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(execCtx, scriptPath)
+	cmd.Dir = workDir
+	// Linux: 注入命名空间隔离（与 Run 共用，防止 hook 逃逸宿主 PID/NS 空间）
+	if attrs := containerSandboxSysProcAttr(); attrs != nil {
+		cmd.SysProcAttr = attrs
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("sandbox: RunScript %q: %w", scriptPath, err)
+	}
+	return nil
+}
+
 // ─── SandboxRouter ────────────────────────────────────────────────────────────
 
 // SandboxRouter 根据 SandboxSpec.SandboxTier 路由至对应沙箱实现。

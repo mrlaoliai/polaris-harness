@@ -15,6 +15,13 @@ import (
 	"github.com/polarisagi/polarisagi-harness/pkg/substrate"
 )
 
+// HookRunner 在受限环境下执行插件 hook 脚本。
+// 接口在调用方定义（AGENTS.md 原则），具体实现由 pkg/action.ContainerSandbox.RunScript 提供。
+type HookRunner interface {
+	// RunScript 执行 hookPath 指定的可执行文件， workDir 为工作目录。
+	RunScript(ctx context.Context, hookPath, workDir string) error
+}
+
 type InstallRequest struct {
 	Principal   string
 	ExtensionID string
@@ -33,6 +40,8 @@ type Manager struct {
 	prefsRepo         protocol.PreferencesRepo
 	auditTrail        *substrate.AuditTrail
 	publisherTrustMap map[string]int
+	// hookRunner 通过 WithHookRunner 注入；nil 时 uninstall hook 降级为 warn+skip
+	hookRunner HookRunner
 }
 
 func NewManager(db *sql.DB, mcpMgr any, pg protocol.PolicyGate, pr protocol.PreferencesRepo, at *substrate.AuditTrail, publisherTrustMap map[string]int) *Manager {
@@ -47,6 +56,12 @@ func NewManager(db *sql.DB, mcpMgr any, pg protocol.PolicyGate, pr protocol.Pref
 		auditTrail:        at,
 		publisherTrustMap: publisherTrustMap,
 	}
+}
+
+// WithHookRunner 注入 HookRunner 实现（如 ContainerSandbox）。返回自身支持链式调用。
+func (m *Manager) WithHookRunner(hr HookRunner) *Manager {
+	m.hookRunner = hr
+	return m
 }
 
 // InstallExtension handles the install flow with M11 Cedar-Gate.
@@ -152,10 +167,16 @@ func (m *Manager) UninstallExtension(ctx context.Context, catalogID string) erro
 						hookPath := filepath.Join(inst.installPath, hook)
 						// 路径防穿越：禁止逃逸出 installPath
 						if strings.HasPrefix(filepath.Clean(hookPath), filepath.Clean(inst.installPath)) {
-							// AGENTS.md [XR-11]: L2 层禁止直接 exec，Hook 执行应通过
-							// pkg/action/sandbox.Run 调度；此处暂记录警告，待 sandbox 接口就绪后接入。
-							slog.Warn("marketplace: uninstall hook skipped (requires sandbox integration)",
-								"ext", inst.id, "hook", hookPath)
+							if m.hookRunner != nil {
+								// 通过注入的沙笼接口执行：具体实现由 ContainerSandbox.RunScript 提供
+								if err := m.hookRunner.RunScript(ctx, hookPath, inst.installPath); err != nil {
+									slog.Warn("marketplace: uninstall hook failed", "ext", inst.id, "err", err)
+								}
+							} else {
+								// hookRunner 未注入：skip，记录日志提示调用方配置 ContainerSandbox
+								slog.Warn("marketplace: uninstall hook skipped (no HookRunner injected, call WithHookRunner to enable)",
+									"ext", inst.id, "hook", hookPath)
+							}
 						}
 					}
 				}
