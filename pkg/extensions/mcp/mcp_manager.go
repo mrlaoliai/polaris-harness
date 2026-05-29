@@ -63,7 +63,7 @@ func (m *MCPManager) Add(ctx context.Context, serverID, name string, cfg MCPClie
 		if old.client != nil {
 			old.client.Close()
 		}
-		m.unregisterTools(serverID, old.tools)
+		m.unregisterTools(old.name, old.tools)
 	}
 
 	storeFailed := func(err error) error {
@@ -88,7 +88,7 @@ func (m *MCPManager) Add(ctx context.Context, serverID, name string, cfg MCPClie
 		return storeFailed(wrapped)
 	}
 
-	m.registerTools(serverID, client, tools)
+	m.registerTools(name, client, tools)
 	m.entries[serverID] = &mcpEntry{
 		client: client,
 		name:   name,
@@ -107,7 +107,7 @@ func (m *MCPManager) Remove(serverID string) {
 		if e.client != nil {
 			e.client.Close()
 		}
-		m.unregisterTools(serverID, e.tools)
+		m.unregisterTools(e.name, e.tools)
 		delete(m.entries, serverID)
 	}
 }
@@ -170,12 +170,12 @@ func (m *MCPManager) ListToolSchemas() []protocol.ToolSchema {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var result []protocol.ToolSchema
-	for serverID, e := range m.entries {
+	for _, e := range m.entries {
 		for _, t := range e.tools {
 			var schema any
 			json.Unmarshal(t.InputSchema, &schema) //nolint:errcheck
 			result = append(result, protocol.ToolSchema{
-				Name:        mcpToolName(serverID, t.Name),
+				Name:        mcpToolName(e.name, t.Name),
 				Description: t.Description,
 				Parameters:  schema,
 			})
@@ -237,14 +237,14 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string)
 	}
 }
 
-func (m *MCPManager) registerTools(serverID string, client *MCPClient, tools []MCPTool) {
+func (m *MCPManager) registerTools(serverName string, client *MCPClient, tools []MCPTool) {
 	// 确定此 server 的污点等级：白名单 → TaintMedium；其余 → TaintHigh
 	taint := protocol.TaintHigh
 	if client.cfg.Trusted {
 		taint = protocol.TaintMedium
 	}
 	for _, t := range tools {
-		toolName := mcpToolName(serverID, t.Name)
+		toolName := mcpToolName(serverName, t.Name)
 		mcpName := t.Name
 		fn := makeMCPToolFn(client, mcpName)
 		// RegisterWithTaint 将污点等级附加到工具注册，供 InProcessSandbox.Run 写入 ToolResult
@@ -269,9 +269,9 @@ func makeMCPToolFn(client *MCPClient, mcpName string) action.InProcessFn {
 	}
 }
 
-func (m *MCPManager) unregisterTools(serverID string, tools []MCPTool) {
+func (m *MCPManager) unregisterTools(serverName string, tools []MCPTool) {
 	for _, t := range tools {
-		m.sandbox.Unregister(mcpToolName(serverID, t.Name))
+		m.sandbox.Unregister(mcpToolName(serverName, t.Name))
 	}
 }
 
