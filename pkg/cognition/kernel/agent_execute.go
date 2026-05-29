@@ -57,7 +57,6 @@ func (a *Agent) executeEffect(ctx context.Context, effect protocol.Effect) error
 			}
 		}
 
-
 		// S_PLAN 阶段
 		if a.sm.Current() == protocol.AgentStatePlan {
 			if a.sCtx.SurpriseIndex > 0 && a.sCtx.SurpriseIndex < 0.3 {
@@ -221,7 +220,6 @@ func (a *Agent) executeEffect(ctx context.Context, effect protocol.Effect) error
 			return nil
 		}
 
-
 		// S_EXECUTE 阶段拦截：调用 Agent 层 DAG 执行（可访问 toolRegistry 与完整 sCtx）。
 		// 同理，由 runExecuteDAG 自行推进 FSM（ExecuteDone / ExecuteFail）。
 		if a.sm.Current() == protocol.AgentStateExecute {
@@ -294,7 +292,6 @@ func (a *Agent) runValidateDAG(ctx context.Context) error {
 		// 返回非致命 error 提示调用方失败原因，但不能让 Run 循环崩溃
 		return perrors.Wrap(perrors.CodeInternal, "s_validate failed", err)
 	}
-
 
 	// L3: LLM 看门狗校验 (上提为标准 FSM Effect)
 	// 仅对 Tier 1+ 生效

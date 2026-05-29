@@ -53,7 +53,7 @@ func TestBuildContext_LastZoneIsOutput(t *testing.T) {
 }
 
 func TestAssembleContext_Order(t *testing.T) {
-	result := AssembleContext("IMMUTABLE", "SKILL", "DATA")
+	result := AssembleContext("IMMUTABLE", "SKILL", "DATA", protocol.TaintNone)
 	expected := "IMMUTABLESKILLDATA"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
@@ -61,7 +61,7 @@ func TestAssembleContext_Order(t *testing.T) {
 }
 
 func TestAssembleContext_EmptyParts(t *testing.T) {
-	result := AssembleContext("", "", "")
+	result := AssembleContext("", "", "", protocol.TaintNone)
 	if result != "" {
 		t.Errorf("expected empty string, got %q", result)
 	}

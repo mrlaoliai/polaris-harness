@@ -1,6 +1,8 @@
 package cognition
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -102,11 +104,21 @@ type ContextChunk struct {
 // AssembleContext 组装 Agent LLM 调用的完整上下文。
 // 顺序: ZoneImmutable → ZoneMutableSkill → ZoneTaintedData
 // 安全约束: ZoneImmutable 内容 TaintLevel > TaintLow → panic 拒绝
-func AssembleContext(immutable, mutableSkill, taintedData string) string {
+func AssembleContext(immutable, mutableSkill, taintedData string, taintLevel protocol.TaintLevel) string {
 	var b strings.Builder
 	b.WriteString(immutable)
 	b.WriteString(mutableSkill)
-	b.WriteString(taintedData)
+
+	if taintLevel >= protocol.TaintMedium {
+		hash := sha256.Sum256([]byte(taintedData))
+		hexStr := hex.EncodeToString(hash[:])[:8]
+		b.WriteString(fmt.Sprintf("\n=== UNTRUSTED_DATA_%s ===\n", hexStr))
+		b.WriteString(taintedData)
+		b.WriteString("\n=== END_UNTRUSTED_DATA ===\n")
+	} else {
+		b.WriteString(taintedData)
+	}
+
 	return b.String()
 }
 
