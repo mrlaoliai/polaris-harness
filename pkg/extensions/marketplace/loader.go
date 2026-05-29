@@ -133,25 +133,33 @@ func loadMCPConfig(path string) (*protocol.MCPConfig, error) {
 	// 注意：Claude Code 官方 .mcp.json 格式是 {"mcpServers":{...}}，不走此分支。
 	// 扁平解析仅在标准解析得到空集合时触发，避免误解析含其他顶层字段的 JSON。
 	if len(c.MCPServers) == 0 {
-		var flat map[string]protocol.MCPServerDef
-		if json.Unmarshal(data, &flat) == nil {
-			// 过滤掉 JSON 根对象中非 MCPServerDef 的字段（如 "mcpServers" 本身为空时）
-			filtered := make(map[string]protocol.MCPServerDef, len(flat))
-			for k, v := range flat {
-				if k == "mcpServers" {
-					continue // 标准 key，不视为服务器名
-				}
-				// 有效的服务器定义：必须有 command（stdio）或 url（HTTP/SSE）
-				if v.Command != "" || v.URL != "" {
-					filtered[k] = v
-				}
-			}
-			if len(filtered) > 0 {
-				c.MCPServers = filtered
-			}
+		if flat := parseFlatMCPConfig(data); flat != nil {
+			c.MCPServers = flat
 		}
 	}
 	return &c, nil
+}
+
+func parseFlatMCPConfig(data []byte) map[string]protocol.MCPServerDef {
+	var flat map[string]protocol.MCPServerDef
+	if json.Unmarshal(data, &flat) != nil {
+		return nil
+	}
+	// 过滤掉 JSON 根对象中非 MCPServerDef 的字段（如 "mcpServers" 本身为空时）
+	filtered := make(map[string]protocol.MCPServerDef, len(flat))
+	for k, v := range flat {
+		if k == "mcpServers" {
+			continue // 标准 key，不视为服务器名
+		}
+		// 有效的服务器定义：必须有 command（stdio）或 url（HTTP/SSE）
+		if v.Command != "" || v.URL != "" {
+			filtered[k] = v
+		}
+	}
+	if len(filtered) > 0 {
+		return filtered
+	}
+	return nil
 }
 
 // parseManifest reads and parses a plugin.json file.

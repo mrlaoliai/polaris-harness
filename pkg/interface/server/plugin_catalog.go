@@ -552,11 +552,14 @@ func (s *Server) downloadAndInstallExtension(ctx context.Context, extID, catalog
 
 		// 自动发现 bundle 内未显式声明的 SKILL.md（处理 .claude-plugin 等第三方格式）
 		_ = filepath.Walk(destDir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() || info.Name() != "SKILL.md" {
+			if err != nil {
+				return nil //nolint:nilerr // ignore access errors during auto-discovery
+			}
+			if info.IsDir() || info.Name() != "SKILL.md" {
 				return nil
 			}
-			rel, relErr := filepath.Rel(destDir, path)
-			if relErr != nil || declaredSkillPaths[rel] {
+			rel, _ := filepath.Rel(destDir, path)
+			if declaredSkillPaths[rel] {
 				return nil
 			}
 			s.installBundleSkill(ctx, extID, destDir, rel, "", entry.TrustTier, now)

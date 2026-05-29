@@ -360,36 +360,7 @@ func (c *MCPClient) httpPostReceive(ctx context.Context, url string, body []byte
 	defer resp.Body.Close()
 
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		scanner := bufio.NewScanner(resp.Body)
-		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
-		var dataLines []string
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
-				// 事件边界：合并多行 data（SSE 规范：多行 data 以 \n 连接）
-				if len(dataLines) > 0 {
-					data := strings.Join(dataLines, "\n")
-					dataLines = dataLines[:0]
-					var r mcpRPCResponse
-					if json.Unmarshal([]byte(data), &r) != nil {
-						continue
-					}
-					// 有 ID 的是 RPC 响应；无 ID 的是通知，异步 dispatch
-					if r.ID != nil {
-						return &r, nil
-					}
-					c.dispatch(&r)
-				}
-				continue
-			}
-			if v, ok := strings.CutPrefix(line, "data: "); ok {
-				dataLines = append(dataLines, v)
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			slog.Debug("mcp: streamable http SSE scan error", "server", c.cfg.ServerName, "err", err)
-		}
-		return nil, perrors.New(perrors.CodeInternal, "mcp: streamable http: no rpc response in SSE stream")
+		return c.readSSESingleResponse(resp.Body)
 	}
 
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
@@ -401,6 +372,40 @@ func (c *MCPClient) httpPostReceive(ctx context.Context, url string, body []byte
 		return nil, perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("mcp: response parse: %v", err), err)
 	}
 	return &r, nil
+}
+
+func (c *MCPClient) readSSESingleResponse(r io.Reader) (*mcpRPCResponse, error) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	var dataLines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			if len(dataLines) == 0 {
+				continue
+			}
+			// 事件边界：合并多行 data（SSE 规范：多行 data 以 \n 连接）
+			data := strings.Join(dataLines, "\n")
+			dataLines = dataLines[:0]
+			var resp mcpRPCResponse
+			if json.Unmarshal([]byte(data), &resp) != nil {
+				continue
+			}
+			// 有 ID 的是 RPC 响应；无 ID 的是通知，异步 dispatch
+			if resp.ID != nil {
+				return &resp, nil
+			}
+			c.dispatch(&resp)
+			continue
+		}
+		if v, ok := strings.CutPrefix(line, "data: "); ok {
+			dataLines = append(dataLines, v)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		slog.Debug("mcp: streamable http SSE scan error", "server", c.cfg.ServerName, "err", err)
+	}
+	return nil, perrors.New(perrors.CodeInternal, "mcp: streamable http: no rpc response in SSE stream")
 }
 
 func (c *MCPClient) dispatch(resp *mcpRPCResponse) {
@@ -432,7 +437,7 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 		"protocolVersion": mcpProtocolVersion,
 		"capabilities": map[string]any{
 			// 声明客户端支持的能力，服务器据此开启对应功能
-			"roots":   map[string]any{"listChanged": false},
+			"roots":    map[string]any{"listChanged": false},
 			"sampling": map[string]any{},
 		},
 		"clientInfo": map[string]any{"name": "polaris", "version": "1.0"},
