@@ -147,3 +147,103 @@ func TestMCPTransport_Values(t *testing.T) {
 		t.Errorf("expected sse, got %q", MCPSSE)
 	}
 }
+
+// ── parseMCPContent ───────────────────────────────────────────────────────────
+
+func TestParseMCPContent_TextOnly(t *testing.T) {
+	blocks := []mcpContentBlock{
+		{Type: "text", Text: "hello"},
+		{Type: "text", Text: " world"},
+	}
+	text, imgs := parseMCPContent(blocks)
+	if text != "hello world" {
+		t.Errorf("expected 'hello world', got %q", text)
+	}
+	if len(imgs) != 0 {
+		t.Errorf("expected 0 images, got %d", len(imgs))
+	}
+}
+
+func TestParseMCPContent_ImageOnly(t *testing.T) {
+	// 1×1 白色 JPEG（最小合法 JPEG，base64 标准编码）
+	// 使用简单的 1 字节数据测试解码流程
+	import64 := "AAEC" // 3 字节 base64 → [0,1,2]
+	blocks := []mcpContentBlock{
+		{Type: "image", Data: import64, MIMEType: "image/jpeg"},
+	}
+	text, imgs := parseMCPContent(blocks)
+	if text != "" {
+		t.Errorf("expected empty text, got %q", text)
+	}
+	if len(imgs) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(imgs))
+	}
+	if imgs[0].MediaType != "image/jpeg" {
+		t.Errorf("expected image/jpeg, got %q", imgs[0].MediaType)
+	}
+	if len(imgs[0].Data) != 3 {
+		t.Errorf("expected 3 bytes decoded, got %d", len(imgs[0].Data))
+	}
+}
+
+func TestParseMCPContent_Mixed(t *testing.T) {
+	blocks := []mcpContentBlock{
+		{Type: "text", Text: "result:"},
+		{Type: "image", Data: "AAEC", MIMEType: "image/png"},
+		{Type: "text", Text: " done"},
+	}
+	text, imgs := parseMCPContent(blocks)
+	if text != "result: done" {
+		t.Errorf("expected 'result: done', got %q", text)
+	}
+	if len(imgs) != 1 {
+		t.Errorf("expected 1 image, got %d", len(imgs))
+	}
+}
+
+func TestParseMCPContent_ImageMissingData_Skipped(t *testing.T) {
+	blocks := []mcpContentBlock{
+		{Type: "image", Data: "", MIMEType: "image/jpeg"}, // 空 data
+		{Type: "image", Data: "AAEC", MIMEType: ""},       // 空 mimeType
+	}
+	_, imgs := parseMCPContent(blocks)
+	if len(imgs) != 0 {
+		t.Errorf("blocks with missing data/mimeType should be skipped, got %d images", len(imgs))
+	}
+}
+
+func TestParseMCPContent_UnknownTypeSkipped(t *testing.T) {
+	blocks := []mcpContentBlock{
+		{Type: "embedded_resource", Text: "whatever"},
+		{Type: "text", Text: "ok"},
+	}
+	text, imgs := parseMCPContent(blocks)
+	if text != "ok" {
+		t.Errorf("expected 'ok', got %q", text)
+	}
+	if len(imgs) != 0 {
+		t.Errorf("expected 0 images, got %d", len(imgs))
+	}
+}
+
+func TestDecodeBase64_Standard(t *testing.T) {
+	// "hello" → aGVsbG8=（标准编码，含 padding）
+	raw, err := decodeBase64("aGVsbG8=")
+	if err != nil {
+		t.Fatalf("standard base64 decode failed: %v", err)
+	}
+	if string(raw) != "hello" {
+		t.Errorf("expected 'hello', got %q", string(raw))
+	}
+}
+
+func TestDecodeBase64_URLSafe(t *testing.T) {
+	// "hello world" → aGVsbG8gd29ybGQ（URL-safe, no padding）
+	raw, err := decodeBase64("aGVsbG8gd29ybGQ")
+	if err != nil {
+		t.Fatalf("URL-safe base64 decode failed: %v", err)
+	}
+	if string(raw) != "hello world" {
+		t.Errorf("expected 'hello world', got %q", string(raw))
+	}
+}

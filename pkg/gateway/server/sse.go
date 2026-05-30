@@ -422,6 +422,18 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 				"content": resultText,
 			})
 
+			// MCP 工具可能返回图片（type="image" content block）。
+			// 将 ImageParts 追加到同一 toolResultParts 切片：
+			//   - Anthropic adapter：将 ImagePart 与 tool_result block 一起放入 content 数组
+			//   - OpenAI adapter：parseUserParts 提取 ImagePart 为独立 role="user" 视觉消息
+			//   - normalizeInferRequest() 自动对图片做降采样/格式转换
+			if result != nil && len(result.ImageParts) > 0 {
+				slog.Info("server: tool returned images", "name", toolName, "count", len(result.ImageParts))
+				for _, img := range result.ImageParts {
+					toolResultParts = append(toolResultParts, img)
+				}
+			}
+
 			var inputObj any
 			if len(inputRaw) > 0 {
 				json.Unmarshal(inputRaw, &inputObj) //nolint:errcheck

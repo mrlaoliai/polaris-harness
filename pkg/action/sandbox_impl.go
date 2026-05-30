@@ -42,18 +42,27 @@ type SandboxSpec struct {
 type InProcessSandbox struct {
 	mu       sync.RWMutex
 	registry map[string]InProcessFn
+	// richRegistry 存储可返回 ToolResult（含 ImageParts）的富工具函数（MCP 等外部工具）。
+	// Run() 优先查此表，未命中才走 registry，两表互斥（RegisterRich 不写 registry）。
+	richRegistry map[string]InProcessRichFn
 	// taintMap 存储每个工具的输出污点等级。
-	// 内置工具保持 TaintNone（零值），MCP/外部工具通过 RegisterWithTaint 写入。
+	// 内置工具保持 TaintNone（零值），MCP/外部工具通过 RegisterWithTaint/RegisterRich 写入。
 	taintMap map[string]protocol.TaintLevel
 }
 
-// InProcessFn 内置工具执行函数签名。
+// InProcessFn 内置工具执行函数签名（仅返回字节）。
 type InProcessFn func(ctx context.Context, input []byte) ([]byte, error)
+
+// InProcessRichFn 富工具执行函数签名，返回完整 ToolResult（含 ImageParts）。
+// 适用于 MCP 工具等可能返回图片/多媒体内容的外部工具。
+// 调用方（InProcessSandbox.Run）会将 ToolResult.TaintLevel 设为注册时指定的 taint（若未设置）。
+type InProcessRichFn func(ctx context.Context, input []byte) (*protocol.ToolResult, error)
 
 func NewInProcessSandbox() *InProcessSandbox {
 	return &InProcessSandbox{
-		registry: make(map[string]InProcessFn),
-		taintMap: make(map[string]protocol.TaintLevel),
+		registry:     make(map[string]InProcessFn),
+		richRegistry: make(map[string]InProcessRichFn),
+		taintMap:     make(map[string]protocol.TaintLevel),
 	}
 }
 
@@ -74,22 +83,31 @@ func (s *InProcessSandbox) RegisterWithTaint(toolName string, fn InProcessFn, ta
 	s.taintMap[toolName] = taint
 }
 
-// Unregister 取消注册工具（MCP Server 断开时调用）。
+// RegisterRich 注册富工具函数（返回完整 ToolResult，含 ImageParts）。
+// 供 MCP/外部工具使用；taint 在 Run() 中回填（若 ToolResult.TaintLevel==0）。
+// 不同于 Register/RegisterWithTaint：不写 registry，两路互斥。
+func (s *InProcessSandbox) RegisterRich(toolName string, fn InProcessRichFn, taint protocol.TaintLevel) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.richRegistry[toolName] = fn
+	s.taintMap[toolName] = taint
+}
+
+// Unregister 取消注册工具（MCP Server 断开时调用，同时清理两个注册表）。
 func (s *InProcessSandbox) Unregister(toolName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.registry, toolName)
+	delete(s.richRegistry, toolName)
 	delete(s.taintMap, toolName)
 }
 
 func (s *InProcessSandbox) Run(ctx context.Context, spec SandboxSpec) (*protocol.ToolResult, error) {
 	s.mu.RLock()
 	fn, ok := s.registry[spec.ToolName]
+	richFn := s.richRegistry[spec.ToolName]
 	taint := s.taintMap[spec.ToolName] // TaintNone(0) for builtins
 	s.mu.RUnlock()
-	if !ok {
-		return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("inprocess_sandbox: unknown tool %q", spec.ToolName))
-	}
 
 	quotaMs := spec.CPUQuotaMs
 	if quotaMs == 0 {
@@ -99,6 +117,34 @@ func (s *InProcessSandbox) Run(ctx context.Context, spec SandboxSpec) (*protocol
 	defer cancel()
 
 	start := time.Now()
+
+	// 优先走富工具路径（MCP 等可返回 ImageParts 的工具）
+	if richFn != nil {
+		res, err := richFn(execCtx, spec.Input)
+		latency := time.Since(start).Milliseconds()
+		if err != nil {
+			return &protocol.ToolResult{
+				Success:    false,
+				Error:      err.Error(),
+				LatencyMs:  latency,
+				TaintLevel: taint,
+			}, nil
+		}
+		if res == nil {
+			res = &protocol.ToolResult{}
+		}
+		res.LatencyMs = latency
+		// 回填注册时的污点等级（富工具函数通常不感知 taint，由注册层统一设置）
+		if res.TaintLevel == 0 {
+			res.TaintLevel = taint
+		}
+		return res, nil
+	}
+
+	if !ok {
+		return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("inprocess_sandbox: unknown tool %q", spec.ToolName))
+	}
+
 	out, err := fn(execCtx, spec.Input)
 	if err != nil {
 		return &protocol.ToolResult{

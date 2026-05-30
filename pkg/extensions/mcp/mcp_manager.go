@@ -148,7 +148,10 @@ func (m *MCPManager) CallTool(ctx context.Context, serverID, toolName string, ar
 		}
 	}
 
-	text, _, err := e.client.CallToolTainted(ctx, toolName, args)
+	text, _, _, err := e.client.CallToolTainted(ctx, toolName, args)
+	if err != nil {
+		return "", perrors.Wrap(perrors.CodeInternal, "mcp_manager: call tool", err)
+	}
 	return text, err
 }
 
@@ -265,27 +268,31 @@ func (m *MCPManager) registerTools(serverName string, client *MCPClient, tools [
 			continue
 		}
 		fn := makeMCPToolFn(client, t.Name)
-		// RegisterWithTaint 将污点等级附加到工具注册，供 InProcessSandbox.Run 写入 ToolResult
-		m.sandbox.RegisterWithTaint(llmName, fn, taint)
+		// RegisterRich 将 MCP 工具注册到富工具路径（支持 ImageParts 回传）
+		m.sandbox.RegisterRich(llmName, fn, taint)
 		valid = append(valid, t)
 	}
 	return valid
 }
 
-// makeMCPToolFn 创建调用 MCP 工具的执行函数。
-// 使用 CallToolTainted 进行污点保护反序列化（M07 §1 安全要求）。
-func makeMCPToolFn(client *MCPClient, mcpName string) action.InProcessFn {
-	return func(ctx context.Context, input []byte) ([]byte, error) {
+// makeMCPToolFn 创建调用 MCP 工具的富执行函数。
+// 返回完整 ToolResult（含 ImageParts），使用 CallToolTainted 进行污点保护反序列化（M07 §1 安全要求）。
+func makeMCPToolFn(client *MCPClient, mcpName string) action.InProcessRichFn {
+	return func(ctx context.Context, input []byte) (*protocol.ToolResult, error) {
 		var args map[string]any
 		if len(input) > 0 {
 			json.Unmarshal(input, &args) //nolint:errcheck
 		}
-		// CallToolTainted 内部执行 TaintPreservingDecoder，taint 通过 RegisterWithTaint 传递
-		text, _, err := client.CallToolTainted(ctx, mcpName, args)
+		// CallToolTainted 内部执行 TaintPreservingDecoder，taint 通过 RegisterRich 传递
+		text, imgs, _, err := client.CallToolTainted(ctx, mcpName, args)
 		if err != nil {
 			return nil, err
 		}
-		return []byte(text), nil
+		return &protocol.ToolResult{
+			Success:    true,
+			Output:     []byte(text),
+			ImageParts: imgs, // MCP type="image" content block 解析结果
+		}, nil
 	}
 }
 
