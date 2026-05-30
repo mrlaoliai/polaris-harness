@@ -24,32 +24,7 @@ func RegisterExtensionTools(
 		meta protocol.Tool
 		fn   action.InProcessFn
 	}{
-		{
-			meta: protocol.Tool{
-				Name:        "browser_use",
-				Description: "提供无头浏览器 (Chrome) 控制能力（导航/点击/输入/截图）。",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteNetwork,
-				SideEffects: []protocol.SideEffect{protocol.SideNetworkCall},
-				RiskLevel:   protocol.RiskHigh,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"action": map[string]any{
-							"type": "string",
-							"enum": []string{"navigate", "click", "type", "screenshot"},
-						},
-						"url":      map[string]any{"type": "string"},
-						"selector": map[string]any{"type": "string"},
-						"text":     map[string]any{"type": "string"},
-					},
-					"required": []string{"action"},
-				},
-			},
-			fn: NewBrowserUseTool().Execute,
-		},
+
 		{
 			meta: protocol.Tool{
 				Name:        "search_extension",

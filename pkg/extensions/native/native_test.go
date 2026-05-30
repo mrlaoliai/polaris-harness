@@ -44,12 +44,3 @@ func TestMakeExtensionInstallFn_InvalidJSON(t *testing.T) {
 	}
 }
 
-// ── BrowserUseTool arg validation (no browser needed) ────────────────────────
-
-func TestBrowserUseTool_InvalidJSON(t *testing.T) {
-	b := NewBrowserUseTool()
-	_, err := b.Execute(context.Background(), []byte("not-json"))
-	if err == nil {
-		t.Fatal("invalid JSON should return error")
-	}
-}
