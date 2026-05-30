@@ -47,11 +47,11 @@ type mcpRegistryServer struct {
 }
 
 type mcpServerDef struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Version     string           `json:"version"`
-	Repository  mcpRepository    `json:"repository"`
-	Remotes     []mcpRemoteDef   `json:"remotes"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Version     string         `json:"version"`
+	Repository  mcpRepository  `json:"repository"`
+	Remotes     []mcpRemoteDef `json:"remotes"`
 }
 
 type mcpRepository struct {
