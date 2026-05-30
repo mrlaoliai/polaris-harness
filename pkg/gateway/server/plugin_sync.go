@@ -246,6 +246,7 @@ func isPluginBundleRoot(dir string) (string, string) {
 	}{
 		{"plugin.json", "plugin.json"},
 		{".claude-plugin/plugin.json", "plugin.json"},
+		{".codex-plugin/plugin.json", "plugin.json"},
 		{"ai-plugin.json", "ai-plugin.json"},
 		{"plugin.toml", "plugin.toml"},
 		{".claude-plugin/plugin.toml", "plugin.toml"},
