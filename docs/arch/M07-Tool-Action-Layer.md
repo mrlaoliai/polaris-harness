@@ -2,7 +2,7 @@
 
 > MCP 双向化 | 三级沙箱 | 能力分级 read_only→privileged | Go+Wasm(wazero) | [HE-Rule-2] [HE-Rule-5]
 > CANONICAL SOURCE: 沙箱架构、wazero 实现、StreamingActionBus
-> **§跳读**: 0-bis:6 职责 / 0-ter:18 不变量速查 / 1:29 MCP双向 / 2:75 A2A / 3:96 注册 / 4:110 三级沙箱(CANONICAL) / 5:250 PolicyGate / 6:303 Capability / 7:320 动作扩展 / 8:436 Usage演化 / 12:494 (SOFT)降级 / 13:512 跨模块契约 / 14:532 Plugin / 15:570 Hook
+> **§跳读**: 0-bis:6 职责 / 0-ter:18 不变量速查 / 1:29 MCP双向 / 2:83 A2A / 3:112 注册 / 4:127 三级沙箱(CANONICAL) / 5:263 PolicyGate / 6:318 Capability / 7:335 动作扩展 / 8:465 Usage演化 / 12:506 (SOFT)降级 / 13:524 跨模块契约 / 14:544 Plugin / 15:586 Hook
 ## 0-bis. 职责边界
 
 - M7 **是**: 工具注册中心（ToolRegistry）+ 五大工具类别管理 | M7 **不是**: 工具的语义定义者（各模块注册自己的工具）
