@@ -85,7 +85,7 @@ func (c *MCPMarketplaceClient) Install(ctx context.Context, pkg protocol.Registr
 
 	// 动态安装逻辑：根据 URL 判断是否需要下载二进制
 	actualCommand := pkg.Command
-	if pkg.URL != "" && pkg.URL != "uvx-mode" {
+	if pkg.URL != "" && pkg.URL != "npx-mode" {
 		// 这是需要下载二进制文件的模式
 		binaryPath := filepath.Join(pluginDir, pkg.Command)
 		if runtime.GOOS == "windows" {

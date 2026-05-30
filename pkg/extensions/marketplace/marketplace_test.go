@@ -151,7 +151,7 @@ func TestLoadPlugin_WithMCPConfig(t *testing.T) {
 	// 写入 mcp.json
 	mcpConfig := protocol.MCPConfig{
 		MCPServers: map[string]protocol.MCPServerDef{
-			"my-server": {Command: "uvx", Args: []string{"my-mcp"}},
+			"my-server": {Command: "npx", Args: []string{"my-mcp"}},
 		},
 	}
 	mcpData, _ := json.Marshal(mcpConfig)

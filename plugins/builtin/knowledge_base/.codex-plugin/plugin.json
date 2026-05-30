@@ -1,0 +1,31 @@
+{
+  "name": "polarisagi-knowledge-base",
+  "version": "1.0.0",
+  "description": "Read local files and list directory contents for Retrieval-Augmented Generation (RAG) via MCP.",
+  "author": {
+    "name": "mrlaoliai",
+    "email": "polarisagi.online@gmail.com",
+    "url": "https://polarisagi.online/"
+  },
+  "homepage": "https://polarisagi.online/",
+  "repository": "https://github.com/polarisagi/polarisagi-plugins-official",
+  "license": "MIT",
+  "keywords": ["knowledge-base", "rag", "file-system", "mcp"],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Knowledge Base",
+    "shortDescription": "Read local files and list directories for RAG.",
+    "longDescription": "Allows the AI agent to scan the local file system and read document content for Retrieval-Augmented Generation. Built in pure TypeScript with zero external dependencies.\n\nSecurity: Set POLARISAGI_KB_ALLOWED_DIR env var to restrict accessible paths.\nRequires: Node.js v18+. Installed automatically via npx — no binary download needed.",
+    "developerName": "mrlaoliai",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "websiteURL": "https://polarisagi.online/",
+    "privacyPolicyURL": "https://github.com/polarisagi/polarisagi-plugins-official",
+    "termsOfServiceURL": "https://github.com/polarisagi/polarisagi-plugins-official/blob/main/LICENSE",
+    "defaultPrompt": [
+      "List all files in my documents folder.",
+      "Read the content of README.md in the project root.",
+      "Find all markdown files in the current directory."
+    ]
+  }
+}

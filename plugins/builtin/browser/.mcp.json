@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "browser": {
-      "command": "uvx",
-      "args": ["browser-use-mcp"]
+    "polarisagi-browser-use": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest", "--stdio"]
     }
   }
 }
