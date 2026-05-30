@@ -15,7 +15,7 @@
   "pkg/action/hook/hook_linux.go": "649900b3911df329a8c80e9c9a1de9be984065abf65c3abb1309365df56b1f28",
   "pkg/action/hook/hook_other.go": "fbc207481729f2acf2d0724c7f12f2dd4435b58592c173825bb3ea6cbfedf7c0",
   "pkg/action/hook/hook_test.go": "49301fbc00656f9cacd7325ec355a76a11291bfecad40f4bd6fafb366391af43",
-  "pkg/action/hook/registry.go": "f892b68e9ebfe50325207e8a280b58ac0e564c4fd42b2a1a729678987f4d9c5e",
+  "pkg/action/hook/registry.go": "8f5b3f419b5670bc51f6179fb95aeef55e35f01f3925ff5e19573041ac9a2df3",
   "pkg/action/hook/runner.go": "aa3e17f6b85d53a46dffa8171c13806607b2279fa6a0e7bc70cf8c8a88425597",
   "pkg/action/lam/lam.go": "e64682dac5cc2b190161a7d31ad6bb23dd83fd84ba4922be070b317e3e4e85d2",
   "pkg/action/lam/lam_test.go": "c4899e3f375ac60ea86d6247cf2414ac776cfda39214f9c9c85e6efaee2a1b0e",
