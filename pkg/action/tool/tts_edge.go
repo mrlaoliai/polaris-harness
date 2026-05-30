@@ -8,44 +8,9 @@ import (
 	"os/exec"
 
 	perrors "github.com/polarisagi/polarisagi-harness/internal/errors"
-	"github.com/polarisagi/polarisagi-harness/internal/protocol"
 )
 
-// NewEdgeTTS 返回 TTS 工具的 Schema。
-func NewEdgeTTS() protocol.Tool {
-	return protocol.Tool{
-		Name:        "tts_edge",
-		Description: "Convert text to speech using Edge TTS and return a base64-encoded audio data URI (audio/mp3).",
-		Version:     "1.0.0",
-		Capability:  protocol.CapWriteNetwork,
-		SideEffects: []protocol.SideEffect{protocol.SideNetworkCall, protocol.SideProcessSpawn, protocol.SideFileWrite},
-		RiskLevel:   protocol.RiskLow,
-		SandboxTier: protocol.SandboxInProcess,
-		Source:      protocol.ToolBuiltin,
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"text": map[string]any{
-					"type":        "string",
-					"description": "The text to synthesize into speech.",
-				},
-				"voice": map[string]any{
-					"type":        "string",
-					"default":     "en-US-AriaNeural",
-					"description": "Edge TTS voice name (e.g. 'en-US-AriaNeural', 'zh-CN-XiaoxiaoNeural'). Defaults to en-US-AriaNeural.",
-				},
-				"rate": map[string]any{
-					"type":        "string",
-					"default":     "+0%",
-					"description": "Speech rate adjustment relative to default (e.g. '+20%' for faster, '-10%' for slower).",
-				},
-			},
-			"required": []string{"text"},
-		},
-	}
-}
-
-// ExecuteEdgeTTS 执行文本转语音。
+// ExecuteEdgeTTS 执行文本转语音。元数据由 builtin/tts_edge/tool.yaml + schema.json 定义。
 func ExecuteEdgeTTS(ctx context.Context, args []byte) ([]byte, error) {
 	var req struct {
 		Text  string `json:"text"`

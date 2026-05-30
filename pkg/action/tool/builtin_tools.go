@@ -22,8 +22,8 @@ import (
 )
 
 // RegisterBuiltinTools 注册所有内置工具到 sandbox 与 registry，并绑定 InProcessSandbox 为执行器。
-// 内置工具均在 InProcessSandbox 中执行（CapReadOnly 或 CapWriteLocal），无需 Wasm。
-// 安全约束由 PolicyGate 前置校验 + 路径白名单双重保证。
+// 工具元数据（名称/描述/Schema）从 builtin/<name>/tool.yaml + schema.json 文件加载，
+// 实现函数在本文件中定义。安全约束由 PolicyGate 前置校验 + 路径白名单双重保证。
 // 调用方式: 系统启动时调用一次（非线程安全）。
 func RegisterBuiltinTools(
 	sandbox *action.InProcessSandbox,
@@ -31,213 +31,34 @@ func RegisterBuiltinTools(
 	allowedPaths []string, // 文件系统路径白名单（read_file/list_dir/write_file 均受限）
 	dialer protocol.SafeDialer,
 ) error {
-	tools := []struct {
-		meta protocol.Tool
+	// 元数据与实现绑定表：name → InProcessFn
+	// 元数据从 builtin/<name>/tool.yaml + schema.json 加载，不再硬编码在此处。
+	defs := []struct {
+		name string
 		fn   action.InProcessFn
 	}{
-		{
-			meta: protocol.Tool{
-				Name:        "read_file",
-				Description: "Read the contents of a file at the specified path. Restricted to allowed directories.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapReadOnly,
-				SideEffects: []protocol.SideEffect{protocol.SideNone},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "Absolute path of the file to read. Must be within the allowed directories.",
-						},
-					},
-					"required": []string{"path"},
-				},
-			},
-			fn: makeReadFileFn(allowedPaths),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "list_dir",
-				Description: "List the entries of a directory (name, type, size). Restricted to allowed directories.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapReadOnly,
-				SideEffects: []protocol.SideEffect{protocol.SideNone},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "Absolute path of the directory to list. Must be within the allowed directories.",
-						},
-					},
-					"required": []string{"path"},
-				},
-			},
-			fn: makeListDirFn(allowedPaths),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "write_file",
-				Description: "Write or append content to a file. Creates the file if it does not exist. Restricted to allowed directories.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteLocal,
-				SideEffects: []protocol.SideEffect{protocol.SideFileWrite},
-				RiskLevel:   protocol.RiskMedium,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "Absolute path of the file to write. Must be within the allowed directories.",
-						},
-						"content": map[string]any{
-							"type":        "string",
-							"description": "Text content to write into the file.",
-						},
-						"append": map[string]any{
-							"type":        "boolean",
-							"default":     false,
-							"description": "If true, append to the file instead of overwriting it.",
-						},
-					},
-					"required": []string{"path", "content"},
-				},
-			},
-			fn: makeWriteFileFn(allowedPaths),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "fetch_url",
-				Description: "Fetch the content of a public URL and return the response body. SSRF-guarded: private/internal network addresses are blocked.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteNetwork,
-				SideEffects: []protocol.SideEffect{protocol.SideNetworkCall},
-				RiskLevel:   protocol.RiskMedium,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"url": map[string]any{
-							"type":        "string",
-							"format":      "uri",
-							"description": "The public URL to fetch. Private/internal addresses (localhost, 192.168.x, 10.x, etc.) are blocked.",
-						},
-					},
-					"required": []string{"url"},
-				},
-			},
-			fn: makeFetchURLFn(dialer),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "bash",
-				Description: "Execute a bash command in a sandboxed environment. Restricted to allowed working directories. Use for shell operations, scripting, and CLI tools.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapWriteLocal,
-				SideEffects: []protocol.SideEffect{protocol.SideFileWrite},
-				RiskLevel:   protocol.RiskHigh,
-				SandboxTier: protocol.SandboxContainer,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"command": map[string]any{
-							"type":        "string",
-							"description": "Bash command string to execute (passed to bash -c). Runs in the first allowed directory as working directory.",
-						},
-					},
-					"required": []string{"command"},
-				},
-			},
-			fn: makeBashFn(allowedPaths),
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "get_datetime",
-				Description: "Return the current date and time in UTC and local timezone.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapReadOnly,
-				SideEffects: []protocol.SideEffect{protocol.SideNone},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
-			},
-			fn: getDatetimeFn,
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "csv_parse",
-				Description: "Parse CSV text and return a JSON array where each row is an object keyed by the header row.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapReadOnly,
-				SideEffects: []protocol.SideEffect{protocol.SideNone},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"csv": map[string]any{
-							"type":        "string",
-							"description": "Raw CSV text. The first row is treated as the header and becomes the object keys.",
-						},
-					},
-					"required": []string{"csv"},
-				},
-			},
-			fn: csvParseFn,
-		},
-		{
-			meta: protocol.Tool{
-				Name:        "diff_text",
-				Description: "Compute the unified diff between two text strings and return the diff output.",
-				Version:     "1.0.0",
-				Capability:  protocol.CapReadOnly,
-				SideEffects: []protocol.SideEffect{protocol.SideNone},
-				RiskLevel:   protocol.RiskLow,
-				SandboxTier: protocol.SandboxInProcess,
-				Source:      protocol.ToolBuiltin,
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"old": map[string]any{
-							"type":        "string",
-							"description": "The original text (left side of the diff, shown as '-' lines).",
-						},
-						"new": map[string]any{
-							"type":        "string",
-							"description": "The new text (right side of the diff, shown as '+' lines).",
-						},
-					},
-					"required": []string{"old", "new"},
-				},
-			},
-			fn: diffTextFn,
-		},
-		{
-			meta: NewEdgeTTS(),
-			fn:   ExecuteEdgeTTS,
-		},
-		{
-			meta: NewVideoAnalysis(),
-			fn:   ExecuteVideoAnalysis,
-		},
+		{"read_file", makeReadFileFn(allowedPaths)},
+		{"list_dir", makeListDirFn(allowedPaths)},
+		{"write_file", makeWriteFileFn(allowedPaths)},
+		{"fetch_url", makeFetchURLFn(dialer)},
+		{"bash", makeBashFn(allowedPaths)},
+		{"get_datetime", getDatetimeFn},
+		{"csv_parse", csvParseFn},
+		{"diff_text", diffTextFn},
+		{"tts_edge", ExecuteEdgeTTS},
+		{"video_analysis", ExecuteVideoAnalysis},
 	}
 
-	for _, t := range tools {
-		sandbox.Register(t.meta.Name, t.fn)
-		if err := toolReg.Register(t.meta); err != nil {
-			return perrors.Wrap(perrors.CodeInternal, fmt.Sprintf("builtin_tools: register %q", t.meta.Name), err)
+	for _, d := range defs {
+		meta, err := LoadBuiltinToolMeta(d.name)
+		if err != nil {
+			return perrors.Wrap(perrors.CodeInternal,
+				fmt.Sprintf("builtin_tools: load meta for %q", d.name), err)
+		}
+		sandbox.Register(meta.Name, d.fn)
+		if err := toolReg.Register(meta); err != nil {
+			return perrors.Wrap(perrors.CodeInternal,
+				fmt.Sprintf("builtin_tools: register %q", d.name), err)
 		}
 	}
 
@@ -245,6 +66,8 @@ func RegisterBuiltinTools(
 	toolReg.SetSandbox(sandbox)
 	return nil
 }
+
+// ── 以下为纯实现函数，不含任何元数据 ─────────────────────────────────────────
 
 // ─── read_file ────────────────────────────────────────────────────────────────
 

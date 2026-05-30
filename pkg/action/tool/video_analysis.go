@@ -11,42 +11,9 @@ import (
 	"strings"
 
 	perrors "github.com/polarisagi/polarisagi-harness/internal/errors"
-	"github.com/polarisagi/polarisagi-harness/internal/protocol"
 )
 
-// NewVideoAnalysis 返回视频分析工具的 Schema。
-func NewVideoAnalysis() protocol.Tool {
-	return protocol.Tool{
-		Name:        "video_analysis",
-		Description: "Extract keyframes from a video at a fixed interval and return them as base64-encoded JPEG data URIs. Requires ffmpeg.",
-		Version:     "1.0.0",
-		Capability:  protocol.CapWriteNetwork,
-		SideEffects: []protocol.SideEffect{protocol.SideProcessSpawn, protocol.SideFileWrite},
-		RiskLevel:   protocol.RiskLow,
-		SandboxTier: protocol.SandboxInProcess,
-		Source:      protocol.ToolBuiltin,
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"video_uri": map[string]any{
-					"type":        "string",
-					"description": "URI or local file path of the video to analyze (e.g. 'file:///tmp/clip.mp4' or '/tmp/clip.mp4').",
-				},
-				"interval_sec": map[string]any{
-					"type":        "integer",
-					"default":     5,
-					"description": "Interval in seconds between extracted keyframes (default 5). Lower values produce more frames.",
-				},
-				"max_frames": map[string]any{
-					"type":        "integer",
-					"default":     20,
-					"description": "Maximum number of keyframes to return. Prevents excessive memory usage on long videos (default 20).",
-				},
-			},
-			"required": []string{"video_uri"},
-		},
-	}
-}
+// ExecuteVideoAnalysis 执行视频分析。元数据由 builtin/video_analysis/tool.yaml + schema.json 定义。
 
 // ExecuteVideoAnalysis 执行视频分析。
 func ExecuteVideoAnalysis(ctx context.Context, args []byte) ([]byte, error) {
