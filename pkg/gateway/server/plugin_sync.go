@@ -201,7 +201,7 @@ func parseMCPEntry(path string, mpDir string, mp protocol.Marketplace) ([]protoc
 		}
 	}
 
-	var entries []protocol.RegistryEntry
+	entries := make([]protocol.RegistryEntry, 0, len(mcpConfig.MCPServers))
 	for srvName, srvDef := range mcpConfig.MCPServers {
 		url := mp.RepoURL
 		if strings.Contains(url, "github.com") {
@@ -264,6 +264,34 @@ func isPluginBundleRoot(dir string) (string, string) {
 	return "", ""
 }
 
+// parseBundleManifest 根据清单类型解析插件包。
+func parseBundleManifest(manifestPath, manifestType, mpDir string, mp protocol.Marketplace) []protocol.RegistryEntry {
+	var entries []protocol.RegistryEntry
+	switch manifestType {
+	case "plugin.json":
+		if entry, err := parsePluginEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
+			entries = append(entries, *entry)
+		}
+	case "ai-plugin.json":
+		if entry, err := parseAIPluginEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
+			entries = append(entries, *entry)
+		}
+	case "plugin.toml":
+		if entry, err := parsePluginTOMLEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
+			entries = append(entries, *entry)
+		}
+	case "skills.yaml", "agent-manifest.yaml":
+		if newEntries, err := parseGoogleSkillsEntry(manifestPath, mpDir, mp); err == nil {
+			entries = append(entries, newEntries...)
+		}
+	case "mcp.json":
+		if newEntries, err := parseMCPEntry(manifestPath, mpDir, mp); err == nil {
+			entries = append(entries, newEntries...)
+		}
+	}
+	return entries
+}
+
 // discoverMarketplaceEntries 递归遍历市场目录，自动发现所有的插件和技能。
 // 引入 Bundle Root Detection，遇到完整插件包则不再拆解其内部的子技能。
 func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protocol.RegistryEntry, error) { //nolint:gocyclo
@@ -281,28 +309,7 @@ func discoverMarketplaceEntries(mpDir string, mp protocol.Marketplace) ([]protoc
 			// 如果当前目录是一个插件包（如 discord 目录包含了 .claude-plugin/plugin.json），则整体作为一个插件条目，不再继续深入遍历其 skills/
 			manifestPath, manifestType := isPluginBundleRoot(path)
 			if manifestPath != "" {
-				switch manifestType {
-				case "plugin.json":
-					if entry, err := parsePluginEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
-						entries = append(entries, *entry)
-					}
-				case "ai-plugin.json":
-					if entry, err := parseAIPluginEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
-						entries = append(entries, *entry)
-					}
-				case "plugin.toml":
-					if entry, err := parsePluginTOMLEntry(manifestPath, mpDir, mp); err == nil && entry != nil {
-						entries = append(entries, *entry)
-					}
-				case "skills.yaml", "agent-manifest.yaml":
-					if newEntries, err := parseGoogleSkillsEntry(manifestPath, mpDir, mp); err == nil {
-						entries = append(entries, newEntries...)
-					}
-				case "mcp.json":
-					if newEntries, err := parseMCPEntry(manifestPath, mpDir, mp); err == nil {
-						entries = append(entries, newEntries...)
-					}
-				}
+				entries = append(entries, parseBundleManifest(manifestPath, manifestType, mpDir, mp)...)
 				// 核心：跳过进入该包内部（如 external_plugins/discord/skills），防止内部碎片能力被提取到全局市场
 				return filepath.SkipDir
 			}
