@@ -484,6 +484,7 @@ type SkillMeta struct {
 	Benchmarks   SkillBenchmarks
 	Instructions string // script runtime: SKILL.md 全文，供 LLM tool_use 返回
 	Deprecated   bool
+	WasmPath     string // marketplace 安装路径（extension_instances.install_path + "/impl.wasm"）；空则由 WasmLoader 兜底
 }
 
 type SkillBenchmarks struct {

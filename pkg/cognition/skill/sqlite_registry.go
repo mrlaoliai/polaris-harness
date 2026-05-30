@@ -67,25 +67,30 @@ func (r *SQLiteRegistryImpl) Register(ctx context.Context, meta protocol.SkillMe
 }
 
 func (r *SQLiteRegistryImpl) Get(ctx context.Context, name, version string) (*protocol.SkillMeta, error) {
+	// LEFT JOIN extension_instances 获取 marketplace 安装路径；builtin/user 技能 install_path 为空
 	query := `
-		SELECT name, version, runtime, risk_level, sandbox, capabilities, exec_mode,
-		       trust_tier, idempotent, benchmarks, instructions, deprecated
-		FROM skills WHERE name = ?
+		SELECT s.name, s.version, s.runtime, s.risk_level, s.sandbox, s.capabilities, s.exec_mode,
+		       s.trust_tier, s.idempotent, s.benchmarks, s.instructions, s.deprecated,
+		       COALESCE(ei.install_path, '')
+		FROM skills s
+		LEFT JOIN extension_instances ei ON ei.runtime_id = s.name AND ei.ext_type = 'skill'
+		WHERE s.name = ?
 	`
 	args := []any{name}
 	if version != "" {
-		query += " AND version = ?"
+		query += " AND s.version = ?"
 		args = append(args, version)
 	}
 
 	row := r.db.QueryRowContext(ctx, query, args...)
 
 	var meta protocol.SkillMeta
-	var capsRaw, benchRaw string
+	var capsRaw, benchRaw, installPath string
 	var trustInt int
 	err := row.Scan(
 		&meta.Name, &meta.Version, &meta.Runtime, &meta.RiskLevel, &meta.Sandbox,
 		&capsRaw, &meta.ExecMode, &trustInt, &meta.Idempotent, &benchRaw, &meta.Instructions, &meta.Deprecated,
+		&installPath,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -94,6 +99,9 @@ func (r *SQLiteRegistryImpl) Get(ctx context.Context, name, version string) (*pr
 		return nil, perrors.Wrap(perrors.CodeInternal, "sqlite_registry: get failed", err)
 	}
 	meta.Trust = protocol.TrustTier(trustInt)
+	if installPath != "" {
+		meta.WasmPath = installPath + "/impl.wasm"
+	}
 
 	json.Unmarshal([]byte(capsRaw), &meta.Capabilities) //nolint:errcheck
 	json.Unmarshal([]byte(benchRaw), &meta.Benchmarks)  //nolint:errcheck

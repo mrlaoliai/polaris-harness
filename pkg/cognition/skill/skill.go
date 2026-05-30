@@ -3,6 +3,7 @@ package skill
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -214,18 +215,18 @@ type WasmLoader interface {
 type WasmSkillExecutor struct {
 	registry protocol.SkillRegistry
 	runner   WasmRunner // nil → 返回输入原文（Tier 0 降级）
-	loader   WasmLoader // nil → 无法加载 Wasm（降级）
+	loader   WasmLoader // 可选兜底：meta.WasmPath 不存在时尝试此加载器
 }
 
-// NewWasmSkillExecutor 构造执行器。runner/loader 均为可选；
-// 两者俱 nil 时退化为仅做元数据验证（Tier 0 兼容路径）。
+// NewWasmSkillExecutor 构造执行器。runner 可选（nil 时退化为仅元数据验证）。
+// loader 作为文件系统兜底，marketplace 安装的技能优先走 meta.WasmPath。
 func NewWasmSkillExecutor(reg protocol.SkillRegistry, runner WasmRunner, loader WasmLoader) *WasmSkillExecutor {
 	return &WasmSkillExecutor{registry: reg, runner: runner, loader: loader}
 }
 
 // ExecuteSkill 执行 Wasm 技能。
-// 完整路径: 元数据验证 → 加载 Wasm 字节 → wazero 执行 → 返回输出。
-// 降级路径（runner/loader 为 nil）: 仅验证元数据，返回输入原文。
+// 加载优先级: meta.WasmPath（marketplace 安装路径）> loader.LoadWasm（文件系统兜底）。
+// 降级路径（runner 为 nil 或两路均无法加载）: 返回输入原文，不中断调用链。
 func (e *WasmSkillExecutor) ExecuteSkill(ctx context.Context, skillID string, input []byte) ([]byte, error) {
 	meta, err := e.registry.Get(ctx, skillID, "")
 	if err != nil {
@@ -235,15 +236,26 @@ func (e *WasmSkillExecutor) ExecuteSkill(ctx context.Context, skillID string, in
 		return nil, perrors.New(perrors.CodeInternal, fmt.Sprintf("skill_executor: skill %s is deprecated", skillID))
 	}
 
-	// 降级路径：runner 或 loader 未注入（Tier 0）
-	if e.runner == nil || e.loader == nil {
+	if e.runner == nil {
 		return input, nil
 	}
 
-	wasmBytes, err := e.loader.LoadWasm(skillID)
-	if err != nil {
-		return input, nil //nolint:nilerr // Wasm 字节码不存在时降级返回输入，不中断调用链
+	// 优先从 extension_instances.install_path 读取（marketplace 安装路径）
+	var wasmBytes []byte
+	if meta.WasmPath != "" {
+		wasmBytes, err = os.ReadFile(meta.WasmPath)
+		if err != nil {
+			return input, nil //nolint:nilerr
+		}
+	} else if e.loader != nil {
+		wasmBytes, err = e.loader.LoadWasm(skillID)
+		if err != nil {
+			return input, nil //nolint:nilerr
+		}
+	} else {
+		return input, nil
 	}
+
 	if err := e.ValidateSkill(wasmBytes); err != nil {
 		return nil, perrors.Wrap(perrors.CodeInternal, "skill_executor: wasm validation", err)
 	}

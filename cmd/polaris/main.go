@@ -44,7 +44,6 @@ import (
 	knowledgepkg "github.com/polarisagi/polarisagi-harness/pkg/swarm/knowledge"
 	si "github.com/polarisagi/polarisagi-harness/pkg/swarm/self_improve"
 	"github.com/polarisagi/polarisagi-harness/pkg/swarm/supervisor"
-	"github.com/polarisagi/polarisagi-harness/skills/builtin"
 )
 
 func main() {
@@ -416,7 +415,9 @@ func run() error { //nolint:gocyclo
 
 	wasmRT := action.NewWazeroRuntime(ctx)
 	wasmRunner := action.NewWasmRunnerAdapter(wasmRT)
-	wasmLoader := skill.NewEmbedWasmLoader(builtin.FS)
+	// WasmLoader 兜底：从 skills/builtin/ 加载本地已编译的 wasm（make build-skills）。
+	// marketplace 安装的技能优先走 SkillMeta.WasmPath，不经此 loader。
+	wasmLoader := skill.NewFilesystemWasmLoader("")
 	skillExecutor := skill.NewWasmSkillExecutor(skillRegistry, wasmRunner, wasmLoader)
 	_ = skillExecutor
 	slog.Info("polaris: skill library initialized (wazero-backed)")

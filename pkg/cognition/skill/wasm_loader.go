@@ -1,7 +1,6 @@
 package skill
 
 import (
-	"embed"
 	"os"
 	"path/filepath"
 
@@ -39,25 +38,3 @@ func (l *FilesystemWasmLoader) LoadWasm(skillID string) ([]byte, error) {
 	return data, nil
 }
 
-// EmbedWasmLoader 从 embed.FS 加载 Wasm 字节码。
-// 适用场景: 官方内置技能随二进制 embed 发布，零外部依赖。
-type EmbedWasmLoader struct {
-	fs embed.FS
-}
-
-// NewEmbedWasmLoader 构造基于 go:embed 的 Wasm 加载器。
-func NewEmbedWasmLoader(fs embed.FS) *EmbedWasmLoader {
-	return &EmbedWasmLoader{fs: fs}
-}
-
-func (l *EmbedWasmLoader) LoadWasm(skillID string) ([]byte, error) {
-	name := skillID
-	if len(name) > 6 && name[:6] == "skill:" {
-		name = name[6:]
-	}
-	data, err := l.fs.ReadFile(name + "/impl.wasm")
-	if err != nil {
-		return nil, perrors.Wrap(perrors.CodeInternal, "wasm_loader: read embedded file "+name+"/impl.wasm", err)
-	}
-	return data, nil
-}

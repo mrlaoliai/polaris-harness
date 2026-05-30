@@ -46,7 +46,7 @@ configs/                     嵌入式启动配置（随二进制打包）
   automations/templates/     内置自动化模板
   agents/ prompts/ *.yaml    各类启动配置
 policies/                    Cedar 策略 + ESCALATE/KILLSWITCH 协议
-skills/builtin/              内置 Wasm 技能包（将解耦至 GitHub Bundle；现阶段仍嵌入二进制）
+skills/builtin/              内置 Wasm 技能源码（make build-skills 编译；运行时从文件系统加载，不再 embed 进二进制）
 
 pkg/substrate/    L0: inference/storage/observability/policy
 pkg/cognition/    L1: kernel/memory/skill
