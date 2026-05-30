@@ -28,7 +28,7 @@ ADR-0005 决策购零 CGO（purego 桥接），但代码实际滞后：
 | 2 | cedar_ffi.go 4 函数迁移（load_policies / evaluate / policy_count / free_string） | `pkg/substrate/policy/cedar_ffi.go` |
 | 3 | surreal_store.go 13 函数迁移（KV/Vector/Graph/FTS/free） | `pkg/substrate/storage/surreal_store.go` |
 | 4 | Makefile 平台 dylib 拷贝 + 启动加载 | `Makefile` / `pkg/substrate/ffi/dylib.go` |
-| 5 | 文档同步（dict §4 §6 / 07 / pkg/substrate CLAUDE.md / ffi-abi.md §7） | 见 CHANGELOG 2026-05-16 |
+| 5 | 文档同步（dict §4 §6 / 07 / pkg/substrate AGENTS.md / ffi-abi.md §7） | 见 CHANGELOG 2026-05-16 |
 
 字符串/字节生命周期约定：Go→C 用 null-terminated `[]byte` + `unsafe.Pointer` 转 uintptr；C→Go 立即拷贝立即调 `*_free_*`。
 

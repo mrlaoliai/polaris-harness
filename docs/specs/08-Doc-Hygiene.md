@@ -77,7 +77,7 @@ M_X 内仅保留：
 ## H6 Tier C 禁区
 
 **禁止修改**以下结构（即使看起来冗长）：
-- 不变量速查表 `inv_MXX_NN`（CLAUDE.md 强制项）
+- 不变量速查表 `inv_MXX_NN`（AGENTS.md 强制项）
 - §跳读 单行索引（由 `make docs-sync` 维护）
 - INDEX.md §2 场景表、§2.5 章节级跳读、§3 概念定位
 - 跨模块契约表（§13 类）

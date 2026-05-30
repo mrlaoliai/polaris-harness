@@ -29,7 +29,7 @@
 | pkg/substrate（Store 同步写） | `pkg/substrate/storage/store.go §Put/Txn` | 中频同步 KV 写范式 | `Store.Put`（同步确认）、`Store.Txn`（CAS/原子操作）；不适合高频批量场景 |
 
 > 全部 canonical 已由人工 PR 确认（[canonical] tag），见 `docs/specs/CHANGELOG.md`。
-> 部分包（substrate root / cognition root / swarm patterns / swarm supervisor / governance root）不设主 canonical——根层文件多为独立模块，无"复制范式"关系；写新代码时以最近相关子包的 canonical + 各 `pkg/*/CLAUDE.md` 的"关键参照文件"区为锚。
+> 部分包（substrate root / cognition root / swarm patterns / swarm supervisor / governance root）不设主 canonical——根层文件多为独立模块，无"复制范式"关系；写新代码时以最近相关子包的 canonical + 各 `pkg/*/AGENTS.md` 的"关键参照文件"区为锚。
 
 ## 7.2 使用流程
 

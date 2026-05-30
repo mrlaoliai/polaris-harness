@@ -67,7 +67,7 @@
 
 **参考实现体系建立**：
 - `07-Reference-Implementation.md` | 新增标杆代码索引，全部 `pkg/` 的 canonical 文件确认（见表）
-- `pkg/*/CLAUDE.md` | 6 份模块级 AI 上下文文件（substrate/cognition/action/swarm/governance/edge）
+- `pkg/*/AGENTS.md` | 6 份模块级 AI 上下文文件（substrate/cognition/action/swarm/governance/edge）
 
 **支撑体系建立**：
 - `../arch/00-Global-Dictionary.md` | 新增 §13 标识符↔概念映射表（命名一致性 SSoT）

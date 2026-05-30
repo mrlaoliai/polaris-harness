@@ -86,7 +86,7 @@ type StateTransRecord struct {
 
 // ============================================================================
 // RegressionDetector — 30 天滚动基线对比
-// 阈值策略（相对变化率，对应 governance CLAUDE.md §回归双阈）：
+// 阈值策略（相对变化率，对应 governance AGENTS.md §回归双阈）：
 //   - TaskSuccessRate 下降 > 5%  → WARN；> 10% → CRITICAL
 //   - AvgLatencyMs   上升 > 20% → WARN；> 40% → CRITICAL
 //   - TokenBurnRate  上升 > 30% → WARN（无 CRITICAL，成本软约束）
