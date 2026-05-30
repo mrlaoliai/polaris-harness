@@ -474,20 +474,21 @@ func parseAIPluginEntry(path, mpDir string, mp protocol.Marketplace) (*protocol.
 	if err := json.Unmarshal(data, &p); err != nil {
 		return nil, err
 	}
+	relDir, _ := filepath.Rel(mpDir, filepath.Dir(path))
+	relPath := filepath.ToSlash(relDir)
+
 	name := p.NameForHuman
 	if name == "" {
 		name = p.NameForModel
 	}
 	if name == "" {
-		return nil, nil
+		name = filepath.Base(relDir)
+		name = formatName(name)
 	}
 	desc := p.DescriptionForHuman
 	if desc == "" {
 		desc = p.DescriptionForModel
 	}
-
-	relDir, _ := filepath.Rel(mpDir, filepath.Dir(path))
-	relPath := filepath.ToSlash(relDir)
 
 	extType := "app"
 	command := ""
@@ -536,6 +537,12 @@ func parsePluginTOMLEntry(path, mpDir string, mp protocol.Marketplace) (*protoco
 	}
 	relPath := filepath.ToSlash(relDir)
 
+	name := p.Plugin.Name
+	if name == "" {
+		name = filepath.Base(relDir)
+		name = formatName(name)
+	}
+
 	extType := "mcp"
 	if p.MCP.Command == "" {
 		extType = "plugin"
@@ -551,7 +558,7 @@ func parsePluginTOMLEntry(path, mpDir string, mp protocol.Marketplace) (*protoco
 		Publisher:   mp.Publisher,
 		Type:        extType,
 		TrustTier:   mp.TrustTier,
-		Name:        p.Plugin.Name,
+		Name:        name,
 		Description: p.Plugin.Description,
 		URL:         url,
 		Command:     p.MCP.Command,
@@ -583,17 +590,22 @@ func parseGoogleSkillsEntry(path, mpDir string, mp protocol.Marketplace) ([]prot
 	}
 
 	// 单条目
-	if g.Name != "" && len(g.Skills) == 0 {
+	if len(g.Skills) == 0 {
 		extType := "skill"
 		if g.Command != "" {
 			extType = "mcp"
+		}
+		name := g.Name
+		if name == "" {
+			name = filepath.Base(relDir)
+			name = formatName(name)
 		}
 		return []protocol.RegistryEntry{{
 			ID:          baseID,
 			Publisher:   mp.Publisher,
 			Type:        extType,
 			TrustTier:   mp.TrustTier,
-			Name:        g.Name,
+			Name:        name,
 			Description: g.Description,
 			URL:         baseURL,
 			Command:     g.Command,
