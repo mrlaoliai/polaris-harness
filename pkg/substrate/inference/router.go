@@ -294,6 +294,9 @@ func (ir *InferenceRouter) ModelID() string {
 
 // Infer 路由单次请求到最优 Provider，失败时 failover 至次优。
 func (ir *InferenceRouter) Infer(ctx context.Context, req *protocol.InferRequest) (*protocol.InferResponse, error) {
+	// 统一预处理：降采样超规格图片、PNG/GIF→JPEG 格式转换
+	// 覆盖所有调用方（Gateway / Cognition Kernel / Swarm / Extensions）
+	normalizeInferRequest(req)
 	entry := ir.registry.best(req)
 	if entry == nil {
 		return nil, perrors.New(perrors.CodeInternal, "inference_router: no available providers")
@@ -312,6 +315,8 @@ func (ir *InferenceRouter) Infer(ctx context.Context, req *protocol.InferRequest
 
 // StreamInfer 路由流式请求，内嵌延迟记录与 Failover。
 func (ir *InferenceRouter) StreamInfer(ctx context.Context, req *protocol.InferRequest) (<-chan protocol.StreamEvent, error) {
+	// 统一预处理：与 Infer 路径一致，确保流式和非流式路径均受益
+	normalizeInferRequest(req)
 	entry := ir.registry.best(req)
 	if entry == nil {
 		return nil, perrors.New(perrors.CodeInternal, "inference_router: no available providers")

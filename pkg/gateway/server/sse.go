@@ -202,24 +202,10 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 
 		hasMedia = true
 		if isImage {
-			mime := att.MimeType
-			if isProcessableImage(mime) {
-				// 降采样 + PNG/GIF→JPEG 转换，减少 token 用量和传输体积
-				if resized, newMime, ok := resizeImageForLLM(raw, mime); ok {
-					origKB := len(raw) / 1024
-					newKB := len(resized) / 1024
-					slog.Info("server: image resized for LLM",
-						"uri", att.URI,
-						"orig_kb", origKB,
-						"new_kb", newKB,
-						"new_mime", newMime,
-					)
-					raw, mime = resized, newMime
-				}
-			}
+			// 图片原样构造 ImagePart，压缩/降采样由 InferenceRouter.normalizeInferRequest() 统一处理
 			mediaParts = append(mediaParts, protocol.ImagePart{
 				Type:      "image",
-				MediaType: mime,
+				MediaType: att.MimeType,
 				Data:      raw,
 			})
 		} else {
@@ -243,16 +229,11 @@ func (s *Server) handleAgentStream(w http.ResponseWriter, r *http.Request) { //n
 				slog.Warn("server: invalid image base64, skipping", "err", err)
 				continue
 			}
-			mime := ip.MimeType
-			if isProcessableImage(mime) {
-				if resized, newMime, ok := resizeImageForLLM(raw, mime); ok {
-					raw, mime = resized, newMime
-				}
-			}
+			// 图片原样构造 ImagePart，压缩/降采样由 InferenceRouter.normalizeInferRequest() 统一处理
 			hasMedia = true
 			mediaParts = append(mediaParts, protocol.ImagePart{
 				Type:      "image",
-				MediaType: mime,
+				MediaType: ip.MimeType,
 				Data:      raw,
 			})
 		}
