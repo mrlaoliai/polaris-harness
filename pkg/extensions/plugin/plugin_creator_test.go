@@ -14,7 +14,7 @@ func (m *MockLLMClient) Generate(ctx context.Context, systemPrompt, userPrompt s
 	return `{
   "name": "test-plugin",
   "description": "A simple test plugin",
-  "python_code": "print('hello')"
+  "typescript_code": "console.log('hello');"
 }`, nil
 }
 
@@ -37,9 +37,14 @@ func TestPluginCreator(t *testing.T) {
 		t.Errorf("Expected plugin dir %s, got %s", expectedDir, pluginDir)
 	}
 
-	// Verify server.py exists
-	if _, err := os.Stat(filepath.Join(expectedDir, "server.py")); os.IsNotExist(err) {
-		t.Errorf("server.py was not created")
+	// Verify src/index.ts exists
+	if _, err := os.Stat(filepath.Join(expectedDir, "src", "index.ts")); os.IsNotExist(err) {
+		t.Errorf("src/index.ts was not created")
+	}
+
+	// Verify package.json exists
+	if _, err := os.Stat(filepath.Join(expectedDir, "package.json")); os.IsNotExist(err) {
+		t.Errorf("package.json was not created")
 	}
 
 	// Verify plugin.json exists

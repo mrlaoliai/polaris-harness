@@ -33,23 +33,23 @@ func NewPluginCreator(llm LLMClient, baseDir string) *PluginCreator {
 
 // GeneratedPlugin represents the structured output expected from the LLM.
 type GeneratedPlugin struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	PythonCode  string `json:"python_code"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	TypeScriptCode string `json:"typescript_code"`
 }
 
 const pluginCreatorSystemPrompt = `
-You are the internal plugin-creator agent. Your job is to translate a user's intent into a fully functional Anthropic MCP (Model Context Protocol) plugin using Python.
+You are the internal plugin-creator agent. Your job is to translate a user's intent into a fully functional MCP (Model Context Protocol) plugin using TypeScript.
 A plugin MUST have a concise name (kebab-case) and a clear description.
-You must use the 'mcp' Python package, specifically 'from mcp.server.fastmcp import FastMCP' to define the server.
+You must use the '@modelcontextprotocol/sdk' package to define the server.
 
 Output ONLY valid JSON matching this schema:
 {
   "name": "plugin-name",
   "description": "What this plugin does...",
-  "python_code": "import asyncio\nfrom mcp.server.fastmcp import FastMCP\n\nmcp = FastMCP(\"plugin-name\")\n\n@mcp.tool()\ndef my_tool() -> str:\n    return \"Done\"\n\nif __name__ == \"__main__\":\n    mcp.run(transport='stdio')\n"
+  "typescript_code": "import { McpServer } from \"@modelcontextprotocol/sdk/server/mcp.js\";\nimport { StdioServerTransport } from \"@modelcontextprotocol/sdk/server/stdio.js\";\nimport { z } from \"zod\";\n\nconst server = new McpServer({ name: \"plugin-name\", version: \"1.0.0\" });\n\nserver.tool(\"my_tool\", \"Description\", {}, async () => ({\n  content: [{ type: \"text\", text: \"Done\" }],\n}));\n\nconst transport = new StdioServerTransport();\nawait server.connect(transport);\n"
 }
-Do not include any Markdown wrappers like ` + "```json" + ` in the output. Ensure the python code is properly escaped in the JSON string.
+Do not include any Markdown wrappers like ` + "```json" + ` in the output. Ensure the TypeScript code is properly escaped in the JSON string.
 `
 
 // GeneratePlugin takes a user's intent, calls the LLM, and creates the physical plugin directory, .mcp.json, and server.py.
@@ -71,21 +71,47 @@ func (c *PluginCreator) GeneratePlugin(ctx context.Context, intent string) (stri
 		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to parse generated plugin JSON", err)
 	}
 
-	if result.Name == "" || result.Description == "" || result.PythonCode == "" {
+	if result.Name == "" || result.Description == "" || result.TypeScriptCode == "" {
 		return "", perrors.New(perrors.CodeInternal, "plugin_creator: invalid generation, missing required fields")
 	}
 
 	// Create physical directory structure
 	pluginDir := filepath.Join(c.baseDir, result.Name)
+	srcDir := filepath.Join(pluginDir, "src")
 
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
-		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to create plugin directory", err)
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to create src directory", err)
 	}
 
-	// Write server.py
-	serverPath := filepath.Join(pluginDir, "server.py")
-	if err := os.WriteFile(serverPath, []byte(result.PythonCode), 0644); err != nil {
-		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to write server.py", err)
+	// Write src/index.ts
+	indexTSPath := filepath.Join(srcDir, "index.ts")
+	if err := os.WriteFile(indexTSPath, []byte(result.TypeScriptCode), 0644); err != nil {
+		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to write src/index.ts", err)
+	}
+
+	// Write package.json（npx tsx 无需编译步骤，直接运行 TypeScript）
+	packageJSON := fmt.Sprintf(`{
+  "name": "%s",
+  "version": "1.0.0",
+  "description": "%s",
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0"
+  }
+}`, result.Name, result.Description)
+
+	packageJSONPath := filepath.Join(pluginDir, "package.json")
+	if err := os.WriteFile(packageJSONPath, []byte(packageJSON), 0644); err != nil {
+		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to write package.json", err)
 	}
 
 	// Create a default plugin.json
@@ -106,13 +132,12 @@ func (c *PluginCreator) GeneratePlugin(ctx context.Context, intent string) (stri
 		return "", perrors.Wrap(perrors.CodeInternal, "plugin_creator: failed to write plugin.json", err)
 	}
 
-	// Create .mcp.json 使用 uv run 执行 server.py（uvx 用于运行已安装的 Python 包命令，
-	// 不适用于直接执行脚本文件；脚本应通过 `uv run` 调用）
+	// Create .mcp.json（使用 npx tsx 直接运行 TypeScript，无需预编译）
 	mcpJSON := fmt.Sprintf(`{
   "mcpServers": {
     "%s": {
-      "command": "uv",
-      "args": ["run", "server.py"]
+      "command": "npx",
+      "args": ["tsx", "src/index.ts"]
     }
   }
 }`, result.Name)
