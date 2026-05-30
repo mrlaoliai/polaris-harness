@@ -72,9 +72,9 @@ type Server struct {
 	cronCancel context.CancelFunc
 }
 
-func (s *Server) SetInstallManager(m *marketplace.Manager)       { s.installMgr = m }
-func (s *Server) SetScriptRunner(r marketplace.HookRunner)       { s.scriptRunner = r }
-func (s *Server) SetSkillSigningKey(k []byte)                    { s.skillSignKey = k }
+func (s *Server) SetInstallManager(m *marketplace.Manager) { s.installMgr = m }
+func (s *Server) SetScriptRunner(r marketplace.HookRunner) { s.scriptRunner = r }
+func (s *Server) SetSkillSigningKey(k []byte)              { s.skillSignKey = k }
 
 // SetMCPManager 注入 MCPManager（NewServer 之后、Start 之前调用）。
 func (s *Server) SetMCPManager(m *mcp.MCPManager) { s.mcpMgr = m }

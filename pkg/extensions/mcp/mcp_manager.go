@@ -254,7 +254,7 @@ func (m *MCPManager) registerTools(serverName string, client *MCPClient, tools [
 	if client.cfg.Trusted {
 		taint = protocol.TaintMedium
 	}
-	var valid []MCPTool
+	valid := make([]MCPTool, 0, len(tools))
 	for _, t := range tools {
 		llmName := mcpToolName(serverName, t.Name)
 		if llmName != mcpToolName(serverName, sanitizeToolNamePart(t.Name)) || t.Name != sanitizeToolNamePart(t.Name) {

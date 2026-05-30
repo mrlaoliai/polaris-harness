@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"log/slog"
 	"net"
@@ -210,13 +211,49 @@ func isLoopback(ip string) bool {
 	return parsed != nil && parsed.IsLoopback()
 }
 
+// checkAuth 执行 API Key 校验和匿名写保护，返回注入了身份的 context。
+// 校验失败时直接写响应并返回 false，调用方应立即 return。
+func (s *Server) checkAuth(w http.ResponseWriter, r *http.Request, clientIP, expectedKey string, authManager *AuthManager) (context.Context, bool) {
+	ctx := r.Context()
+
+	// 跳过健康/指标端点（路径以 "z" 或 "metrics" 结尾）
+	if strings.HasSuffix(r.URL.Path, "z") || strings.HasSuffix(r.URL.Path, "metrics") || expectedKey == "" {
+		if expectedKey == "" && isAdminWrite(r.Method, r.URL.Path) && !isLoopback(clientIP) {
+			http.Error(w, "403 Forbidden: admin endpoints require POLARIS_API_KEY or localhost access", http.StatusForbidden)
+			return ctx, false
+		}
+		return WithAuthContext(ctx, &AuthContext{UserID: "anonymous", ClientType: "unknown"}), true
+	}
+
+	if authManager.IsLocked(clientIP) {
+		w.Header().Set("Retry-After", "300")
+		http.Error(w, "429 Too Many Requests - Auth Cooldown", http.StatusTooManyRequests)
+		return ctx, false
+	}
+
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if token == "" {
+		token = r.Header.Get("X-API-Key")
+	}
+
+	// 恒定时间比较防御时序攻击
+	if subtle.ConstantTimeCompare([]byte(token), []byte(expectedKey)) != 1 {
+		authManager.RecordFailure(clientIP)
+		http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+		return ctx, false
+	}
+
+	authManager.RecordSuccess(clientIP)
+	// MVP 阶段单一 API Key，统一记录为 admin
+	return WithAuthContext(ctx, &AuthContext{UserID: "admin", ClientType: "api"}), true
+}
+
 // withMiddleware 挂载所有基础网关级别的安全防护（Auth + Rate Limit + CORS + Logging）
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	// 按照 M13 规范，为每个 IP 分配一个单独的桶，限制默认并发 QPS
 	limiter := NewRateLimitManager(20, 50)
 	authManager := NewAuthManager()
 
-	// API 密钥，如果在环境中设置了则进行验证
 	expectedKey := os.Getenv("POLARIS_API_KEY")
 	if expectedKey == "" {
 		slog.Warn("http: POLARIS_API_KEY not set — all /v1/ endpoints are unauthenticated; admin write paths restricted to localhost only")
@@ -227,15 +264,15 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 		w = lrw
 
 		clientIP := extractIP(r)
-
 		isAPI := strings.HasPrefix(r.URL.Path, "/v1/") || r.URL.Path == "/healthz"
 		defer func() {
-			if isAPI {
-				if lrw.statusCode >= 500 {
-					slog.Error("http: request failed", "method", r.Method, "path", r.URL.Path, "ip", clientIP, "status", lrw.statusCode, "error", strings.TrimSpace(string(lrw.body)))
-				} else if lrw.statusCode >= 400 {
-					slog.Warn("http: bad request", "method", r.Method, "path", r.URL.Path, "ip", clientIP, "status", lrw.statusCode, "error", strings.TrimSpace(string(lrw.body)))
-				}
+			if !isAPI {
+				return
+			}
+			if lrw.statusCode >= 500 {
+				slog.Error("http: request failed", "method", r.Method, "path", r.URL.Path, "ip", clientIP, "status", lrw.statusCode, "error", strings.TrimSpace(string(lrw.body)))
+			} else if lrw.statusCode >= 400 {
+				slog.Warn("http: bad request", "method", r.Method, "path", r.URL.Path, "ip", clientIP, "status", lrw.statusCode, "error", strings.TrimSpace(string(lrw.body)))
 			}
 		}()
 
@@ -249,57 +286,17 @@ func (s *Server) withMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 速率限制隔离
 		if !limiter.Allow(clientIP) {
 			w.Header().Set("Retry-After", "30")
 			http.Error(w, "429 Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
 
-		// 简单的 Auth 校验（跳过 /healthz 和 /readyz）
-		ctx := r.Context()
-		if !strings.HasSuffix(r.URL.Path, "z") && !strings.HasSuffix(r.URL.Path, "metrics") && expectedKey != "" {
-			if authManager.IsLocked(clientIP) {
-				w.Header().Set("Retry-After", "300")
-				http.Error(w, "429 Too Many Requests - Auth Cooldown", http.StatusTooManyRequests)
-				return
-			}
-
-			// 获取 Token
-			token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if token == "" {
-				token = r.Header.Get("X-API-Key")
-			}
-
-			// 使用恒定时间比较防御时序攻击
-			if subtle.ConstantTimeCompare([]byte(token), []byte(expectedKey)) != 1 {
-				authManager.RecordFailure(clientIP)
-				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			authManager.RecordSuccess(clientIP)
-
-			// Auth 成功，提取身份并注入 (MVP 阶段由于单一 API Key，统一记录为 admin)
-			authCtx := &AuthContext{
-				UserID:     "admin",
-				ClientType: "api",
-			}
-			ctx = WithAuthContext(ctx, authCtx)
-		} else {
-			// 无全局 API Key：管理写操作只允许来自 localhost，防止 CORS + 无认证被利用
-			if expectedKey == "" && isAdminWrite(r.Method, r.URL.Path) && !isLoopback(clientIP) {
-				http.Error(w, "403 Forbidden: admin endpoints require POLARIS_API_KEY or localhost access", http.StatusForbidden)
-				return
-			}
-			authCtx := &AuthContext{
-				UserID:     "anonymous",
-				ClientType: "unknown",
-			}
-			ctx = WithAuthContext(ctx, authCtx)
+		ctx, ok := s.checkAuth(w, r, clientIP, expectedKey, authManager)
+		if !ok {
+			return
 		}
 
-		// 仅记录 API 请求（进入时）
 		if isAPI {
 			slog.Debug("http: request", "method", r.Method, "path", r.URL.Path, "ip", clientIP)
 		}

@@ -20,8 +20,14 @@ import (
 // skillsDir 必须是绝对路径；若目录不存在则静默跳过（技能未编译的合法状态）。
 func SeedBuiltinSkills(ctx context.Context, db *sql.DB, skillsDir string) error {
 	fi, err := os.Stat(skillsDir)
-	if err != nil || !fi.IsDir() {
-		return nil // 目录不存在：技能未编译，跳过
+	if os.IsNotExist(err) {
+		return nil // 技能目录未编译，属合法状态，静默跳过
+	}
+	if err != nil {
+		return perrors.Wrap(perrors.CodeInternal, "seeder: stat skills dir", err)
+	}
+	if !fi.IsDir() {
+		return nil
 	}
 
 	entries, err := os.ReadDir(skillsDir)

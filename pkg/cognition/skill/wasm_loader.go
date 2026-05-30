@@ -37,4 +37,3 @@ func (l *FilesystemWasmLoader) LoadWasm(skillID string) ([]byte, error) {
 	}
 	return data, nil
 }
-

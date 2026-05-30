@@ -66,14 +66,14 @@ type PluginInterface struct {
 // PluginJSON 表示 .codex-plugin/plugin.json 或 .claude-plugin/plugin.json 的完整清单格式。
 // 字段集覆盖 OpenAI Codex / Anthropic Claude Code 两家标准 plugin.json。
 type PluginJSON struct {
-	Name        string          `json:"name"`
-	Version     string          `json:"version"`
-	Description string          `json:"description"`
-	Author      string          `json:"author,omitempty"`
-	Homepage    string          `json:"homepage,omitempty"`
-	Repository  string          `json:"repository,omitempty"`
-	License     string          `json:"license,omitempty"`
-	Keywords    []string        `json:"keywords,omitempty"`
+	Name        string           `json:"name"`
+	Version     string           `json:"version"`
+	Description string           `json:"description"`
+	Author      string           `json:"author,omitempty"`
+	Homepage    string           `json:"homepage,omitempty"`
+	Repository  string           `json:"repository,omitempty"`
+	License     string           `json:"license,omitempty"`
+	Keywords    []string         `json:"keywords,omitempty"`
 	MCPServers  string           `json:"mcpServers,omitempty"` // 指向 .mcp.json 的相对路径
 	Interface   *PluginInterface `json:"interface,omitempty"`  // UI 展示元数据
 }
@@ -84,12 +84,12 @@ type PluginJSON struct {
 //   - "http" / "streamable-http": 远端 HTTP，使用 URL/Headers
 //   - "sse": 已废弃（Anthropic 2026-04-01 停止接受），仍保留兼容
 type MCPServerDef struct {
-	Type               string            `json:"type,omitempty"`               // "stdio"|"http"|"streamable-http"|"sse"
-	Command            string            `json:"command,omitempty"`            // stdio 专用
+	Type               string            `json:"type,omitempty"`    // "stdio"|"http"|"streamable-http"|"sse"
+	Command            string            `json:"command,omitempty"` // stdio 专用
 	Args               []string          `json:"args,omitempty"`
 	Env                map[string]string `json:"env,omitempty"`
-	URL                string            `json:"url,omitempty"`                // http/sse 专用
-	Headers            map[string]string `json:"headers,omitempty"`            // http/sse 专用，Bearer 等
+	URL                string            `json:"url,omitempty"`                 // http/sse 专用
+	Headers            map[string]string `json:"headers,omitempty"`             // http/sse 专用，Bearer 等
 	AuthorizationToken string            `json:"authorization_token,omitempty"` // Anthropic Messages API 远程 MCP 鉴权
 }
 
@@ -117,8 +117,8 @@ type PluginBundleManifest struct {
 	Interface   *PluginInterface        `json:"interface,omitempty"`  // UI 展示元数据
 
 	// Skills: 由 UnmarshalJSON 从 "skills" 字段解析，见下方注释。
-	Skills    []BundleSkillRef  // array form: [{"path":"...","name":"..."}]
-	SkillsDir string            // string form: "./skills/"
+	Skills    []BundleSkillRef // array form: [{"path":"...","name":"..."}]
+	SkillsDir string           // string form: "./skills/"
 	// Hooks: 由 UnmarshalJSON 从 "hooks" 字段解析。
 	Hooks     map[string]string // map form: {"install":"path","uninstall":"path"}
 	HooksFile string            // string form: "./hooks/hooks.json"
@@ -199,7 +199,7 @@ type AppJSON struct {
 type AppDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
-	URL         string `json:"url,omitempty"`    // HTTP connector 端点
+	URL         string `json:"url,omitempty"`     // HTTP connector 端点
 	Command     string `json:"command,omitempty"` // 本地进程命令
 }
 
