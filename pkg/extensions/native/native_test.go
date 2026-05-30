@@ -43,4 +43,3 @@ func TestMakeExtensionInstallFn_InvalidJSON(t *testing.T) {
 		t.Fatal("invalid JSON input should return error")
 	}
 }
-
