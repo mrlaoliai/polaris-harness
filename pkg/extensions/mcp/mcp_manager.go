@@ -239,7 +239,7 @@ func (m *MCPManager) LoadFromDB(ctx context.Context, db *sql.DB, dataDir string)
 			connCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
 			if err := m.Add(connCtx, id, name, cfg); err != nil {
-				slog.Warn("mcp_manager: load server failed", "id", id, "err", err)
+				slog.Error("mcp_manager: load server failed", "id", id, "err", err)
 			}
 		}(id, name, cfg)
 	}
