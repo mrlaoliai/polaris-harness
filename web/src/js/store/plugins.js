@@ -89,10 +89,11 @@ Alpine.store('plugins', {
     }
   },
 
-  async syncMarketplaces() {
+  async syncMarketplaces(localOnly = false) {
     this.syncing = true
     try {
-      const r = await fetch('/v1/plugins/sync', { 
+      const url = localOnly ? '/v1/plugins/sync?local_only=true' : '/v1/plugins/sync'
+      const r = await fetch(url, { 
         method: 'POST', 
         headers: authHeaders() 
       })

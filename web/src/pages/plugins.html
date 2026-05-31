@@ -33,7 +33,7 @@
             <input id="store-plugins-search" name="store-plugins-search" type="search" class="grow" :placeholder="$store.plugins.filter === 'marketplace' ? $store.i18n.t('plugins_search_marketplace') : `${$store.i18n.t('plugins_search_prefix')}${$store.plugins.typeLabel($store.plugins.filter)}...`" x-model="$store.plugins.search" />
           </label>
           <button class="btn btn-primary btn-sm" @click="$store.plugins.openCreateModal()" x-text="`+ ${$store.plugins.filter === 'marketplace' ? $store.i18n.t('plugins_btn_add_market') : $store.i18n.t('plugins_btn_create')}`"></button>
-          <button class="btn btn-outline btn-sm" @click="$store.plugins.syncMarketplaces()" :disabled="$store.plugins.syncing">
+          <button class="btn btn-outline btn-sm" @click="$store.plugins.syncMarketplaces($store.plugins.filter !== 'marketplace')" :disabled="$store.plugins.syncing">
             <span x-show="$store.plugins.syncing" class="loading loading-spinner loading-xs"></span>
             <span x-show="!$store.plugins.syncing" x-text="'⟳ ' + $store.i18n.t('plugins_btn_sync')"></span>
           </button>

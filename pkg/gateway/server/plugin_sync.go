@@ -360,7 +360,7 @@ func pullOrClone(repoURL, mpDir, gitDir string) (available bool, updated bool) {
 }
 
 // syncMarketplace 同步单个市场
-func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, tmpDir string) int {
+func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, tmpDir string, localOnly bool) int {
 	if mp.RepoURL == "" {
 		return 0
 	}
@@ -369,7 +369,16 @@ func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, t
 	mpDir := filepath.Join(tmpDir, safeID)
 	gitDir := filepath.Join(mpDir, ".git")
 
-	available, updated := pullOrClone(mp.RepoURL, mpDir, gitDir)
+	var available, updated bool
+	if localOnly {
+		if _, err := os.Stat(mpDir); err == nil {
+			available = true
+			updated = true
+		}
+	} else {
+		available, updated = pullOrClone(mp.RepoURL, mpDir, gitDir)
+	}
+
 	if !available {
 		return 0
 	}
@@ -421,7 +430,7 @@ func (s *Server) syncMarketplace(ctx context.Context, mp protocol.Marketplace, t
 }
 
 // SyncAllMarketplaces 后台静默同步所有可用市场并更新缓存
-func (s *Server) SyncAllMarketplaces(ctx context.Context) (int, error) {
+func (s *Server) SyncAllMarketplaces(ctx context.Context, localOnly bool) (int, error) {
 	var mps []protocol.Marketplace
 	rows, err := s.db.QueryContext(ctx, "SELECT id, name, type, publisher, repo_url, description, is_builtin, trust_tier, enabled, created_at FROM plugin_marketplaces WHERE enabled=1")
 	if err != nil {
@@ -458,7 +467,7 @@ func (s *Server) SyncAllMarketplaces(ctx context.Context) (int, error) {
 
 	syncedCount := 0
 	for _, mp := range mps {
-		syncedCount += s.syncMarketplace(ctx, mp, tmpDir)
+		syncedCount += s.syncMarketplace(ctx, mp, tmpDir, localOnly)
 	}
 
 	return syncedCount, nil
@@ -643,8 +652,9 @@ func parseGoogleSkillsEntry(path, mpDir string, mp protocol.Marketplace) ([]prot
 
 // handleSyncMarketplaces 刷新/同步市场
 func (s *Server) handleSyncMarketplaces(w http.ResponseWriter, r *http.Request) {
-	slog.Info("polaris-server: manual sync marketplaces triggered")
-	syncedCount, err := s.SyncAllMarketplaces(r.Context())
+	localOnly := r.URL.Query().Get("local_only") == "true"
+	slog.Info("polaris-server: manual sync marketplaces triggered", "local_only", localOnly)
+	syncedCount, err := s.SyncAllMarketplaces(r.Context(), localOnly)
 	if err != nil {
 		slog.Error("polaris-server: manual sync marketplaces failed", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -832,7 +832,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 //nolint:nestif
 func (s *Server) bootMarketplaceInit(ctx context.Context) {
 	slog.Info("polaris-server: auto-syncing marketplaces...")
-	if _, err := s.SyncAllMarketplaces(ctx); err != nil {
+	if _, err := s.SyncAllMarketplaces(ctx, false); err != nil {
 		slog.Error("polaris-server: auto-sync marketplaces failed", "err", err)
 		return
 	}
