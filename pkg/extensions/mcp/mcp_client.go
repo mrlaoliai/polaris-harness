@@ -286,6 +286,11 @@ func (c *MCPClient) call(ctx context.Context, method string, params any) (json.R
 		delete(c.pending, id)
 		c.mu.Unlock()
 		return nil, ctx.Err()
+	case <-c.done:
+		c.mu.Lock()
+		delete(c.pending, id)
+		c.mu.Unlock()
+		return nil, perrors.New(perrors.CodeInternal, "mcp: connection closed")
 	}
 }
 
