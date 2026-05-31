@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "polarisagi-computer-use": {
-      "command": "npx",
-      "args": ["-y", "polarisagi-computer-mcp@latest"]
-    }
-  }
-}
